@@ -24,4 +24,10 @@ public class Enum extends Obj
     {
         super(sourceInformation, identifier, classifier, name, propertiesList);
     }
+
+    @Override
+    protected Enum cloneWithNewPropertyValues(ListIterable<PropertyValue> newPropertyValues)
+    {
+        return new Enum(getSourceInformation(), getIdentifier(), getClassifier(), getName(), newPropertyValues);
+    }
 }

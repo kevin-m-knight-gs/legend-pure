@@ -180,7 +180,7 @@ public class DistributedMetadataTool implements Closeable
         }
 
         @Override
-        public Void accept(PropertyValueMany many)
+        public Void visit(PropertyValueMany many)
         {
             indent();
             print(many.getProperty());
@@ -192,7 +192,7 @@ public class DistributedMetadataTool implements Closeable
         }
 
         @Override
-        public Void accept(PropertyValueOne one)
+        public Void visit(PropertyValueOne one)
         {
             indent();
             print(one.getProperty());
@@ -204,21 +204,21 @@ public class DistributedMetadataTool implements Closeable
         }
 
         @Override
-        public Void accept(Primitive primitive)
+        public Void visit(Primitive primitive)
         {
             print(primitive.toString());
             return null;
         }
 
         @Override
-        public Void accept(ObjRef objRef)
+        public Void visit(ObjRef objRef)
         {
             printf("instance %s %s", objRef.getClassifierId(), objRef.getId());
             return null;
         }
 
         @Override
-        public Void accept(EnumRef enumRef)
+        public Void visit(EnumRef enumRef)
         {
             printf("enum %s %s", enumRef.getEnumerationId(), enumRef.getEnumerationId());
             return null;

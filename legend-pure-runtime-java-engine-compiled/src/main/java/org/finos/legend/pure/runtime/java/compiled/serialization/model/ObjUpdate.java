@@ -1,4 +1,4 @@
-// Copyright 2020 Goldman Sachs
+// Copyright 2021 Goldman Sachs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,18 @@
 
 package org.finos.legend.pure.runtime.java.compiled.serialization.model;
 
-public interface RValueVisitor<T>
+import org.eclipse.collections.api.list.ListIterable;
+
+public class ObjUpdate extends Obj
 {
-    T visit(Primitive primitive);
-    T visit(ObjRef objRef);
-    T visit(EnumRef enumRef);
+    public ObjUpdate(String identifier, String classifier, ListIterable<PropertyValue> additionalPropertyValues)
+    {
+        super(null, identifier, classifier, null, additionalPropertyValues);
+    }
+
+    @Override
+    protected ObjUpdate cloneWithNewPropertyValues(ListIterable<PropertyValue> newPropertyValues)
+    {
+        return new ObjUpdate(getIdentifier(), getClassifier(), newPropertyValues);
+    }
 }

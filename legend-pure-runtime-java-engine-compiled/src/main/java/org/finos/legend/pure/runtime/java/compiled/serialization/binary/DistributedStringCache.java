@@ -28,6 +28,8 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Serialized;
 
+import java.util.Objects;
+
 class DistributedStringCache extends AbstractStringCache
 {
     private static final int PARTITION_SIZE = 32 * 1024; // must be a power of 2
@@ -128,34 +130,52 @@ class DistributedStringCache extends AbstractStringCache
         @Override
         public void collectObj(String classifierId, String identifier, String name)
         {
-            this.classifierIds.add(classifierId);
-            this.identifiers.put(classifierId, identifier);
-            this.otherStrings.add(name);
+            addClassifierId(classifierId);
+            addIdentifier(classifierId, identifier);
+            addOtherString(name);
         }
 
         @Override
         public void collectSourceId(String sourceId)
         {
-            this.otherStrings.add(sourceId);
+            addOtherString(sourceId);
         }
 
         @Override
         public void collectProperty(String property)
         {
-            this.otherStrings.add(property);
+            addOtherString(property);
         }
 
         @Override
         public void collectRef(String classifierId, String identifier)
         {
-            this.classifierIds.add(classifierId);
-            this.identifiers.put(classifierId, identifier);
+            addClassifierId(classifierId);
+            addIdentifier(classifierId, identifier);
         }
 
         @Override
         public void collectPrimitiveString(String string)
         {
-            this.otherStrings.add(string);
+            addOtherString(string);
+        }
+
+        private void addClassifierId(String classifierId)
+        {
+            this.classifierIds.add(Objects.requireNonNull(classifierId));
+        }
+
+        private void addIdentifier(String classifierId, String identifier)
+        {
+            this.identifiers.put(Objects.requireNonNull(classifierId), Objects.requireNonNull(identifier));
+        }
+
+        private void addOtherString(String string)
+        {
+            if (string != null)
+            {
+                this.otherStrings.add(string);
+            }
         }
     }
 }

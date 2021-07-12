@@ -22,25 +22,40 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.Enum;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjRef;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Primitive;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValue;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueConsumer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueMany;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueOne;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValue;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueConsumer;
 
 import java.math.BigDecimal;
+import java.util.function.Consumer;
 
 abstract class AbstractBinaryObjSerializer implements BinaryObjSerializer
 {
     @Override
     public void serializeObj(Writer writer, Obj obj)
     {
-        writer.writeBoolean(obj instanceof Enum);
-        writeSourceInformation(writer, obj.getSourceInformation());
-        writeIdentifier(writer, obj.getIdentifier());
-        writeClassifier(writer, obj.getClassifier());
-        writeName(writer, obj.getName());
-        writePropertyValues(writer, obj);
+        if (obj instanceof ObjUpdate)
+        {
+            writer.writeByte(BinaryGraphSerializationTypes.OBJ_UPDATE);
+            writeIdentifier(writer, obj.getIdentifier());
+            writeClassifier(writer, obj.getClassifier());
+            writePropertyValues(writer, obj.getPropertyValues());
+        }
+        else
+        {
+            byte objType = (obj instanceof Enum) ? BinaryGraphSerializationTypes.ENUM : BinaryGraphSerializationTypes.OBJ;
+            writer.writeByte(objType);
+            writeSourceInformation(writer, obj.getSourceInformation());
+            writeIdentifier(writer, obj.getIdentifier());
+            writeClassifier(writer, obj.getClassifier());
+            writeName(writer, obj.getName());
+            writePropertyValues(writer, obj.getPropertyValues());
+        }
     }
 
     protected void writeSourceInformation(Writer writer, SourceInformation sourceInformation)
@@ -77,99 +92,118 @@ abstract class AbstractBinaryObjSerializer implements BinaryObjSerializer
         writeString(writer, name);
     }
 
-    protected void writePropertyValues(Writer writer, Obj obj)
-    {
-        ListIterable<PropertyValue> propertyValues = obj.getPropertyValues();
-        writer.writeInt(propertyValues.size());
-        for (PropertyValue propertyValue : propertyValues)
-        {
-            writePropertyValue(writer, propertyValue);
-        }
-    }
-
-    protected void writePropertyValue(Writer writer, PropertyValue propertyValue)
-    {
-        if (propertyValue instanceof PropertyValueMany)
-        {
-            PropertyValueMany many = (PropertyValueMany)propertyValue;
-            writer.writeBoolean(true);
-            writeString(writer, many.getProperty());
-            ListIterable<RValue> values = many.getValues();
-            writer.writeInt(values.size());
-            for (RValue rValue : values)
-            {
-                writeRValue(writer, rValue);
-            }
-        }
-        else
-        {
-            PropertyValueOne propertyValueOne = (PropertyValueOne)propertyValue;
-            writer.writeBoolean(false);
-            writeString(writer, propertyValueOne.getProperty());
-            writeRValue(writer, propertyValueOne.getValue());
-        }
-    }
-
-    protected void writeRValue(Writer writer, RValue rValue)
-    {
-        if (rValue instanceof EnumRef)
-        {
-            EnumRef enumeration = (EnumRef)rValue;
-            writer.writeByte(BinaryGraphSerializationTypes.ENUM_REF);
-            writeString(writer, enumeration.getEnumerationId());
-            writeString(writer, enumeration.getEnumName());
-        }
-        else if (rValue instanceof ObjRef)
-        {
-            ObjRef objRef = (ObjRef)rValue;
-            writer.writeByte(BinaryGraphSerializationTypes.OBJ_REF);
-            writeString(writer, objRef.getClassifierId());
-            writeString(writer, objRef.getId());
-        }
-        else if (rValue instanceof Primitive)
-        {
-            Primitive primitive = (Primitive)rValue;
-            Object value = primitive.getValue();
-            if (value instanceof Boolean)
-            {
-                writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_BOOLEAN);
-                writer.writeBoolean((Boolean)value);
-            }
-            else if (value instanceof Double)
-            {
-                writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_DOUBLE);
-                writer.writeDouble((Double)value);
-            }
-            else if (value instanceof Long)
-            {
-                writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_LONG);
-                writer.writeLong((Long)value);
-            }
-            else if (value instanceof String)
-            {
-                writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_STRING);
-                writeString(writer, (String)value);
-            }
-            else if (value instanceof PureDate)
-            {
-                writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_DATE);
-                writeString(writer, value.toString());
-            }
-            else if (value instanceof BigDecimal)
-            {
-                writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_DECIMAL);
-                writer.writeString(((BigDecimal)value).toPlainString());
-            }
-            else
-            {
-                throw new UnsupportedOperationException("Unsupported primitive type: " + value.getClass().getSimpleName());
-            }
-        }
-        else
-        {
-            throw new UnsupportedOperationException("serialization for RValue type not supported: " + rValue.getClass().getName());
-        }
-    }
-
     protected abstract void writeString(Writer writer, String string);
+
+    private void writePropertyValues(Writer writer, ListIterable<? extends PropertyValue> propertyValues)
+    {
+        RValueConsumer rValueWriter = new RValueConsumer()
+        {
+            @Override
+            protected void accept(Primitive primitive)
+            {
+                writePrimitive(writer, primitive);
+            }
+
+            @Override
+            protected void accept(ObjRef objRef)
+            {
+                writeObjRef(writer, objRef);
+            }
+
+            @Override
+            protected void accept(EnumRef enumRef)
+            {
+                writeEnumRef(writer, enumRef);
+            }
+        };
+        PropertyValueConsumer propertyValueWriter = new PropertyValueConsumer()
+        {
+            @Override
+            protected void accept(PropertyValueMany many)
+            {
+                writePropertyValueMany(writer, many, rValueWriter);
+            }
+
+            @Override
+            protected void accept(PropertyValueOne one)
+            {
+                writePropertyValueOne(writer, one, rValueWriter);
+            }
+        };
+        writer.writeInt(propertyValues.size());
+        propertyValues.forEach(propertyValueWriter);
+    }
+
+    // PropertyValue writers
+
+    private void writePropertyValueOne(Writer writer, PropertyValueOne propertyValue, Consumer<? super RValue> rValueWriter)
+    {
+        writer.writeBoolean(false);
+        writeString(writer, propertyValue.getProperty());
+        rValueWriter.accept(propertyValue.getValue());
+    }
+
+    private void writePropertyValueMany(Writer writer, PropertyValueMany propertyValue, Consumer<? super RValue> rValueWriter)
+    {
+        writer.writeBoolean(true);
+        writeString(writer, propertyValue.getProperty());
+        ListIterable<RValue> values = propertyValue.getValues();
+        writer.writeInt(values.size());
+        values.forEach(rValueWriter);
+    }
+
+    // RValue writers
+
+    private void writeObjRef(Writer writer, ObjRef objRef)
+    {
+        writer.writeByte(BinaryGraphSerializationTypes.OBJ_REF);
+        writeString(writer, objRef.getClassifierId());
+        writeString(writer, objRef.getId());
+    }
+
+    private void writeEnumRef(Writer writer, EnumRef enumRef)
+    {
+        writer.writeByte(BinaryGraphSerializationTypes.ENUM_REF);
+        writeString(writer, enumRef.getEnumerationId());
+        writeString(writer, enumRef.getEnumName());
+    }
+
+    private void writePrimitive(Writer writer, Primitive primitive)
+    {
+        Object value = primitive.getValue();
+        if (value instanceof Boolean)
+        {
+            writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_BOOLEAN);
+            writer.writeBoolean((Boolean) value);
+        }
+        else if (value instanceof Double)
+        {
+            writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_DOUBLE);
+            writer.writeDouble((Double) value);
+        }
+        else if (value instanceof Long)
+        {
+            writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_LONG);
+            writer.writeLong((Long) value);
+        }
+        else if (value instanceof String)
+        {
+            writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_STRING);
+            writeString(writer, (String) value);
+        }
+        else if (value instanceof PureDate)
+        {
+            writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_DATE);
+            writeString(writer, value.toString());
+        }
+        else if (value instanceof BigDecimal)
+        {
+            writer.writeByte(BinaryGraphSerializationTypes.PRIMITIVE_DECIMAL);
+            writer.writeString(((BigDecimal) value).toPlainString());
+        }
+        else
+        {
+            throw new UnsupportedOperationException("Unsupported primitive type: " + value.getClass().getSimpleName());
+        }
+    }
 }

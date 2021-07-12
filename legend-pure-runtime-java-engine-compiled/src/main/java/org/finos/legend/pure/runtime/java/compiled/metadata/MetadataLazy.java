@@ -41,6 +41,7 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyV
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueOne;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueVisitor;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValue;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueConsumer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueVisitor;
 
 import java.io.IOException;
@@ -52,13 +53,13 @@ public class MetadataLazy implements Metadata
     private static final PropertyValueVisitor<Object> VALUES_VISITOR = new PropertyValueVisitor<Object>()
     {
         @Override
-        public Object accept(PropertyValueMany many)
+        public Object visit(PropertyValueMany many)
         {
             return many.getValues();
         }
 
         @Override
-        public Object accept(PropertyValueOne one)
+        public Object visit(PropertyValueOne one)
         {
             return one.getValue();
         }
@@ -67,19 +68,19 @@ public class MetadataLazy implements Metadata
     private final RValueVisitor<Object> valueToObjectVisitor = new RValueVisitor<Object>()
     {
         @Override
-        public Object accept(Primitive primitive)
+        public Object visit(Primitive primitive)
         {
             return primitive.getValue();
         }
 
         @Override
-        public Object accept(ObjRef ref)
+        public Object visit(ObjRef ref)
         {
             return toJavaObject(ref.getClassifierId(), ref.getId());
         }
 
         @Override
-        public Object accept(EnumRef enumRef)
+        public Object visit(EnumRef enumRef)
         {
             return getEnum(enumRef.getEnumerationId(), enumRef.getEnumName());
         }
@@ -182,25 +183,22 @@ public class MetadataLazy implements Metadata
         }
 
         MutableSetMultimap<String, ObjRef> objRefsByClassifier = Multimaps.mutable.set.empty();
-        values.forEachWith(RValue::visit, new RValueVisitor<Void>()
+        values.forEach(new RValueConsumer()
         {
             @Override
-            public Void accept(Primitive primitive)
+            protected void accept(Primitive primitive)
             {
-                return null;
             }
 
             @Override
-            public Void accept(ObjRef objRef)
+            protected void accept(ObjRef objRef)
             {
                 objRefsByClassifier.put(objRef.getClassifierId(), objRef);
-                return null;
             }
 
             @Override
-            public Void accept(EnumRef enumRef)
+            protected void accept(EnumRef enumRef)
             {
-                return null;
             }
         });
         if (objRefsByClassifier.isEmpty())
@@ -247,19 +245,19 @@ public class MetadataLazy implements Metadata
         return values.collectWith(RValue::visit, new RValueVisitor<Object>()
         {
             @Override
-            public Object accept(Primitive primitive)
+            public Object visit(Primitive primitive)
             {
                 return primitive.getValue();
             }
 
             @Override
-            public Object accept(ObjRef objRef)
+            public Object visit(ObjRef objRef)
             {
                 return objectByRef.get(objRef);
             }
 
             @Override
-            public Object accept(EnumRef enumRef)
+            public Object visit(EnumRef enumRef)
             {
                 return getEnum(enumRef.getEnumerationId(), enumRef.getEnumName());
             }

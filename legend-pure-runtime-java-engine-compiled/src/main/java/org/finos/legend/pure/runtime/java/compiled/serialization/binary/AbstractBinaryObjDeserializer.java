@@ -21,6 +21,7 @@ import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.DateFunctions;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.LatestDate;
 import org.finos.legend.pure.m4.serialization.Reader;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Enum;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
@@ -38,13 +39,54 @@ abstract class AbstractBinaryObjDeserializer implements BinaryObjDeserializer
     @Override
     public Obj deserialize(Reader reader)
     {
-        boolean isEnum = reader.readBoolean();
+        byte objType = reader.readByte();
+        switch (objType)
+        {
+            case BinaryGraphSerializationTypes.OBJ:
+            {
+                return readObj(reader);
+            }
+            case BinaryGraphSerializationTypes.ENUM:
+            {
+                return readEnum(reader);
+            }
+            case BinaryGraphSerializationTypes.OBJ_UPDATE:
+            {
+                return readObjUpdate(reader);
+            }
+            default:
+            {
+                throw new RuntimeException("Unknown Obj type: " + objType);
+            }
+        }
+    }
+
+    protected Obj readObj(Reader reader)
+    {
         SourceInformation sourceInformation = readSourceInformation(reader);
         String identifier = readIdentifier(reader);
         String classifier = readClassifier(reader);
         String name = readName(reader);
         ListIterable<PropertyValue> propertiesList = readPropertyValues(reader);
-        return isEnum ? new Enum(sourceInformation, identifier, classifier, name, propertiesList) : new Obj(sourceInformation, identifier, classifier, name, propertiesList);
+        return new Obj(sourceInformation, identifier, classifier, name, propertiesList);
+    }
+
+    protected Enum readEnum(Reader reader)
+    {
+        SourceInformation sourceInformation = readSourceInformation(reader);
+        String identifier = readIdentifier(reader);
+        String classifier = readClassifier(reader);
+        String name = readName(reader);
+        ListIterable<PropertyValue> propertiesList = readPropertyValues(reader);
+        return new Enum(sourceInformation, identifier, classifier, name, propertiesList);
+    }
+
+    protected ObjUpdate readObjUpdate(Reader reader)
+    {
+        String identifier = readIdentifier(reader);
+        String classifier = readClassifier(reader);
+        ListIterable<PropertyValue> propertiesList = readPropertyValues(reader);
+        return new ObjUpdate(identifier, classifier, propertiesList);
     }
 
     protected SourceInformation readSourceInformation(Reader reader)
@@ -160,27 +202,35 @@ abstract class AbstractBinaryObjDeserializer implements BinaryObjDeserializer
         {
             case BinaryGraphSerializationTypes.OBJ_REF:
             {
-                return new ObjRef(readString(reader), readString(reader));
+                String classifierId = readString(reader);
+                String instanceId = readString(reader);
+                return new ObjRef(classifierId, instanceId);
             }
             case BinaryGraphSerializationTypes.ENUM_REF:
             {
-                return new EnumRef(readString(reader), readString(reader));
+                String enumerationId = readString(reader);
+                String enumName = readString(reader);
+                return new EnumRef(enumerationId, enumName);
             }
             case BinaryGraphSerializationTypes.PRIMITIVE_BOOLEAN:
             {
-                return new Primitive(reader.readBoolean());
+                boolean value = reader.readBoolean();
+                return new Primitive(value);
             }
             case BinaryGraphSerializationTypes.PRIMITIVE_DOUBLE:
             {
-                return new Primitive(reader.readDouble());
+                double value = reader.readDouble();
+                return new Primitive(value);
             }
             case BinaryGraphSerializationTypes.PRIMITIVE_LONG:
             {
-                return new Primitive(reader.readLong());
+                long value = reader.readLong();
+                return new Primitive(value);
             }
             case BinaryGraphSerializationTypes.PRIMITIVE_STRING:
             {
-                return new Primitive(readString(reader));
+                String value = readString(reader);
+                return new Primitive(value);
             }
             case BinaryGraphSerializationTypes.PRIMITIVE_DATE:
             {
@@ -190,7 +240,8 @@ abstract class AbstractBinaryObjDeserializer implements BinaryObjDeserializer
             case BinaryGraphSerializationTypes.PRIMITIVE_DECIMAL:
             {
                 String decimalString = reader.readString();
-                return new Primitive(new BigDecimal(decimalString));
+                BigDecimal value = new BigDecimal(decimalString);
+                return new Primitive(value);
             }
             default:
             {

@@ -15,7 +15,10 @@
 package org.finos.legend.pure.runtime.java.compiled.serialization.model;
 
 import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.list.ListIterable;
+import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.map.MutableMap;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
 import java.util.Objects;
@@ -75,10 +78,10 @@ public class Obj
             return false;
         }
 
-        Obj that = (Obj)other;
+        Obj that = (Obj) other;
         return this.identifier.equals(that.identifier) &&
                 this.classifier.equals(that.classifier) &&
-                this.name.equals(that.name) &&
+                Objects.equals(this.name, that.name) &&
                 Objects.equals(this.sourceInformation, that.sourceInformation) &&
                 this.properties.equals(that.properties);
     }
@@ -110,5 +113,99 @@ public class Obj
         this.properties.appendString(builder);
         builder.append('}');
         return builder.toString();
+    }
+
+    public Obj applyUpdates(Iterable<? extends ObjUpdate> updates)
+    {
+        // Consolidate and validate updates
+        MutableMap<String, MutableList<RValue>> consolidatedUpdates = Maps.mutable.empty();
+        PropertyValueConsumer collector = new PropertyValueConsumer()
+        {
+            @Override
+            protected void accept(PropertyValueMany many)
+            {
+                ListIterable<RValue> values = many.getValues();
+                if (values.notEmpty())
+                {
+                    consolidatedUpdates.getIfAbsentPut(many.getProperty(), Lists.mutable::empty).addAllIterable(values);
+                }
+            }
+
+            @Override
+            protected void accept(PropertyValueOne one)
+            {
+                RValue value = one.getValue();
+                if (value != null)
+                {
+                    consolidatedUpdates.getIfAbsentPut(one.getProperty(), Lists.mutable::empty).add(value);
+                }
+            }
+        };
+        updates.forEach(update ->
+        {
+            if (!this.identifier.equals(update.getIdentifier()) || !this.classifier.equals(update.getClassifier()))
+            {
+                throw new IllegalArgumentException("Cannot apply update for " + update.getClassifier() + ":" + update.getIdentifier() + " to " + this.classifier + ":" + this.identifier);
+            }
+            update.getPropertyValues().forEach(collector);
+        });
+
+        // If there are no updates, return this
+        if (consolidatedUpdates.isEmpty())
+        {
+            return this;
+        }
+
+        // If there are updates, compute new property values
+        MutableList<PropertyValue> updatedPropertyValues = this.properties.collect(propertyValue ->
+        {
+            String property = propertyValue.getProperty();
+            MutableList<RValue> additions = consolidatedUpdates.remove(property); // remove so we know what we have left over at the end
+            if ((additions == null) || additions.isEmpty())
+            {
+                return propertyValue;
+            }
+            ListIterable<RValue> newValues = propertyValue.visit(new PropertyValueVisitor<ListIterable<RValue>>()
+            {
+                @Override
+                public ListIterable<RValue> visit(PropertyValueMany many)
+                {
+                    ListIterable<RValue> values = many.getValues();
+                    if (values.isEmpty())
+                    {
+                        return additions;
+                    }
+                    return Lists.mutable.<RValue>ofInitialCapacity(values.size() + additions.size())
+                            .withAll(values)
+                            .withAll(additions);
+                }
+
+                @Override
+                public ListIterable<RValue> visit(PropertyValueOne one)
+                {
+                    RValue value = one.getValue();
+                    if (value != null)
+                    {
+                        additions.add(0, one.getValue());
+                    }
+                    return additions;
+                }
+            });
+            return newPropertyValue(property, newValues);
+        }, Lists.mutable.ofInitialCapacity(this.properties.size()));
+        consolidatedUpdates.forEach((property, values) -> updatedPropertyValues.add(newPropertyValue(property, values)));
+
+        // Return a copy of this with updated property values
+        return cloneWithNewPropertyValues(updatedPropertyValues);
+    }
+
+    protected Obj cloneWithNewPropertyValues(ListIterable<PropertyValue> newPropertyValues)
+    {
+        return new Obj(this.sourceInformation, this.identifier, this.classifier, this.name, newPropertyValues);
+    }
+
+    private static PropertyValue newPropertyValue(String property, ListIterable<RValue> values)
+    {
+        return (values.size() == 1) ? new PropertyValueOne(property, values.get(0)) : new PropertyValueMany(property, values);
     }
 }
