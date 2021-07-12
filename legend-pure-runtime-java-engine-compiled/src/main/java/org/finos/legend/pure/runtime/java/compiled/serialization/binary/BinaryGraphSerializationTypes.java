@@ -16,12 +16,18 @@ package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 
 class BinaryGraphSerializationTypes
 {
-    static final byte OBJ_REF = 1;
-    static final byte ENUM_REF = 2;
-    static final byte PRIMITIVE_BOOLEAN = 3;
-    static final byte PRIMITIVE_DOUBLE = 4;
-    static final byte PRIMITIVE_LONG = 5;
-    static final byte PRIMITIVE_STRING = 6;
-    static final byte PRIMITIVE_DATE = 7;
-    static final byte PRIMITIVE_DECIMAL = 8;
+    // Obj types
+    static final byte OBJ = 0;
+    static final byte ENUM = 1;
+    static final byte OBJ_UPDATE = 2;
+
+    // RValue types
+    static final byte OBJ_REF = 3;
+    static final byte ENUM_REF = 4;
+    static final byte PRIMITIVE_BOOLEAN = 5;
+    static final byte PRIMITIVE_DOUBLE = 6;
+    static final byte PRIMITIVE_LONG = 7;
+    static final byte PRIMITIVE_STRING = 8;
+    static final byte PRIMITIVE_DATE = 9;
+    static final byte PRIMITIVE_DECIMAL = 10;
 }
