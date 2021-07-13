@@ -21,6 +21,7 @@ import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 public class Obj
@@ -115,6 +116,11 @@ public class Obj
         return builder.toString();
     }
 
+    public Obj applyUpdates(ObjUpdate... updates)
+    {
+        return applyUpdates(Arrays.asList(updates));
+    }
+
     public Obj applyUpdates(Iterable<? extends ObjUpdate> updates)
     {
         // Consolidate and validate updates
@@ -145,7 +151,7 @@ public class Obj
         {
             if (!this.identifier.equals(update.getIdentifier()) || !this.classifier.equals(update.getClassifier()))
             {
-                throw new IllegalArgumentException("Cannot apply update for " + update.getClassifier() + ":" + update.getIdentifier() + " to " + this.classifier + ":" + this.identifier);
+                throw new IllegalArgumentException("Cannot apply update for " + update.getIdentifier() + " (classifier: " + update.getClassifier() + ") to " + this.identifier + " (classifier: " + this.classifier + ")");
             }
             update.getPropertyValues().forEach(collector);
         });
