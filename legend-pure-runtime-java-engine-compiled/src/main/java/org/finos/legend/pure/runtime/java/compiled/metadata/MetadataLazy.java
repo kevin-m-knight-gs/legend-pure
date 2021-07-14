@@ -94,23 +94,10 @@ public class MetadataLazy implements Metadata
 
     private volatile Constructor<? extends CoreInstance> enumConstructor = null; //NOSONAR we actually want to protect the pointer
 
-    @Deprecated
-    public MetadataLazy(ClassLoader classLoader, DistributedBinaryGraphDeserializer deserializer)
+    private MetadataLazy(ClassLoader classLoader, DistributedBinaryGraphDeserializer deserializer)
     {
-        this.classLoader = (classLoader == null) ? MetadataLazy.class.getClassLoader() : classLoader;
-        this.deserializer = (deserializer == null) ? DistributedBinaryGraphDeserializer.fromClassLoader(this.classLoader) : deserializer;
-    }
-
-    @Deprecated
-    public MetadataLazy(ClassLoader classLoader)
-    {
-        this(classLoader, null);
-    }
-
-    @Deprecated
-    public MetadataLazy()
-    {
-        this(null, null);
+        this.classLoader = classLoader;
+        this.deserializer = deserializer;
     }
 
     @Override
