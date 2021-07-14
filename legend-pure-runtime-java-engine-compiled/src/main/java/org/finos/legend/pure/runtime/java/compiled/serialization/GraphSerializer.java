@@ -20,18 +20,13 @@ import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.map.primitive.MutableObjectBooleanMap;
-import org.eclipse.collections.api.multimap.list.MutableListMultimap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.set.SetIterable;
 import org.eclipse.collections.api.stack.MutableStack;
-import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.impl.factory.Maps;
-import org.eclipse.collections.impl.factory.Multimaps;
 import org.eclipse.collections.impl.factory.Sets;
 import org.eclipse.collections.impl.factory.Stacks;
 import org.eclipse.collections.impl.factory.primitive.ObjectBooleanMaps;
-import org.eclipse.collections.impl.list.mutable.FastList;
-import org.eclipse.collections.impl.tuple.Tuples;
 import org.eclipse.collections.impl.utility.LazyIterate;
 import org.finos.legend.pure.m3.compiler.Context;
 import org.finos.legend.pure.m3.navigation.Instance;
@@ -69,7 +64,6 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyV
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueMany;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueOne;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValue;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.Serialized;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
@@ -77,170 +71,6 @@ import java.math.BigDecimal;
 public class GraphSerializer
 {
     public static final CompileState SERIALIZED = CompileState.COMPILE_EVENT_EXTRA_STATE_1;
-
-    /**
-     * Starting from the given nodes, serialize graph nodes that have not already been
-     * serialized.
-     *
-     * @param nodes            starting nodes
-     * @param processorSupport processor support
-     * @return serialization
-     */
-    public static Serialized serializeNew(Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
-    {
-        return serialize(newCompiledStateSearchState(nodes, processorSupport), processorSupport);
-    }
-
-    /**
-     * Starting from the given node, serialize graph nodes that have not already been
-     * serialized.
-     *
-     * @param node             starting node
-     * @param processorSupport processor support
-     * @return serialization
-     */
-    public static Serialized serializeNew(CoreInstance node, ProcessorSupport processorSupport)
-    {
-        return serialize(newCompiledStateSearchState(node, processorSupport), processorSupport);
-    }
-
-    /**
-     * Starting from the given nodes, serialize all graph nodes.
-     *
-     * @param nodes            starting nodes
-     * @param processorSupport processor support
-     * @return serialization
-     */
-    public static Serialized serializeAll(Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
-    {
-        return serializeAll(nodes, processorSupport, false);
-    }
-
-    /**
-     * Starting from the given nodes, serialize all graph nodes. If addSerializedCompileState is
-     * true, then a CompileState is added to the serialized nodes to mark that they have been
-     * serialized.
-     *
-     * @param nodes                     starting nodes
-     * @param processorSupport          processor support
-     * @param addSerializedCompileState whether to add a CompileState indicating a node has been serialized
-     * @return serialization
-     */
-    public static Serialized serializeAll(Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport, boolean addSerializedCompileState)
-    {
-        return serialize(newPrivateSetSearchState(nodes, processorSupport, addSerializedCompileState), processorSupport);
-    }
-
-    /**
-     * Starting from the given node, serialize all graph nodes.
-     *
-     * @param node             starting node
-     * @param processorSupport processor support
-     * @return serialization
-     */
-    public static Serialized serializeAll(CoreInstance node, ProcessorSupport processorSupport)
-    {
-        return serializeAll(node, processorSupport, false);
-    }
-
-    /**
-     * Starting from the given node, serialize all graph nodes. If addSerializedCompileState is
-     * true, then a CompileState is added to the serialized nodes to mark that they have been
-     * serialized.
-     *
-     * @param node                      starting node
-     * @param processorSupport          processor support
-     * @param addSerializedCompileState whether to add a CompileState indicating a node has been serialized
-     * @return serialization
-     */
-    public static Serialized serializeAll(CoreInstance node, ProcessorSupport processorSupport, boolean addSerializedCompileState)
-    {
-        return serialize(newPrivateSetSearchState(node, processorSupport, addSerializedCompileState), processorSupport);
-    }
-
-
-    private static Serialized serialize(SearchState state, ProcessorSupport processorSupport)
-    {
-        FastList<Obj> added = FastList.newList();
-        MutableSet<CoreInstance> addedPackages = Sets.mutable.empty();
-        MutableListMultimap<CoreInstance, Obj> links = Multimaps.mutable.list.empty();
-
-        while (state.hasNodes())
-        {
-            CoreInstance instance = state.nextNode();
-            if (state.shouldVisit(instance))
-            {
-                state.noteVisited(instance);
-
-                // Serialize
-                MutableList<PropertyValue> propertyValues = Lists.mutable.empty();
-                for (String key : instance.getKeys())
-                {
-                    ListIterable<? extends CoreInstance> values = Instance.getValueForMetaPropertyToManyResolved(instance, key, processorSupport);
-                    if (values.notEmpty())
-                    {
-                        CoreInstance property = instance.getKeyByName(key);
-                        boolean isToOne = Multiplicity.isToOne(Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.multiplicity, processorSupport), false);
-
-                        PropertyValue propertyValue;
-                        if (isToOne)
-                        {
-                            CoreInstance value = values.get(0);
-                            if (!state.isPrimitiveType(value.getClassifier()))
-                            {
-                                state.addNode(value);
-                            }
-                            RValue rValue = buildRValue(value, state, processorSupport);
-                            propertyValue = new PropertyValueOne(key, rValue);
-                        }
-                        else
-                        {
-                            MutableList<RValue> rValues = Lists.mutable.withInitialCapacity(values.size());
-                            for (CoreInstance value : values)
-                            {
-                                if (!state.isPrimitiveType(value.getClassifier()))
-                                {
-                                    state.addNode(value);
-                                }
-                                RValue rValue = buildRValue(value, state, processorSupport);
-                                rValues.add(rValue);
-                            }
-                            propertyValue = new PropertyValueMany(key, rValues);
-                        }
-                        propertyValues.add(propertyValue);
-                    }
-                }
-
-                Obj obj = buildObj(instance, propertyValues, state, processorSupport);
-
-                if (Instance.instanceOf(instance, M3Paths.PackageableElement, processorSupport))
-                {
-                    CoreInstance packageCoreInstance = instance.getValueForMetaPropertyToOne(M3Properties._package);
-                    // Don't need to add links if the package is also being serialized as part of this process
-                    if ((packageCoreInstance != null) && !addedPackages.contains(packageCoreInstance))
-                    {
-                        links.put(packageCoreInstance, obj);
-                    }
-                    if (Instance.instanceOf(instance, M3Paths.Package, processorSupport))
-                    {
-                        addedPackages.add(instance);
-                        links.removeAll(instance);
-                    }
-                }
-
-                added.add(obj);
-            }
-        }
-        added.trimToSize();
-
-        MutableList<Pair<Obj, Obj>> linksList = Lists.mutable.withInitialCapacity(links.sizeDistinct());
-        links.forEachKeyMultiValues((pkg, objs) ->
-        {
-            Obj pkgObj = buildObj(pkg, null, state, processorSupport);
-            objs.forEach(obj -> linksList.add(Tuples.pair(pkgObj, obj)));
-        });
-        return new Serialized(added, linksList);
-    }
 
     public static Obj buildObjWithProperties(CoreInstance instance, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
     {
@@ -420,84 +250,6 @@ public class GraphSerializer
             }
         }
         return value;
-    }
-
-    public static void buildGraph(Serialized serialized, MetadataEager metadata, CompiledCoreInstanceBuilder instanceBuilder, ClassLoader classLoader)
-    {
-        buildGraph(serialized, metadata, instanceBuilder, Sets.immutable.empty(), null, classLoader);
-    }
-
-    public static void buildGraph(Serialized serialized, MetadataEager metadata, CompiledCoreInstanceBuilder instanceBuilder, SetIterable<? extends CoreInstance> excluded, MutableSet<? super CoreInstance> resultExcluded, ClassLoader classLoader)
-    {
-        // Create instances ....
-        serialized.getObjects().forEach(obj ->
-        {
-            if (obj instanceof Enum)
-            {
-                CoreInstance instance = instanceBuilder.newEnumCoreInstance(obj.getClassifier(), obj.getName(), obj.getSourceInformation(), classLoader);
-                metadata.add(obj.getClassifier(), obj.getName(), instance);
-            }
-            else
-            {
-                CoreInstance instance = instanceBuilder.newCoreInstance(obj.getClassifier(), obj.getName(), obj.getSourceInformation(), classLoader);
-                metadata.add(obj.getClassifier(), obj.getIdentifier(), instance);
-            }
-        });
-
-        if ((resultExcluded != null) && excluded.notEmpty())
-        {
-            ModelRepository repository = excluded.getAny().getRepository();
-            ProcessorSupport processorSupport = new M3ProcessorSupport(repository);
-            addExclude(repository.getTopLevel(M3Paths.Root), metadata, resultExcluded, processorSupport);
-            excluded.forEach(e -> addExclude(e, metadata, resultExcluded, processorSupport));
-        }
-
-        // Manage properties
-        serialized.getObjects().forEach(obj ->
-        {
-            CoreInstance inst;
-            MapIterable<String, Field> fields;
-            if (obj instanceof Enum)
-            {
-                inst = metadata.getMetadata(obj.getClassifier(), obj.getName());
-                fields = instanceBuilder.getFields(EnumProcessor.ENUM_CLASS_NAME);
-            }
-            else
-            {
-                inst = metadata.getMetadata(obj.getClassifier(), obj.getIdentifier());
-                fields = instanceBuilder.getFields(obj.getClassifier());
-            }
-            obj.getPropertyValues().forEach(val ->
-            {
-                Object newValue;
-                if (val instanceof PropertyValueOne)
-                {
-                    newValue = getRValueValue(((PropertyValueOne) val).getValue(), metadata);
-                }
-                else
-                {
-                    ListIterable<RValue> values = ((PropertyValueMany) val).getValues();
-                    newValue = values.collectWith(GraphSerializer::getRValueValue, metadata, Lists.mutable.withInitialCapacity(values.size()));
-                }
-                try
-                {
-                    Field f = fields.get("_" + val.getProperty());
-                    f.setAccessible(true);
-                    f.set(inst, newValue);
-                }
-                catch (ReflectiveOperationException e)
-                {
-                    throw new RuntimeException("Error building compiled mode graph", e);
-                }
-            });
-        });
-
-        serialized.getPackageLinks().forEach(pair ->
-        {
-            Obj packageObj = pair.getOne();
-            Obj elementObj = pair.getTwo();
-            metadata.addChild(packageObj.getClassifier(), packageObj.getIdentifier(), elementObj.getClassifier(), elementObj.getIdentifier());
-        });
     }
 
     public static int serializeAllToMetadata(Iterable<? extends CoreInstance> startingNodes, MetadataEager metadata, CompiledCoreInstanceBuilder instanceBuilder,

@@ -18,8 +18,11 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.map.primitive.MutableObjectIntMap;
 import org.eclipse.collections.api.map.primitive.ObjectIntMap;
 import org.eclipse.collections.impl.factory.primitive.ObjectIntMaps;
+import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate;
+import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjRef;
@@ -30,7 +33,6 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyV
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueOne;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValue;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueConsumer;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.Serialized;
 
 abstract class AbstractStringCache implements StringCache
 {
@@ -82,15 +84,11 @@ abstract class AbstractStringCache implements StringCache
         return index;
     }
 
-    protected static void collectStrings(StringCollector collector, Serialized serialized)
+    protected static void collectStrings(StringCollector collector, Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
     {
-        PropertyValueCollectorVisitor propertyValueVisitor = new PropertyValueCollectorVisitor(collector);
-        serialized.getObjects().forEach(obj -> collectStringsFromObj(collector, propertyValueVisitor, obj));
-        serialized.getPackageLinks().forEach(link ->
-        {
-            collectStringsFromObj(collector, propertyValueVisitor, link.getOne());
-            collectStringsFromObj(collector, propertyValueVisitor, link.getTwo());
-        });
+        AbstractStringCache.PropertyValueCollectorVisitor propertyValueVisitor = new AbstractStringCache.PropertyValueCollectorVisitor(collector);
+        GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
+        nodes.forEach(node -> collectStringsFromObj(collector, propertyValueVisitor, GraphSerializer.buildObjWithProperties(node, classifierCaches, processorSupport)));
     }
 
     protected static void collectStringsFromObj(StringCollector collector, PropertyValueCollectorVisitor propertyValueVisitor, Obj obj)
