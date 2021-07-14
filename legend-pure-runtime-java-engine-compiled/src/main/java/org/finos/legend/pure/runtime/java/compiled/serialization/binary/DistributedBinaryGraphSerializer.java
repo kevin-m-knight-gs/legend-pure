@@ -21,7 +21,6 @@ import org.eclipse.collections.api.factory.Stacks;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
-import org.eclipse.collections.api.multimap.list.ListMultimap;
 import org.eclipse.collections.api.multimap.list.MutableListMultimap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.stack.MutableStack;
@@ -39,25 +38,24 @@ import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuild
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.MetadataJavaPaths;
 import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.Serialized;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.jar.JarOutputStream;
 
-public abstract class DistributedBinaryGraphSerializer
+public class DistributedBinaryGraphSerializer
 {
     private static final int MAX_BIN_FILE_BYTES = 512 * 1024;
 
     protected final String metadataName;
+    private final PureRuntime runtime;
 
-    private DistributedBinaryGraphSerializer(String metadataName)
+    private DistributedBinaryGraphSerializer(String metadataName, PureRuntime runtime)
     {
         this.metadataName = metadataName;
+        this.runtime = runtime;
     }
-
-    public abstract void serialize(FileWriter fileWriter);
 
     public void serializeToDirectory(Path directory)
     {
@@ -74,84 +72,79 @@ public abstract class DistributedBinaryGraphSerializer
         serialize(FileWriters.fromInMemoryByteArrayMap(fileBytes));
     }
 
-    private static class DistributedBinaryGraphSerializerFromSerialized extends DistributedBinaryGraphSerializer
+    public void serialize(FileWriter fileWriter)
     {
-        private final Serialized serialized;
+        ProcessorSupport processorSupport = this.runtime.getProcessorSupport();
+        MutableListMultimap<String, CoreInstance> nodesByClassifierId = getNodesByClassifierId(this.runtime.getModelRepository(), processorSupport);
 
-        private DistributedBinaryGraphSerializerFromSerialized(String metadataName, Serialized serialized)
+        // Build string cache
+        DistributedStringCache stringCache = DistributedStringCache.fromNodes(nodesByClassifierId.valuesView(), processorSupport);
+        BinaryObjSerializer serializer = new BinaryObjSerializerWithStringCacheAndImplicitIdentifiers(stringCache);
+
+        // Write string cache
+        stringCache.write(this.metadataName, fileWriter);
+
+        // Write instances
+        int partition = 0;
+        int partitionTotalBytes = 0;
+        ByteArrayOutputStream binByteStream = new ByteArrayOutputStream(MAX_BIN_FILE_BYTES);
+        try (Writer binFileWriter = BinaryWriters.newBinaryWriter(binByteStream))
         {
-            super(metadataName);
-            this.serialized = serialized;
-        }
-
-        @Override
-        public void serialize(FileWriter fileWriter)
-        {
-            if (this.serialized.getPackageLinks().notEmpty())
-            {
-                throw new IllegalArgumentException("Separate package links are not allowed");
-            }
-
-            // Build string cache
-            DistributedStringCache stringCache = DistributedStringCache.fromSerialized(serialized);
-            BinaryObjSerializer serializer = new BinaryObjSerializerWithStringCacheAndImplicitIdentifiers(stringCache);
-
-            // Write string cache
-            stringCache.write(this.metadataName, fileWriter);
-
-            // Write instances
-            int partition = 0;
-            int partitionTotalBytes = 0;
-            ByteArrayOutputStream binByteStream = new ByteArrayOutputStream(MAX_BIN_FILE_BYTES);
             ByteArrayOutputStream indexByteStream = new ByteArrayOutputStream();
-            try (Writer binFileWriter = BinaryWriters.newBinaryWriter(binByteStream);
-                 Writer indexFileWriter = BinaryWriters.newBinaryWriter(indexByteStream))
+            try (Writer indexFileWriter = BinaryWriters.newBinaryWriter(indexByteStream))
             {
-                ListMultimap<String, Obj> objsByClassifier = this.serialized.getObjects().groupBy(Obj::getClassifier);
-                for (String classifierId : objsByClassifier.keysView().toSortedList())
+                for (String classifierId : nodesByClassifierId.keysView().toSortedList())
                 {
-                    ListIterable<Obj> classifierObjs = objsByClassifier.get(classifierId);
-                    ListIterable<ObjSerialization> objSerializations = serializeClassifierObjs(serializer, classifierObjs);
+                    ListIterable<CoreInstance> classifierObjs = nodesByClassifierId.get(classifierId).toSortedListBy(coreInstance -> IdBuilder.buildId(coreInstance, processorSupport));
 
                     // Initial index information
-                    indexFileWriter.writeInt(objSerializations.size()); // total obj count
+                    indexFileWriter.writeInt(classifierObjs.size()); // total obj count
                     indexFileWriter.writeInt(partition); // initial partition
                     indexFileWriter.writeInt(partitionTotalBytes); // initial byte offset in partition
 
                     MutableList<ObjSerialization> partitionObjSerializations = Lists.mutable.empty();
-                    for (ObjSerialization objSerialization : objSerializations)
+                    ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+                    try (Writer writer = BinaryWriters.newBinaryWriter(byteStream))
                     {
-                        int objByteCount = objSerialization.bytes.length;
-                        if (partitionTotalBytes + objByteCount > MAX_BIN_FILE_BYTES)
+                        GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
+                        for (CoreInstance coreInstance : classifierObjs)
                         {
-                            // Write current partition
-                            try (Writer writer = fileWriter.getWriter(DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, partition)))
+                            Obj obj = GraphSerializer.buildObjWithProperties(coreInstance, classifierCaches, processorSupport);
+                            //objSerialization
+                            ObjSerialization objSerialization = serializeClassifierObj(serializer, byteStream, writer, obj);
+                            int objByteCount = objSerialization.bytes.length;
+                            if (partitionTotalBytes + objByteCount > MAX_BIN_FILE_BYTES)
                             {
-                                writer.writeBytes(binByteStream.toByteArray());
-                                binByteStream.reset();
-                            }
+                                // Write current partition
+                                try (Writer writer1 = fileWriter.getWriter(DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, partition)))
+                                {
+                                    writer1.writeBytes(binByteStream.toByteArray());
+                                    binByteStream.reset();
+                                }
 
-                            // Write partition portion of classifier index
-                            indexFileWriter.writeInt(partitionObjSerializations.size());
-                            for (ObjSerialization partitionObjSerialization : partitionObjSerializations)
-                            {
-                                indexFileWriter.writeInt(stringCache.getStringId(partitionObjSerialization.identifier));
-                                indexFileWriter.writeInt(partitionObjSerialization.bytes.length);
-                            }
+                                // Write partition portion of classifier index
+                                indexFileWriter.writeInt(partitionObjSerializations.size());
+                                for (ObjSerialization partitionObjSerialization : partitionObjSerializations)
+                                {
+                                    indexFileWriter.writeInt(stringCache.getStringId(partitionObjSerialization.identifier));
+                                    indexFileWriter.writeInt(partitionObjSerialization.bytes.length);
+                                }
 
-                            // New partition
-                            partition++;
-                            if (partition < 0)
-                            {
-                                throw new RuntimeException("Too many partitions");
+                                // New partition
+                                partition++;
+                                if (partition < 0)
+                                {
+                                    throw new RuntimeException("Too many partitions");
+                                }
+                                partitionTotalBytes = 0;
+                                partitionObjSerializations.clear();
                             }
-                            partitionTotalBytes = 0;
-                            partitionObjSerializations.clear();
+                            binFileWriter.writeBytes(objSerialization.bytes);
+                            partitionTotalBytes += objByteCount;
+                            partitionObjSerializations.add(objSerialization);
                         }
-                        binFileWriter.writeBytes(objSerialization.bytes);
-                        partitionTotalBytes += objByteCount;
-                        partitionObjSerializations.add(objSerialization);
                     }
+
                     // Write final partition portion of classifier index
                     if (partitionObjSerializations.notEmpty())
                     {
@@ -163,148 +156,23 @@ public abstract class DistributedBinaryGraphSerializer
                         }
                     }
                     // Write classifier index
-                    try (Writer writer = fileWriter.getWriter(DistributedMetadataFiles.getMetadataClassifierIndexFilePath(this.metadataName, classifierId)))
+                    try (Writer writer1 = fileWriter.getWriter(DistributedMetadataFiles.getMetadataClassifierIndexFilePath(this.metadataName, classifierId)))
                     {
-                        writer.writeBytes(indexByteStream.toByteArray());
+                        writer1.writeBytes(indexByteStream.toByteArray());
                         indexByteStream.reset();
                     }
                 }
-
-                // Write final partition
-                if (binByteStream.size() > 0)
-                {
-                    try (Writer writer = fileWriter.getWriter(DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, partition)))
-                    {
-                        writer.writeBytes(binByteStream.toByteArray());
-                    }
-                }
             }
         }
-    }
 
-    private static class DistributedBinaryGraphSerializerFromPureRuntime extends DistributedBinaryGraphSerializer
-    {
-        private final PureRuntime runtime;
-
-        private DistributedBinaryGraphSerializerFromPureRuntime(String metadataName, PureRuntime runtime)
+        // Write final partition
+        if (binByteStream.size() > 0)
         {
-            super(metadataName);
-            this.runtime = runtime;
-        }
-
-        @Override
-        public void serialize(FileWriter fileWriter)
-        {
-            ProcessorSupport processorSupport = this.runtime.getProcessorSupport();
-            MutableListMultimap<String, CoreInstance> nodesByClassifierId = getNodesByClassifierId(this.runtime.getModelRepository(), processorSupport);
-
-            // Build string cache
-            DistributedStringCache stringCache = DistributedStringCache.fromNodes(nodesByClassifierId.valuesView(), processorSupport);
-            BinaryObjSerializer serializer = new BinaryObjSerializerWithStringCacheAndImplicitIdentifiers(stringCache);
-
-            // Write string cache
-            stringCache.write(this.metadataName, fileWriter);
-
-            // Write instances
-            int partition = 0;
-            int partitionTotalBytes = 0;
-            ByteArrayOutputStream binByteStream = new ByteArrayOutputStream(MAX_BIN_FILE_BYTES);
-            try (Writer binFileWriter = BinaryWriters.newBinaryWriter(binByteStream))
+            try (Writer writer = fileWriter.getWriter(DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, partition)))
             {
-                ByteArrayOutputStream indexByteStream = new ByteArrayOutputStream();
-                try (Writer indexFileWriter = BinaryWriters.newBinaryWriter(indexByteStream))
-                {
-                    for (String classifierId : nodesByClassifierId.keysView().toSortedList())
-                    {
-                        ListIterable<CoreInstance> classifierObjs = nodesByClassifierId.get(classifierId).toSortedListBy(coreInstance -> IdBuilder.buildId(coreInstance, processorSupport));
-
-                        // Initial index information
-                        indexFileWriter.writeInt(classifierObjs.size()); // total obj count
-                        indexFileWriter.writeInt(partition); // initial partition
-                        indexFileWriter.writeInt(partitionTotalBytes); // initial byte offset in partition
-
-                        MutableList<ObjSerialization> partitionObjSerializations = Lists.mutable.empty();
-                        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-                        try (Writer writer = BinaryWriters.newBinaryWriter(byteStream))
-                        {
-                            GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
-                            for (CoreInstance coreInstance : classifierObjs)
-                            {
-                                Obj obj = GraphSerializer.buildObjWithProperties(coreInstance, classifierCaches, processorSupport);
-                                //objSerialization
-                                ObjSerialization objSerialization = serializeClassifierObj(serializer, byteStream, writer, obj);
-                                int objByteCount = objSerialization.bytes.length;
-                                if (partitionTotalBytes + objByteCount > MAX_BIN_FILE_BYTES)
-                                {
-                                    // Write current partition
-                                    try (Writer writer1 = fileWriter.getWriter(DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, partition)))
-                                    {
-                                        writer1.writeBytes(binByteStream.toByteArray());
-                                        binByteStream.reset();
-                                    }
-
-                                    // Write partition portion of classifier index
-                                    indexFileWriter.writeInt(partitionObjSerializations.size());
-                                    for (ObjSerialization partitionObjSerialization : partitionObjSerializations)
-                                    {
-                                        indexFileWriter.writeInt(stringCache.getStringId(partitionObjSerialization.identifier));
-                                        indexFileWriter.writeInt(partitionObjSerialization.bytes.length);
-                                    }
-
-                                    // New partition
-                                    partition++;
-                                    if (partition < 0)
-                                    {
-                                        throw new RuntimeException("Too many partitions");
-                                    }
-                                    partitionTotalBytes = 0;
-                                    partitionObjSerializations.clear();
-                                }
-                                binFileWriter.writeBytes(objSerialization.bytes);
-                                partitionTotalBytes += objByteCount;
-                                partitionObjSerializations.add(objSerialization);
-                            }
-                        }
-
-                        // Write final partition portion of classifier index
-                        if (partitionObjSerializations.notEmpty())
-                        {
-                            indexFileWriter.writeInt(partitionObjSerializations.size());
-                            for (ObjSerialization partitionObjSerialization : partitionObjSerializations)
-                            {
-                                indexFileWriter.writeInt(stringCache.getStringId(partitionObjSerialization.identifier));
-                                indexFileWriter.writeInt(partitionObjSerialization.bytes.length);
-                            }
-                        }
-                        // Write classifier index
-                        try (Writer writer1 = fileWriter.getWriter(DistributedMetadataFiles.getMetadataClassifierIndexFilePath(this.metadataName, classifierId)))
-                        {
-                            writer1.writeBytes(indexByteStream.toByteArray());
-                            indexByteStream.reset();
-                        }
-                    }
-                }
-            }
-
-            // Write final partition
-            if (binByteStream.size() > 0)
-            {
-                try (Writer writer = fileWriter.getWriter(DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, partition)))
-                {
-                    writer.writeBytes(binByteStream.toByteArray());
-                }
+                writer.writeBytes(binByteStream.toByteArray());
             }
         }
-    }
-
-    public static DistributedBinaryGraphSerializer newSerializer(Serialized serialized)
-    {
-        return newSerializer(null, serialized);
-    }
-
-    public static DistributedBinaryGraphSerializer newSerializer(String metadataName, Serialized serialized)
-    {
-        return new DistributedBinaryGraphSerializerFromSerialized(metadataName, serialized);
     }
 
     public static DistributedBinaryGraphSerializer newSerializer(PureRuntime runtime)
@@ -314,27 +182,12 @@ public abstract class DistributedBinaryGraphSerializer
 
     public static DistributedBinaryGraphSerializer newSerializer(String metadataName, PureRuntime runtime)
     {
-        return new DistributedBinaryGraphSerializerFromPureRuntime(metadataName, runtime);
+        return new DistributedBinaryGraphSerializer(metadataName, runtime);
     }
 
     public static void serialize(PureRuntime runtime, Path directory)
     {
         newSerializer(runtime).serializeToDirectory(directory);
-    }
-
-    public static void serialize(Serialized serialized, JarOutputStream stream)
-    {
-        newSerializer(serialized).serializeToJar(stream);
-    }
-
-    public static void serialize(Serialized serialized, Path directory)
-    {
-        newSerializer(serialized).serializeToDirectory(directory);
-    }
-
-    public static void serialize(Serialized serialized, Map<String, byte[]> fileBytes)
-    {
-        newSerializer(serialized).serializeToInMemoryByteArrays(fileBytes);
     }
 
     private static ListIterable<ObjSerialization> serializeClassifierObjs(BinaryObjSerializer serializer, ListIterable<? extends Obj> classifierObjs)

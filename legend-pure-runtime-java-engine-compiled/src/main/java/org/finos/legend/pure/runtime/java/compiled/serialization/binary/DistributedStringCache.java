@@ -24,9 +24,6 @@ import org.eclipse.collections.impl.factory.Multimaps;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.serialization.Writer;
-import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.Serialized;
 
 import java.util.Objects;
 
@@ -71,33 +68,11 @@ class DistributedStringCache extends AbstractStringCache
         }
     }
 
-    static DistributedStringCache fromSerialized(Serialized serialized)
-    {
-        DistributedStringCollector collector = new DistributedStringCollector();
-        collectStrings(collector, serialized);
-        return fromStringCollector(collector);
-    }
-
     static DistributedStringCache fromNodes(Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
     {
         DistributedStringCollector collector = new DistributedStringCollector();
         collectStrings(collector, nodes, processorSupport);
-        return fromStringCollector(collector);
-    }
 
-    static void collectStrings(DistributedStringCollector collector, Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
-    {
-        AbstractStringCache.PropertyValueCollectorVisitor propertyValueVisitor = new AbstractStringCache.PropertyValueCollectorVisitor(collector);
-        GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
-        for (CoreInstance instance : nodes)
-        {
-            Obj obj = GraphSerializer.buildObjWithProperties(instance, classifierCaches, processorSupport);
-            collectStringsFromObj(collector, propertyValueVisitor, obj);
-        }
-    }
-
-    static DistributedStringCache fromStringCollector(DistributedStringCollector collector)
-    {
         MutableSet<String> allStrings = Sets.mutable.ofInitialCapacity(collector.classifierIds.size() + collector.identifiers.size() + collector.otherStrings.size());
 
         MutableList<String> classifierIdList = Lists.mutable.withAll(collector.classifierIds).sortThis();

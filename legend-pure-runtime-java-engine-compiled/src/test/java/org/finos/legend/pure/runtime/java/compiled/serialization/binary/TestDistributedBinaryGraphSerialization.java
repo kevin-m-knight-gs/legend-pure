@@ -27,7 +27,6 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.tools.GraphNodeIterable;
 import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.Serialized;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -44,29 +43,6 @@ public abstract class TestDistributedBinaryGraphSerialization extends AbstractPu
     }
 
     @Test
-    public void testFromSerialized() throws IOException
-    {
-        testFromSerialized(null);
-    }
-
-    @Test
-    public void testFromSerializedWithMetadataName() throws IOException
-    {
-        testFromSerialized("with_serialized");
-    }
-
-    private void testFromSerialized(String metadataName) throws IOException
-    {
-        Serialized serialized = getSerialized();
-        testSerialization(serialized.getObjects(), metadataName, m -> DistributedBinaryGraphSerializer.newSerializer(m, serialized));
-    }
-
-    private Serialized getSerialized()
-    {
-        return GraphSerializer.serializeAll(repository.getTopLevels(), processorSupport);
-    }
-
-    @Test
     public void testFromRuntime() throws IOException
     {
         testFromRuntime(null);
@@ -76,20 +52,6 @@ public abstract class TestDistributedBinaryGraphSerialization extends AbstractPu
     public void testFromRuntimeWithMetadataName() throws IOException
     {
         testFromRuntime("withRuntime");
-    }
-
-    @Test
-    public void testFromRuntimeComparedToSerialized() throws IOException
-    {
-        Serialized serialized = getSerialized();
-        testSerialization(serialized.getObjects(), null, m -> DistributedBinaryGraphSerializer.newSerializer(m, runtime));
-    }
-
-    @Test
-    public void testFromSerializedComparedToRuntime() throws IOException
-    {
-        Serialized serialized = getSerialized();
-        testSerialization(getExpectedObjsFromRuntime(), null, m -> DistributedBinaryGraphSerializer.newSerializer(m, serialized));
     }
 
     private void testFromRuntime(String metadataName) throws IOException
