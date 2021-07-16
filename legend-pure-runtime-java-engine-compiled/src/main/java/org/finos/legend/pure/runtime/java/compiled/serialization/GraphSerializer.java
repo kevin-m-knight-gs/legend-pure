@@ -15,19 +15,13 @@
 package org.finos.legend.pure.runtime.java.compiled.serialization;
 
 import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
-import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.map.primitive.MutableObjectBooleanMap;
-import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.set.SetIterable;
-import org.eclipse.collections.api.stack.MutableStack;
-import org.eclipse.collections.impl.factory.Maps;
-import org.eclipse.collections.impl.factory.Sets;
-import org.eclipse.collections.impl.factory.Stacks;
 import org.eclipse.collections.impl.factory.primitive.ObjectBooleanMaps;
-import org.eclipse.collections.impl.utility.LazyIterate;
 import org.finos.legend.pure.m3.compiler.Context;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Paths;
@@ -37,12 +31,9 @@ import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation._package._Package;
-import org.finos.legend.pure.m3.navigation.multiplicity.Multiplicity;
 import org.finos.legend.pure.m3.navigation.type.Type;
-import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
-import org.finos.legend.pure.m4.coreinstance.compileState.CompileState;
 import org.finos.legend.pure.m4.coreinstance.primitive.FloatCoreInstance;
 import org.finos.legend.pure.m4.coreinstance.primitive.IntegerCoreInstance;
 import org.finos.legend.pure.m4.coreinstance.primitive.PrimitiveCoreInstance;
@@ -50,11 +41,8 @@ import org.finos.legend.pure.m4.coreinstance.primitive.date.DateFunctions;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.LatestDate;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.JavaCompiledCoreInstance;
-import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.EnumProcessor;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.MetadataJavaPaths;
-import org.finos.legend.pure.runtime.java.compiled.metadata.CompiledCoreInstanceBuilder;
 import org.finos.legend.pure.runtime.java.compiled.metadata.Metadata;
-import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataEager;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Enum;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
@@ -65,24 +53,17 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyV
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueOne;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValue;
 
-import java.lang.reflect.Field;
 import java.math.BigDecimal;
 
 public class GraphSerializer
 {
-    public static final CompileState SERIALIZED = CompileState.COMPILE_EVENT_EXTRA_STATE_1;
-
-    public static Obj buildObjWithProperties(CoreInstance instance, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
-    {
-        return buildObj(instance, collectProperties(instance, classifierCaches, processorSupport), classifierCaches, processorSupport);
-    }
-
-    private static Obj buildObj(CoreInstance instance, ListIterable<PropertyValue> propertyValues, ClassifierCaches state, ProcessorSupport processorSupport)
+    public static Obj buildObj(CoreInstance instance, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
     {
         SourceInformation sourceInformation = instance.getSourceInformation();
         String identifier = IdBuilder.buildId(instance, processorSupport);
-        String classifierString = state.getClassifierId(instance.getClassifier());
-        return state.isEnum(instance) ?
+        String classifierString = classifierCaches.getClassifierId(instance.getClassifier());
+        ListIterable<PropertyValue> propertyValues = collectProperties(instance, classifierCaches, processorSupport);
+        return classifierCaches.isEnum(instance) ?
                 new Enum(sourceInformation, identifier, classifierString, instance.getName(), propertyValues) :
                 new Obj(sourceInformation, identifier, classifierString, instance.getName(), propertyValues);
     }
@@ -90,41 +71,32 @@ public class GraphSerializer
     private static ListIterable<PropertyValue> collectProperties(CoreInstance instance, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
     {
         MutableList<PropertyValue> propertyValues = Lists.mutable.empty();
-        for (String key : instance.getKeys())
+        instance.getKeys().forEach(key ->
         {
             ListIterable<? extends CoreInstance> values = Instance.getValueForMetaPropertyToManyResolved(instance, key, processorSupport);
             if (values.notEmpty())
             {
-                CoreInstance property = instance.getKeyByName(key);
-                PropertyValue propertyValue;
-                if (Multiplicity.isToOne(Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.multiplicity, processorSupport), false))
-                {
-                    RValue rValue = buildRValue(values.get(0), classifierCaches, processorSupport);
-                    propertyValue = new PropertyValueOne(key, rValue);
-                }
-                else
-                {
-                    MutableList<RValue> rValues = values.collect(value -> buildRValue(value, classifierCaches, processorSupport), Lists.mutable.withInitialCapacity(values.size()));
-                    propertyValue = new PropertyValueMany(key, rValues);
-                }
+                PropertyValue propertyValue = (values.size() == 1) ?
+                        new PropertyValueOne(key, buildRValue(values.get(0), classifierCaches, processorSupport)) :
+                        new PropertyValueMany(key, values.collect(value -> buildRValue(value, classifierCaches, processorSupport), Lists.mutable.withInitialCapacity(values.size())));
                 propertyValues.add(propertyValue);
             }
-        }
-        return propertyValues;
+        });
+        return propertyValues.isEmpty() ? null : propertyValues;
     }
 
-    private static RValue buildRValue(CoreInstance value, ClassifierCaches state, ProcessorSupport processorSupport)
+    private static RValue buildRValue(CoreInstance value, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
     {
         CoreInstance classifier = value.getClassifier();
-        if (state.isPrimitiveType(classifier))
+        if (classifierCaches.isPrimitiveType(classifier))
         {
             return new Primitive(processPrimitiveTypeJava(value, processorSupport));
         }
-        String classifierId = state.getClassifierId(classifier);
-        return state.isEnumeration(classifier) ? new EnumRef(classifierId, value.getName()) : new ObjRef(classifierId, IdBuilder.buildId(value, processorSupport));
+        String classifierId = classifierCaches.getClassifierId(classifier);
+        return classifierCaches.isEnumeration(classifier) ? new EnumRef(classifierId, value.getName()) : new ObjRef(classifierId, IdBuilder.buildId(value, processorSupport));
     }
 
-    public static Object processPrimitiveTypeJava(CoreInstance instance, ProcessorSupport processorSupport)
+    private static Object processPrimitiveTypeJava(CoreInstance instance, ProcessorSupport processorSupport)
     {
         if (instance == null)
         {
@@ -252,188 +224,6 @@ public class GraphSerializer
         return value;
     }
 
-    public static int serializeAllToMetadata(Iterable<? extends CoreInstance> startingNodes, MetadataEager metadata, CompiledCoreInstanceBuilder instanceBuilder,
-                                             SetIterable<? extends CoreInstance> excluded, MutableSet<? super CoreInstance> resultExcluded, ClassLoader classLoader, ProcessorSupport processorSupport)
-    {
-        // Collect all nodes
-        ListIterable<CoreInstance> nodes = collectNodesForSerialization(startingNodes, processorSupport);
-
-        // Initialize metadata
-        ClassifierCaches classifierCaches = new ClassifierCaches(processorSupport);
-        nodes.forEach(node ->
-        {
-            CoreInstance classifier = node.getClassifier();
-            String classifierId = classifierCaches.getClassifierId(classifier);
-            if (classifierCaches.isEnumeration(classifier))
-            {
-                CoreInstance instance = instanceBuilder.newEnumCoreInstance(classifierId, node.getName(), node.getSourceInformation(), classLoader);
-                metadata.add(classifierId, node.getName(), instance);
-            }
-            else
-            {
-                CoreInstance instance = instanceBuilder.newCoreInstance(classifierId, node.getName(), node.getSourceInformation(), classLoader);
-                metadata.add(classifierId, IdBuilder.buildId(node, processorSupport), instance);
-            }
-        });
-
-        if ((resultExcluded != null) && excluded.notEmpty())
-        {
-            ModelRepository repository = excluded.getAny().getRepository();
-            addExclude(repository.getTopLevel(M3Paths.Root), metadata, resultExcluded, processorSupport);
-            excluded.forEach(e -> addExclude(e, metadata, resultExcluded, processorSupport));
-        }
-
-        // Fill in property values
-        nodes.forEach(node ->
-        {
-            CoreInstance classifier = node.getClassifier();
-            String classifierId = classifierCaches.getClassifierId(classifier);
-
-            CoreInstance inst;
-            MapIterable<String, Field> fields;
-            if (classifierCaches.isEnumeration(classifier))
-            {
-                inst = metadata.getMetadata(classifierId, node.getName());
-                fields = instanceBuilder.getFields(EnumProcessor.ENUM_CLASS_NAME);
-            }
-            else
-            {
-                inst = metadata.getMetadata(classifierId, IdBuilder.buildId(node, processorSupport));
-                fields = instanceBuilder.getFields(classifierId);
-            }
-
-            node.getKeys().forEach(key ->
-            {
-                ListIterable<? extends CoreInstance> values = Instance.getValueForMetaPropertyToManyResolved(node, key, processorSupport);
-                if (values.notEmpty())
-                {
-                    CoreInstance property = node.getKeyByName(key);
-                    Object processedValue = Multiplicity.isToOne(Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.multiplicity, processorSupport), false) ?
-                            processPropertyValue(values.get(0), metadata, classifierCaches, processorSupport) :
-                            values.collect(v -> processPropertyValue(v, metadata, classifierCaches, processorSupport), Lists.mutable.withInitialCapacity(values.size()));
-
-                    Field f = fields.get("_" + key);
-                    f.setAccessible(true);
-                    try
-                    {
-                        f.set(inst, processedValue);
-                    }
-                    catch (ReflectiveOperationException e)
-                    {
-                        throw new RuntimeException(e);
-                    }
-                }
-            });
-        });
-
-        return nodes.size();
-    }
-
-    private static ListIterable<CoreInstance> collectNodesForSerialization(Iterable<? extends CoreInstance> startingNodes, ProcessorSupport processorSupport)
-    {
-        PrivateSetSearchState state = new PrivateSetSearchStateWithCompileStateMarking(Stacks.mutable.withAll(startingNodes), processorSupport);
-        while (state.hasNodes())
-        {
-            CoreInstance instance = state.nextNode();
-            if (state.shouldVisit(instance))
-            {
-                state.noteVisited(instance);
-                LazyIterate.flatCollect(instance.getKeys(), key -> Instance.getValueForMetaPropertyToManyResolved(instance, key, processorSupport))
-                        .reject(state::isPrimitiveValue)
-                        .forEach(state::addNode);
-            }
-        }
-        return Lists.mutable.withAll(state.visited);
-    }
-
-    private static Object processPropertyValue(CoreInstance value, Metadata metadata, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
-    {
-        CoreInstance classifier = value.getClassifier();
-        if (classifierCaches.isPrimitiveType(classifier))
-        {
-            return processPrimitiveTypeJava(value, processorSupport);
-        }
-        if (classifierCaches.isEnumeration(classifier))
-        {
-            return metadata.getEnum(classifierCaches.getClassifierId(classifier), value.getName());
-        }
-        return metadata.getMetadata(classifierCaches.getClassifierId(classifier), IdBuilder.buildId(value, processorSupport));
-    }
-
-    private static Object getRValueValue(RValue rValue, Metadata metadata)
-    {
-        if (rValue instanceof Primitive)
-        {
-            return ((Primitive) rValue).getValue();
-        }
-        if (rValue instanceof EnumRef)
-        {
-            EnumRef enumRef = (EnumRef) rValue;
-            return metadata.getEnum(enumRef.getEnumerationId(), enumRef.getEnumName());
-        }
-        if (rValue instanceof ObjRef)
-        {
-            ObjRef objRef = (ObjRef) rValue;
-            Object result = metadata.getMetadata(objRef.getClassifierId(), objRef.getId());
-            if (result == null)
-            {
-                throw new RuntimeException("ERROR: cannot find id " + objRef.getId() + " for type " + objRef.getClassifierId());
-            }
-            return result;
-        }
-        throw new RuntimeException("Unhandled RValue: " + rValue);
-    }
-
-    private static void addExclude(CoreInstance excludedOne, Metadata metadata, MutableSet<? super CoreInstance> resultExcluded, ProcessorSupport processorSupport)
-    {
-        if ((resultExcluded != null) && (excludedOne != null))
-        {
-            String classifierId = MetadataJavaPaths.buildMetadataKeyFromType(excludedOne.getClassifier());
-            String identifier = IdBuilder.buildId(excludedOne, processorSupport);
-            CoreInstance resultExcludedOne = metadata.getMetadata(classifierId, identifier);
-            if (resultExcludedOne != null)
-            {
-                resultExcluded.add(resultExcludedOne);
-            }
-
-            for (CoreInstance excl : excludedOne.getValueForMetaPropertyToMany(M3Properties.children))
-            {
-                String exclClassifierId = MetadataJavaPaths.buildMetadataKeyFromType(excl.getClassifier());
-                String exclIdentifier = IdBuilder.buildId(excl, processorSupport);
-                CoreInstance resultExcl = metadata.getMetadata(exclClassifierId, exclIdentifier);
-                if (resultExcl != null)
-                {
-                    resultExcluded.add(resultExcl);
-                }
-            }
-        }
-    }
-
-    private static SearchState newCompiledStateSearchState(CoreInstance node, ProcessorSupport processorSupport)
-    {
-        return new CompiledStateSearchState(Stacks.mutable.with(node), processorSupport);
-    }
-
-    private static SearchState newCompiledStateSearchState(Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
-    {
-        return new CompiledStateSearchState(Stacks.mutable.withAll(nodes), processorSupport);
-    }
-
-    private static SearchState newPrivateSetSearchState(CoreInstance node, ProcessorSupport processorSupport, boolean addSerializedCompileState)
-    {
-        return newPrivateSetSearchState(Stacks.mutable.with(node), processorSupport, addSerializedCompileState);
-    }
-
-    private static SearchState newPrivateSetSearchState(Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport, boolean addSerializedCompileState)
-    {
-        return newPrivateSetSearchState(Stacks.mutable.withAll(nodes), processorSupport, addSerializedCompileState);
-    }
-
-    private static SearchState newPrivateSetSearchState(MutableStack<CoreInstance> stack, ProcessorSupport processorSupport, boolean addSerializedCompileState)
-    {
-        return addSerializedCompileState ? new PrivateSetSearchStateWithCompileStateMarking(stack, processorSupport) : new PrivateSetSearchState(stack, processorSupport);
-    }
-
     public static class ClassifierCaches
     {
         private final SetIterable<CoreInstance> primitiveTypes;
@@ -475,98 +265,6 @@ public class GraphSerializer
         private static String newClassifierId(CoreInstance classifier)
         {
             return MetadataJavaPaths.buildMetadataKeyFromType(classifier).intern();
-        }
-    }
-
-    private abstract static class SearchState extends ClassifierCaches
-    {
-        private final MutableStack<CoreInstance> stack;
-
-        private SearchState(MutableStack<CoreInstance> stack, ProcessorSupport processorSupport)
-        {
-            super(processorSupport);
-            this.stack = stack;
-        }
-
-        boolean hasNodes()
-        {
-            return this.stack.notEmpty();
-        }
-
-        CoreInstance nextNode()
-        {
-            return this.stack.pop();
-        }
-
-        void addNode(CoreInstance node)
-        {
-            this.stack.push(node);
-        }
-
-        boolean shouldVisit(CoreInstance node)
-        {
-            return !hasVisited(node) && !isPrimitiveType(node.getClassifier());
-        }
-
-        abstract boolean hasVisited(CoreInstance node);
-
-        abstract void noteVisited(CoreInstance node);
-    }
-
-    private static class CompiledStateSearchState extends SearchState
-    {
-        private CompiledStateSearchState(MutableStack<CoreInstance> stack, ProcessorSupport processorSupport)
-        {
-            super(stack, processorSupport);
-        }
-
-        @Override
-        boolean hasVisited(CoreInstance node)
-        {
-            return node.hasCompileState(SERIALIZED);
-        }
-
-        @Override
-        void noteVisited(CoreInstance node)
-        {
-            node.addCompileState(SERIALIZED);
-        }
-    }
-
-    private static class PrivateSetSearchState extends SearchState
-    {
-        private final MutableSet<CoreInstance> visited = Sets.mutable.with();
-
-        private PrivateSetSearchState(MutableStack<CoreInstance> stack, ProcessorSupport processorSupport)
-        {
-            super(stack, processorSupport);
-        }
-
-        @Override
-        boolean hasVisited(CoreInstance node)
-        {
-            return this.visited.contains(node);
-        }
-
-        @Override
-        void noteVisited(CoreInstance node)
-        {
-            this.visited.add(node);
-        }
-    }
-
-    private static class PrivateSetSearchStateWithCompileStateMarking extends PrivateSetSearchState
-    {
-        private PrivateSetSearchStateWithCompileStateMarking(MutableStack<CoreInstance> stack, ProcessorSupport processorSupport)
-        {
-            super(stack, processorSupport);
-        }
-
-        @Override
-        void noteVisited(CoreInstance node)
-        {
-            super.noteVisited(node);
-            node.addCompileState(SERIALIZED);
         }
     }
 }
