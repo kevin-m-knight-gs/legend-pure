@@ -109,7 +109,7 @@ public class DistributedBinaryGraphSerializer
                         GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
                         for (CoreInstance coreInstance : classifierObjs)
                         {
-                            Obj obj = GraphSerializer.buildObjWithProperties(coreInstance, classifierCaches, processorSupport);
+                            Obj obj = GraphSerializer.buildObj(coreInstance, classifierCaches, processorSupport);
                             //objSerialization
                             ObjSerialization objSerialization = serializeClassifierObj(serializer, byteStream, writer, obj);
                             int objByteCount = objSerialization.bytes.length;

@@ -88,7 +88,7 @@ abstract class AbstractStringCache implements StringCache
     {
         AbstractStringCache.PropertyValueCollectorVisitor propertyValueVisitor = new AbstractStringCache.PropertyValueCollectorVisitor(collector);
         GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
-        nodes.forEach(node -> collectStringsFromObj(collector, propertyValueVisitor, GraphSerializer.buildObjWithProperties(node, classifierCaches, processorSupport)));
+        nodes.forEach(node -> collectStringsFromObj(collector, propertyValueVisitor, GraphSerializer.buildObj(node, classifierCaches, processorSupport)));
     }
 
     protected static void collectStringsFromObj(StringCollector collector, PropertyValueCollectorVisitor propertyValueVisitor, Obj obj)

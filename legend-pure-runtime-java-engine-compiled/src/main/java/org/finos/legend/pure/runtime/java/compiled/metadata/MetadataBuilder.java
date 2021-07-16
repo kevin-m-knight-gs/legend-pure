@@ -14,7 +14,6 @@
 
 package org.finos.legend.pure.runtime.java.compiled.metadata;
 
-import org.eclipse.collections.api.block.function.Function;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.set.SetIterable;
@@ -27,15 +26,16 @@ import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.finos.legend.pure.m4.coreinstance.compileState.CompileState;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.MetadataJavaPaths;
-import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
 
 /**
  * Creates the metadata index
  */
 public class MetadataBuilder
 {
+    public static final CompileState SERIALIZED = CompileState.COMPILE_EVENT_EXTRA_STATE_1;
 
     private MetadataBuilder()
     {
@@ -66,7 +66,6 @@ public class MetadataBuilder
 
                 String id = IdBuilder.buildId(instance, processorSupport);
                 CoreInstance classifier = instance.getClassifier();
-                CoreInstance instanceToAdd = instance;
 
                 for (String key : instance.getKeys())
                 {
@@ -81,11 +80,11 @@ public class MetadataBuilder
 
                 if (classifier instanceof Enumeration)
                 {
-                    metadataEager.add(state.getClassifierId(classifier), instanceToAdd.getName(), instanceToAdd);
+                    metadataEager.add(state.getClassifierId(classifier), instance.getName(), instance);
                 }
                 else
                 {
-                    metadataEager.add(state.getClassifierId(classifier), id, instanceToAdd);
+                    metadataEager.add(state.getClassifierId(classifier), id, instance);
                 }
             }
         }
@@ -95,15 +94,6 @@ public class MetadataBuilder
 
     private static class ClassifierCaches
     {
-        private final Function<CoreInstance, String> newClassifierId = new Function<CoreInstance, String>()
-        {
-            @Override
-            public String valueOf(CoreInstance classifier)
-            {
-                return MetadataJavaPaths.buildMetadataKeyFromType(classifier).intern();
-            }
-        };
-
         private final SetIterable<CoreInstance> primitiveTypes;
         private final MutableMap<CoreInstance, String> classifierIdCache = Maps.mutable.empty();
 
@@ -119,7 +109,12 @@ public class MetadataBuilder
 
         String getClassifierId(CoreInstance classifier)
         {
-            return this.classifierIdCache.getIfAbsentPutWithKey(classifier, this.newClassifierId);
+            return this.classifierIdCache.getIfAbsentPutWithKey(classifier, ClassifierCaches::newClassifierId);
+        }
+
+        private static String newClassifierId(CoreInstance classifier)
+        {
+            return MetadataJavaPaths.buildMetadataKeyFromType(classifier).intern();
         }
     }
 
@@ -168,13 +163,13 @@ public class MetadataBuilder
         @Override
         boolean hasVisited(CoreInstance node)
         {
-            return node.hasCompileState(GraphSerializer.SERIALIZED);
+            return node.hasCompileState(SERIALIZED);
         }
 
         @Override
         void noteVisited(CoreInstance node)
         {
-            node.addCompileState(GraphSerializer.SERIALIZED);
+            node.addCompileState(SERIALIZED);
         }
     }
 
@@ -211,9 +206,7 @@ public class MetadataBuilder
         void noteVisited(CoreInstance node)
         {
             super.noteVisited(node);
-            node.addCompileState(GraphSerializer.SERIALIZED);
+            node.addCompileState(SERIALIZED);
         }
     }
-
-
 }
