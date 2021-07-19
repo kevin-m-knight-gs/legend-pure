@@ -17,15 +17,15 @@ package org.finos.legend.pure.runtime.java.compiled.metadata;
 import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
+import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.ConcurrentMutableMap;
 import org.eclipse.collections.api.map.ImmutableMap;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
-import org.eclipse.collections.api.multimap.set.MutableSetMultimap;
-import org.eclipse.collections.api.tuple.Pair;
-import org.eclipse.collections.impl.factory.Multimaps;
+import org.eclipse.collections.api.set.MutableSet;
+import org.eclipse.collections.impl.Counter;
 import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.JavaPackageAndImportBuilder;
@@ -157,6 +157,21 @@ public class MetadataLazy implements Metadata
         return (value == null) ? null : value.visit(this.valueToObjectVisitor);
     }
 
+    public RichIterable<Object> valuesToObjects(Object value)
+    {
+        if (value == null)
+        {
+            return Lists.immutable.empty();
+        }
+
+        if (value instanceof RValue)
+        {
+            return Lists.mutable.with(valueToObject((RValue) value));
+        }
+
+        return valuesToObjects((ListIterable<RValue>) value);
+    }
+
     public RichIterable<Object> valuesToObjects(ListIterable<RValue> values)
     {
         int size = (values == null) ? 0 : values.size();
@@ -169,7 +184,8 @@ public class MetadataLazy implements Metadata
             return Lists.mutable.with(valueToObject(values.get(0)));
         }
 
-        MutableSetMultimap<String, ObjRef> objRefsByClassifier = Multimaps.mutable.set.empty();
+        MutableMap<String, MutableSet<ObjRef>> objRefsByClassifier = Maps.mutable.empty();
+        Counter objRefCounter = new Counter();
         values.forEach(new RValueConsumer()
         {
             @Override
@@ -180,7 +196,8 @@ public class MetadataLazy implements Metadata
             @Override
             protected void accept(ObjRef objRef)
             {
-                objRefsByClassifier.put(objRef.getClassifierId(), objRef);
+                objRefsByClassifier.getIfAbsentPut(objRef.getClassifierId(), Sets.mutable::empty).add(objRef);
+                objRefCounter.increment();
             }
 
             @Override
@@ -193,14 +210,12 @@ public class MetadataLazy implements Metadata
             return values.collect(this::valueToObject);
         }
 
-        MutableMap<ObjRef, CoreInstance> objectByRef = Maps.mutable.withInitialCapacity(objRefsByClassifier.size());
-        for (Pair<String, RichIterable<ObjRef>> pair : objRefsByClassifier.keyMultiValuePairsView())
+        MutableMap<ObjRef, CoreInstance> objectByRef = Maps.mutable.withInitialCapacity(objRefCounter.getCount());
+        objRefsByClassifier.forEach((classifier, objRefs) ->
         {
-            String classifier = pair.getOne();
-            RichIterable<ObjRef> objRefs = pair.getTwo();
             MutableList<String> idsToDeserialize = Lists.mutable.withInitialCapacity(objRefs.size());
             ConcurrentMutableMap<String, CoreInstance> classifierCache = getClassifierInstanceCache(classifier);
-            for (ObjRef objRef : objRefs)
+            objRefs.forEach(objRef ->
             {
                 String id = objRef.getId();
                 CoreInstance cachedInstance = classifierCache.get(id);
@@ -212,23 +227,26 @@ public class MetadataLazy implements Metadata
                 {
                     objectByRef.put(objRef, cachedInstance);
                 }
-            }
+            });
             if (idsToDeserialize.notEmpty())
             {
+                ListIterable<Obj> deserialized;
                 try
                 {
-                    for (Obj obj : this.deserializer.getInstances(classifier, idsToDeserialize))
-                    {
-                        CoreInstance cachedInstance = classifierCache.getIfAbsentPut(obj.getIdentifier(), () -> newInstance(classifier, obj));
-                        objectByRef.put(new ObjRef(obj.getClassifier(), obj.getIdentifier()), cachedInstance);
-                    }
+                    deserialized = this.deserializer.getInstances(classifier, idsToDeserialize);
                 }
                 catch (IOException e)
                 {
                     throw new RuntimeException("Error deserializing instances of " + classifier, e);
                 }
+
+                deserialized.forEach(obj ->
+                {
+                    CoreInstance cachedInstance = classifierCache.getIfAbsentPut(obj.getIdentifier(), () -> newInstance(classifier, obj));
+                    objectByRef.put(new ObjRef(obj.getClassifier(), obj.getIdentifier()), cachedInstance);
+                });
             }
-        }
+        });
         return values.collectWith(RValue::visit, new RValueVisitor<Object>()
         {
             @Override

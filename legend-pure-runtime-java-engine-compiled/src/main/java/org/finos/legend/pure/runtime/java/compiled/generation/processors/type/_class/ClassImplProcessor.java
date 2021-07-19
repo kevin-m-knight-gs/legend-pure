@@ -133,6 +133,7 @@ public class ClassImplProcessor
                 (ClassProcessor.isPlatformClass(_class) ? buildFactory(className, systemPath) : "") +
                 (isGetterOverride ? getterOverrides(interfaceNamePlusTypeParams) : "") +
                 buildGetValueForMetaPropertyToOne(classGenericType, processorSupport) +
+                buildGetValueForMetaPropertyToMany(classGenericType, processorSupport) +
 
                 buildSimpleProperties(classGenericType, new FullPropertyImplementation()
                 {
@@ -316,7 +317,7 @@ public class ClassImplProcessor
                 "\n";
     }
 
-    public static String buildGetValueForMetaPropertyToOne(final CoreInstance classGenericType, final ProcessorSupport processorSupport)
+    public static String buildGetValueForMetaPropertyToOne(CoreInstance classGenericType, ProcessorSupport processorSupport)
     {
         CoreInstance _class = Instance.getValueForMetaPropertyToOneResolved(classGenericType, M3Properties.rawType, processorSupport);
         RichIterable<CoreInstance> toOneProperties = processorSupport.class_getSimpleProperties(_class).selectWith(IS_TO_ONE, processorSupport);
@@ -325,17 +326,11 @@ public class ClassImplProcessor
                 "    {\n" +
                 "        switch (keyName)\n" +
                 "        {\n" +
-                toOneProperties.collect(new Function<CoreInstance, String>()
-                {
-                    @Override
-                    public String valueOf(CoreInstance property)
-                    {
-                        return "            case \"" + property.getName() + "\":\n" +
-                                "            {\n" +
-                                "                return ValCoreInstance.toCoreInstance(this._" + Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.name, processorSupport).getName() + "());\n" +
-                                "            }\n";
-                    }
-                }).makeString("") +
+                toOneProperties.collect(property ->
+                "            case \"" + property.getName() + "\":\n" +
+                "            {\n" +
+                "                return ValCoreInstance.toCoreInstance(_" + property.getName() + "());\n" +
+                "            }\n").makeString("") +
                 "            default:\n" +
                 "            {\n" +
                 "                return super.getValueForMetaPropertyToOne(keyName);\n" +
@@ -343,6 +338,30 @@ public class ClassImplProcessor
                 "        }\n" +
                 "    }\n" +
                 "\n";
+    }
+
+    public static String buildGetValueForMetaPropertyToMany(CoreInstance classGenericType, ProcessorSupport processorSupport)
+    {
+        CoreInstance _class = Instance.getValueForMetaPropertyToOneResolved(classGenericType, M3Properties.rawType, processorSupport);
+        RichIterable<CoreInstance> toManyProperties = processorSupport.class_getSimpleProperties(_class).rejectWith(IS_TO_ONE, processorSupport);
+        return "    @Override\n" +
+                "    public ListIterable<CoreInstance> getValueForMetaPropertyToMany(String keyName)\n" +
+                "    {\n" +
+                "        switch (keyName)\n" +
+                "        {\n" +
+                toManyProperties.collect(property ->
+                "            case \"" + property.getName() + "\":\n" +
+                "            {\n" +
+                "                return ValCoreInstance.toCoreInstances(_" + property.getName() + "());\n" +
+                "            }\n").makeString("") +
+                "            default:\n" +
+                "            {\n" +
+                "                return super.getValueForMetaPropertyToMany(keyName);\n" +
+                "            }\n" +
+                "        }\n" +
+                "    }\n" +
+                "\n";
+
     }
 
     public static String buildSimpleProperties(final CoreInstance classGenericType, final FullPropertyImplementation propertyImpl, final ProcessorContext processorContext, final ProcessorSupport processorSupport)
@@ -664,7 +683,7 @@ public class ClassImplProcessor
                 buildPropertyToManyAdd(name, owner, className, typeObject) +
                 buildPropertyToManyAddAll(name, owner, className, typeObject) +
                 buildPropertyToManyRemove(name, owner, className) +
-                buildPropertyToManyRemoveItem(name, owner, className, typeObject) +
+                buildPropertyToManyRemoveItem(name, owner, className, typeObject, setCachedOrMutated) +
                 (processorContext.getGenerator().isStubType(property, propertyReturnGenericType) ?
                         buildPropertyToManyAddCoreInstance(name, owner, className) +
                                 buildPropertyToManyAddAllCoreInstance(name, owner, className) +
@@ -713,11 +732,16 @@ public class ClassImplProcessor
                 "\n";
     }
 
-    private static String buildPropertyToManyRemoveItem(String name, String owner, String className, String typeObject)
+    private static String buildPropertyToManyRemoveItem(String name, String owner, String className, String typeObject, boolean setCachedOrMutated)
     {
         return "    public " + className + " _" + name + "Remove(" + typeObject + " val)\n" +
                 "    {\n" +
-                "        " + owner + "._" + name + " = Lists.mutable.with();\n" +
+                (setCachedOrMutated ? "        " + owner + "._" + name + "();\n" : "") +
+                "        if(!(" + owner + "._" + name + " instanceof MutableList))\n" +
+                "        {\n" +
+                "            " + owner + "._" + name + " = " + owner + "._" + name + ".toList();\n" +
+                "        }\n" +
+                "        ((MutableList)" + owner + "._" + name + ").remove(val);\n" +
                 "        return this;\n" +
                 "    }\n" +
                 "\n";

@@ -93,6 +93,7 @@ public class ClassLazyImplProcessor
                         (ClassProcessor.isPlatformClass(_class) ? buildFactory(className, systemPath) : "") +
                         (instanceOfGetterOverride ? lazyGetterOverride(interfaceNamePlusTypeParams) : "") +
                         ClassImplProcessor.buildGetValueForMetaPropertyToOne(classGenericType, processorSupport) +
+                        ClassImplProcessor.buildGetValueForMetaPropertyToMany(classGenericType, processorSupport) +
                         ClassImplProcessor.buildSimpleProperties(classGenericType, new ClassImplProcessor.FullPropertyImplementation()
                         {
                             @Override
@@ -247,7 +248,7 @@ public class ClassLazyImplProcessor
                     "            {\n" +
                     "                if (!" + owner + "._" + name + LAZY_INITIALIZED_SUFFIX + ".get())\n" +
                     "                {\n" +
-                    "                    " + owner + "._" + name + " = (RichIterable<? extends " + typeObject + ">)(Object)" + owner + ".metadataLazy.valuesToObjects((ListIterable<RValue>)this.vals.get(\""+name+"\"));\n" +
+                    "                    " + owner + "._" + name + " = (RichIterable<? extends " + typeObject + ">)(Object)" + owner + ".metadataLazy.valuesToObjects(this.vals.get(\""+name+"\"));\n" +
                     "                    " + owner + "._" + name + LAZY_INITIALIZED_SUFFIX + ".set(true);\n" +
                     "                }\n" +
                     "            }\n" +
