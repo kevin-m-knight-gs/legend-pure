@@ -631,7 +631,7 @@ public class ClassImplProcessor
                         "        }\n" : "") +
                 "        if (add)\n" +
                 "        {\n" +
-                "            if(!(" + owner + "._" + name + " instanceof MutableList))\n" +
+                "            if (!(" + owner + "._" + name + " instanceof MutableList))\n" +
                 "            {\n" +
                 "                " + owner + "._" + name + " = " + owner + "._" + name + ".toList();\n" +
                 "            }\n" +
@@ -656,11 +656,11 @@ public class ClassImplProcessor
                 (setCachedOrMutated ? "        " + owner + "._" + name + "();\n" : "") +
                 "        if (add)\n" +
                 "        {\n" +
-                "            if(!(" + owner + "._" + name + " instanceof MutableList))\n" +
+                "            if (!(" + owner + "._" + name + " instanceof MutableList))\n" +
                 "            {\n" +
                 "                " + owner + "._" + name + " = " + owner + "._" + name + ".toList();\n" +
                 "            }\n" +
-                "            " + owner + "._" + name + " = ((MutableList)" + owner + "._" + name + ").withAll(val);\n" +
+                "            ((MutableList)" + owner + "._" + name + ").addAllIterable(val);\n" +
                 "        }\n" +
                 "        else\n" +
                 "        {\n" +
@@ -695,8 +695,7 @@ public class ClassImplProcessor
     {
         return "    public " + className + " _" + name + "(RichIterable<? extends " + typeObject + "> val)\n" +
                 "    {\n" +
-                "        " + owner + "._" + name + "(val, false);\n" +
-                "        return this;\n" +
+                "        return " + owner + "._" + name + "(val, false);\n" +
                 "    }\n" +
                 "\n";
     }
@@ -726,8 +725,7 @@ public class ClassImplProcessor
     {
         return "    public " + className + " _" + name + "Remove()\n" +
                 "    {\n" +
-                "        " + owner + "._" + name + " = Lists.mutable.with();\n" +
-                "        return this;\n" +
+                "        return " + owner + "._" + name + "(Lists.mutable.empty(), false);\n" +
                 "    }\n" +
                 "\n";
     }
@@ -737,7 +735,7 @@ public class ClassImplProcessor
         return "    public " + className + " _" + name + "Remove(" + typeObject + " val)\n" +
                 "    {\n" +
                 (setCachedOrMutated ? "        " + owner + "._" + name + "();\n" : "") +
-                "        if(!(" + owner + "._" + name + " instanceof MutableList))\n" +
+                "        if (!(" + owner + "._" + name + " instanceof MutableList))\n" +
                 "        {\n" +
                 "            " + owner + "._" + name + " = " + owner + "._" + name + ".toList();\n" +
                 "        }\n" +
