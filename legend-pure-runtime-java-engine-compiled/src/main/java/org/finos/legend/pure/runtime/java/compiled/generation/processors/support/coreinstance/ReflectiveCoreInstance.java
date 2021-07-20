@@ -126,7 +126,7 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
         {
             throw new IllegalArgumentException("Cannot find property '" + key + "'");
         }
-        if (m.getParameterTypes()[1] == RichIterable.class)
+        if (m.getParameterTypes()[0] == RichIterable.class)
         {
             // to many
             throw new RuntimeException("TO CODE");
@@ -515,7 +515,7 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
     {
         String propertyName = key.getLast();
         Method m = getSetMethodForKey(propertyName);
-        if ((m == null) || (m.getParameterTypes()[1] == RichIterable.class))
+        if ((m == null) || (m.getParameterTypes()[0] == RichIterable.class))
         {
             // to many
             m = getAddOneMethodForKey(propertyName);
