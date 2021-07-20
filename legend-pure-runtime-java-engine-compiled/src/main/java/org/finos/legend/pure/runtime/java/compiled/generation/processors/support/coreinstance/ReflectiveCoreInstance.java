@@ -121,77 +121,75 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
     @Override
     public void modifyValueForToManyMetaProperty(String key, int offset, CoreInstance value)
     {
-        Method m = getSetMethodForKey(key);
-        if (m == null)
+        String methodName = "_" + key;
+        Method setMethod = ArrayIterate.detect(getClass().getMethods(), m -> (m.getParameterCount() == 1) && methodName.equals(m.getName()) && (m.getParameterTypes()[0] == RichIterable.class));
+        if (setMethod == null)
         {
             throw new IllegalArgumentException("Cannot find property '" + key + "'");
         }
-        if (m.getParameterTypes()[0] == RichIterable.class)
+
+        Object newValue = toJavaForInvocation(value);
+        Object rawCurrentValue = getRawValueForMetaProperty(key);
+        MutableList<Object> newValues;
+        if (rawCurrentValue == null)
         {
-            // to many
-            throw new RuntimeException("TO CODE");
+            newValues = Lists.mutable.empty();
+        }
+        else if (rawCurrentValue instanceof Iterable)
+        {
+            newValues = Lists.mutable.withAll((Iterable<?>) rawCurrentValue);
         }
         else
         {
-            // to one
-            Object invocationValue;
-            if (value instanceof ValCoreInstance)
+            newValues = Lists.mutable.with(rawCurrentValue);
+        }
+        if ((offset == 0) && newValues.isEmpty())
+        {
+            newValues.add(newValue);
+        }
+        else
+        {
+            newValues.set(offset, newValue);
+        }
+
+        try
+        {
+            setMethod.invoke(this, newValues);
+        }
+        catch (InvocationTargetException e)
+        {
+            Throwable cause = e.getCause();
+            StringBuilder builder = new StringBuilder("Error trying to modify value of property '").append(key).append("' at offset ").append(offset).append(" for ").append(this);
+            String eMessage = cause.getMessage();
+            if (eMessage != null)
             {
-                invocationValue = invokeMethodWithJavaType((ValCoreInstance) value);
+                builder.append(": ").append(eMessage);
             }
-            else if (value instanceof PrimitiveCoreInstance)
+            throw new RuntimeException(builder.toString(), cause);
+        }
+        catch (IllegalAccessException e)
+        {
+            StringBuilder builder = new StringBuilder("Error trying to modify value of property '").append(key).append("' at offset ").append(offset).append(" for ").append(this);
+            String eMessage = e.getMessage();
+            if (eMessage == null)
             {
-                invocationValue = AnyHelper.unwrapPrimitives(value);
+                builder.append(": illegal access");
             }
             else
             {
-                invocationValue = AnyStubHelper.fromStub(value);
+                builder.append(": ").append(eMessage);
             }
-            try
-            {
-                m.invoke(this, invocationValue);
-            }
-            catch (InvocationTargetException e)
-            {
-                Throwable cause = e.getCause();
-                StringBuilder builder = new StringBuilder("Error trying to modify value of property '").append(key).append("' for ").append(this);
-                String eMessage = cause.getMessage();
-                if (eMessage != null)
-                {
-                    builder.append(": ").append(eMessage);
-                }
-                throw new RuntimeException(builder.toString(), cause);
-            }
-            catch (IllegalAccessException e)
-            {
-                StringBuilder builder = new StringBuilder("Error trying to modify value of property '").append(key).append("' for ").append(this);
-                String eMessage = e.getMessage();
-                if (eMessage == null)
-                {
-                    builder.append(": illegal access");
-                }
-                else
-                {
-                    builder.append(": ").append(eMessage);
-                }
-                throw new RuntimeException(builder.toString(), e);
-            }
-            catch (Exception e)
-            {
-                StringBuilder builder = new StringBuilder("Error trying to modify value of property '").append(key).append("' for ").append(this);
-                String eMessage = e.getMessage();
-                if (eMessage != null)
-                {
-                    builder.append(": ").append(eMessage);
-                }
-                throw new RuntimeException(builder.toString(), e);
-            }
+            throw new RuntimeException(builder.toString(), e);
         }
-        //To enable for offset > 0, Check for the fieldType is List - key the map by key set the value at the offset
-        //If not a list, validate that the offset is 0
-        if (offset != 0)
+        catch (Exception e)
         {
-            throw new RuntimeException("TO CODE");
+            StringBuilder builder = new StringBuilder("Error trying to modify value of property '").append(key).append("' at offset ").append(offset).append(" for ").append(this);
+            String eMessage = e.getMessage();
+            if (eMessage != null)
+            {
+                builder.append(": ").append(eMessage);
+            }
+            throw new RuntimeException(builder.toString(), e);
         }
     }
 
@@ -455,23 +453,17 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
     public void setKeyValues(ListIterable<String> key, ListIterable<? extends CoreInstance> value)
     {
         String propertyName = key.getLast();
-        Method m = getSetMethodForKey(propertyName);
-        if (m == null)
+        String methodName = "_" + propertyName;
+        Method method = ArrayIterate.detect(getClass().getMethods(), m -> (m.getParameterCount() == 1) && methodName.equals(m.getName()) && (m.getParameterTypes()[0] == RichIterable.class));
+        if (method == null)
         {
-            throw new RuntimeException("Could not find property '" + propertyName + "' for " + this);
+            throw new IllegalArgumentException("Could not find property '" + propertyName + "' for " + this);
         }
 
-        ListIterable<?> args = value.allSatisfy(v -> v instanceof ValCoreInstance) ? value.collect(v -> invokeMethodWithJavaType((ValCoreInstance) v)) : value;
+        ListIterable<Object> args = value.collect(ReflectiveCoreInstance::toJavaForInvocation);
         try
         {
-            if (m.getParameterTypes()[0] == RichIterable.class)
-            {
-                m.invoke(this, args);
-            }
-            else
-            {
-                m.invoke(this, args.getFirst());
-            }
+            method.invoke(this, args);
         }
         catch (InvocationTargetException e)
         {
@@ -514,33 +506,26 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
     public void addKeyValue(ListIterable<String> key, CoreInstance value)
     {
         String propertyName = key.getLast();
-        Method m = getSetMethodForKey(propertyName);
-        if ((m == null) || (m.getParameterTypes()[0] == RichIterable.class))
+        Method[] allMethods = getClass().getMethods();
+
+        // Try to find the set value method for a to-one property
+        String setOneMethodName = "_" + propertyName;
+        Method method = ArrayIterate.detect(allMethods, m -> (m.getParameterCount() == 1) && setOneMethodName.equals(m.getName()) && (m.getParameterTypes()[0] != RichIterable.class));
+        if (method == null)
         {
-            // to many
-            m = getAddOneMethodForKey(propertyName);
-            if (m == null)
+            // Try to find the add value method for a to-many property
+            String addOneMethodName = setOneMethodName + "Add";
+            method = ArrayIterate.detect(allMethods, m -> (m.getParameterCount() == 1) && addOneMethodName.equals(m.getName()) && (m.getParameterTypes()[0] != RichIterable.class));
+            if (method == null)
             {
-                throw new RuntimeException("Unknown property: '" + propertyName + "'");
+                throw new IllegalArgumentException("Unknown property '" + propertyName + "'");
             }
         }
 
-        Object invocationValue;
-        if (value instanceof ValCoreInstance)
-        {
-            invocationValue = invokeMethodWithJavaType((ValCoreInstance) value);
-        }
-        else if (value instanceof PrimitiveCoreInstance)
-        {
-            invocationValue = AnyHelper.unwrapPrimitives(value);
-        }
-        else
-        {
-            invocationValue = AnyStubHelper.fromStub(value);
-        }
+        Object invocationValue = toJavaForInvocation(value);
         try
         {
-            m.invoke(this, invocationValue);
+            method.invoke(this, invocationValue);
         }
         catch (InvocationTargetException e)
         {
@@ -596,16 +581,6 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
         return getNoParameterMethod("_" + key);
     }
 
-    private Method getSetMethodForKey(String key)
-    {
-        return getOneParameterMethod("_" + key);
-    }
-
-    private Method getAddOneMethodForKey(String key)
-    {
-        return getOneParameterMethod("_" + key + "Add");
-    }
-
     private Method getRemoveAllMethodForKey(String key)
     {
         return getNoParameterMethod("_" + key + "Remove");
@@ -621,12 +596,6 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
         {
             return null;
         }
-    }
-
-    private Method getOneParameterMethod(String methodName)
-    {
-        Method[] methods = getClass().getMethods();
-        return ArrayIterate.detect(methods, m -> (m.getParameterCount() == 1) && methodName.equals(m.getName()));
     }
 
     private Object getRawValueForMetaProperty(String propertyName)
@@ -678,37 +647,64 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
         }
     }
 
+    private static Object toJavaForInvocation(CoreInstance instance)
+    {
+        if (instance instanceof ValCoreInstance)
+        {
+            return invokeMethodWithJavaType((ValCoreInstance) instance);
+        }
+
+        if (instance instanceof PrimitiveCoreInstance)
+        {
+            return AnyHelper.unwrapPrimitives(instance);
+        }
+
+        return AnyStubHelper.fromStub(instance);
+    }
+
     private static Object invokeMethodWithJavaType(ValCoreInstance value)
     {
         String valueType = value.getType();
-        if (M3Paths.String.equals(valueType))
+        if (valueType == null)
         {
-            return value.getName();
+            throw new IllegalArgumentException("value type may not be null");
         }
-        if (M3Paths.Integer.equals(valueType))
+        switch (valueType)
         {
-            return Long.valueOf(value.getName());
+            case M3Paths.String:
+            {
+                return value.getName();
+            }
+            case M3Paths.Integer:
+            {
+                return Long.valueOf(value.getName());
+            }
+            case M3Paths.Float:
+            {
+                return Double.valueOf(value.getName());
+            }
+            case M3Paths.Decimal:
+            {
+                return new BigDecimal(value.getName());
+            }
+            case M3Paths.Boolean:
+            {
+                return Boolean.valueOf(value.getName());
+            }
+            case M3Paths.Date:
+            case M3Paths.StrictDate:
+            case M3Paths.DateTime:
+            {
+                return DateFunctions.parsePureDate(value.getName());
+            }
+            case M3Paths.LatestDate:
+            {
+                return LatestDate.instance;
+            }
+            default:
+            {
+                throw new IllegalArgumentException("Type not supported to retrieve value from ReflectiveCoreInstance - " + valueType);
+            }
         }
-        if (M3Paths.Float.equals(valueType))
-        {
-            return Double.valueOf(value.getName());
-        }
-        if (M3Paths.Decimal.equals(valueType))
-        {
-            return new BigDecimal(value.getName());
-        }
-        if (M3Paths.Boolean.equals(valueType))
-        {
-            return Boolean.valueOf(value.getName());
-        }
-        if (M3Paths.Date.equals(valueType) || M3Paths.StrictDate.equals(valueType) || M3Paths.DateTime.equals(valueType))
-        {
-            return DateFunctions.parsePureDate(value.getName());
-        }
-        if (M3Paths.LatestDate.equals(valueType))
-        {
-            return LatestDate.instance;
-        }
-        throw new IllegalArgumentException("Type not supported to retrieve value from ReflectiveCoreInstance - " + valueType);
     }
 }

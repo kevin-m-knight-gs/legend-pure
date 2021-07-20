@@ -17,9 +17,9 @@ package org.finos.legend.pure.runtime.java.compiled.generation.processors.type._
 import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.block.function.Function;
 import org.eclipse.collections.api.block.predicate.Predicate2;
-import org.eclipse.collections.api.block.procedure.Procedure;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.set.SetIterable;
+import org.eclipse.collections.impl.Counter;
 import org.eclipse.collections.impl.factory.Lists;
 import org.eclipse.collections.impl.factory.Sets;
 import org.finos.legend.pure.m3.navigation.Instance;
@@ -40,10 +40,6 @@ import org.finos.legend.pure.runtime.java.compiled.generation.processors.Functio
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.TypeProcessor;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.valuespecification.ValueSpecificationProcessor;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
-
 public class ClassImplProcessor
 {
     //DO NOT ADD WIDE * IMPORTS TO THIS LIST IT IMPACTS COMPILE TIMES
@@ -62,7 +58,7 @@ public class ClassImplProcessor
             "import org.finos.legend.pure.runtime.java.compiled.*;\n" +
             "import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.function.defended.*;\n" +
             "import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.function.*;\n" +
-            "import org.finos.legend.pure.runtime.java.compiled.execution.*;\n"+
+            "import org.finos.legend.pure.runtime.java.compiled.execution.*;\n" +
             "import org.finos.legend.pure.runtime.java.compiled.execution.sourceInformation.E_;\n" +
             "import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.ReflectiveCoreInstance;\n" +
             "import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.ValCoreInstance;\n" +
@@ -82,9 +78,6 @@ public class ClassImplProcessor
             "import java.io.ObjectInput;\n" +
             "import java.io.ObjectOutput;\n" +
             "import org.eclipse.collections.api.block.procedure.Procedure;\n";
-
-    private static final Set<String> javaSerializationPackages = new HashSet<>(Collections.singletonList("meta::test::test"));
-    private static int enumCount = 0;
 
     public static final String CLASS_IMPL_SUFFIX = "_Impl";
 
@@ -177,30 +170,29 @@ public class ClassImplProcessor
     {
         final StringBuilder writeExternal = new StringBuilder();
         final StringBuilder readExternal = new StringBuilder();
-        writeExternal.append("   @Override\n").append("    public void writeExternal(final ObjectOutput out) throws IOException\n").append("    {\n");
-        readExternal.append("    @Override\n" ).append("    public void readExternal(final ObjectInput in) throws IOException, ClassNotFoundException\n").append("    {\n");
-        enumCount = 0;
-        processorSupport.class_getSimpleProperties(_class).forEach(new Procedure<CoreInstance>()
+        writeExternal.append("   @Override\n    public void writeExternal(final ObjectOutput out) throws IOException\n    {\n");
+        readExternal.append("    @Override\n    public void readExternal(final ObjectInput in) throws IOException, ClassNotFoundException\n    {\n");
+        Counter enumCounter = new Counter(0);
+        processorSupport.class_getSimpleProperties(_class).forEach(property ->
         {
-            @Override
-            public void value(CoreInstance property)
+            CoreInstance unresolvedReturnType = ClassProcessor.getPropertyUnresolvedReturnType(property, processorSupport);
+            CoreInstance returnType = ClassProcessor.getPropertyResolvedReturnType(classGenericType, property, processorSupport);
+
+            String name = Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.name, processorSupport).getName();
+            CoreInstance returnMultiplicity = Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.multiplicity, processorSupport);
+
+            boolean makePrimitiveIfPossible = GenericType.isGenericTypeConcrete(unresolvedReturnType, processorSupport) && Multiplicity.isToOne(returnMultiplicity, true);
+            String returnTypeJava = TypeProcessor.pureTypeToJava(returnType, true, makePrimitiveIfPossible, processorSupport);
+            boolean multiplicityOne = Multiplicity.isToOne(returnMultiplicity, false);
+            if ("org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum".equals(returnTypeJava))
             {
-                CoreInstance unresolvedReturnType = ClassProcessor.getPropertyUnresolvedReturnType(property, processorSupport);
-                CoreInstance returnType = ClassProcessor.getPropertyResolvedReturnType(classGenericType, property, processorSupport);
-
-                String name = Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.name, processorSupport).getName();
-                CoreInstance returnMultiplicity = Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.multiplicity, processorSupport);
-
-                boolean makePrimitiveIfPossible = GenericType.isGenericTypeConcrete(unresolvedReturnType, processorSupport) && Multiplicity.isToOne(returnMultiplicity, true);
-                String returnTypeJava = TypeProcessor.pureTypeToJava(returnType, true, makePrimitiveIfPossible, processorSupport);
-                boolean multiplicityOne = Multiplicity.isToOne(returnMultiplicity, false);
-                if ("org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum".equals(returnTypeJava)){
-                    serializeEnum(name, multiplicityOne, writeExternal, readExternal, enumCount++, pureExternalPackage);
-                }
-                else {
-                    writeExternal.append("           out.writeObject(this._" + name + ");\n");
-                    readExternal.append("           this._" + name + " = (" + (!multiplicityOne ? " RichIterable" : returnTypeJava) + ") in.readObject();\n");
-                }
+                serializeEnum(name, multiplicityOne, writeExternal, readExternal, enumCounter.getCount(), pureExternalPackage);
+                enumCounter.increment();
+            }
+            else
+            {
+                writeExternal.append("           out.writeObject(this._").append(name).append(");\n");
+                readExternal.append("           this._").append(name).append(" = (").append(!multiplicityOne ? " RichIterable" : returnTypeJava).append(") in.readObject();\n");
             }
         });
         writeExternal.append("   }\n");
@@ -211,25 +203,26 @@ public class ClassImplProcessor
 
     private static void serializeEnum(String propertyName, boolean multiplicityOne, StringBuilder writeExternal, StringBuilder readExternal, int n, String pureExternalPackage)
     {
-        if (multiplicityOne){
+        if (multiplicityOne)
+        {
             writeExternal.append("            out.writeObject(this._" + propertyName + ".getFullSystemPath());out.writeObject(this._" + propertyName + "._name());\n");
-            readExternal.append("try { this._" + propertyName + " = (org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum) ((org.finos.legend.pure.runtime.java.compiled.execution.CompiledExecutionSupport)Class.forName(\""+pureExternalPackage+".PureExternal\").getMethod(\"_getExecutionSupport\").invoke(null)).getMetadata().getEnum(((String)in.readObject()).substring(6), (String)in.readObject()); } " +
+            readExternal.append("try { this._" + propertyName + " = (org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum) ((org.finos.legend.pure.runtime.java.compiled.execution.CompiledExecutionSupport)Class.forName(\"" + pureExternalPackage + ".PureExternal\").getMethod(\"_getExecutionSupport\").invoke(null)).getMetadata().getEnum(((String)in.readObject()).substring(6), (String)in.readObject()); } " +
                     "catch (IllegalAccessException | java.lang.reflect.InvocationTargetException | NoSuchMethodException | ClassNotFoundException e ) {\n" +
                     "         throw  new RuntimeException(e);\n" +
                     "     };\n");
         }
         else
-            {
-                writeExternal.append("            out.writeObject((Integer)this._" + propertyName + ".size());\n");
-                readExternal.append("             int n" + n + " = (Integer)in.readObject();");
-                writeExternal.append("            this._" + propertyName + ".forEach(new  DefendedProcedure() ")
-                        .append("{\n").append("            @Override\n").append( "            public void value(Object anEnum) {\n").append("            try{out.writeObject(((org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum)anEnum).getFullSystemPath());out.writeObject(((org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum)anEnum)._name());}catch (IOException e){throw new RuntimeException(e);}\n").append("            }});\n");
-                readExternal.append("             for (int i=0;i<n"+n+";i++){\n" +
-                        "            try { _" + propertyName + "((org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum) ((org.finos.legend.pure.runtime.java.compiled.execution.CompiledExecutionSupport)Class.forName(\""+pureExternalPackage+".PureExternal\").getMethod(\"_getExecutionSupport\").invoke(null)).getMetadata().getEnum(((String)in.readObject()).substring(6), (String)in.readObject()), true); }\n" +
-                        "                    catch (IllegalAccessException | java.lang.reflect.InvocationTargetException | NoSuchMethodException | ClassNotFoundException e ) {\n" +
-                        "                             throw  new RuntimeException(e);\n" +
-                        "                         }\n            }\n");
-            }
+        {
+            writeExternal.append("            out.writeObject((Integer)this._" + propertyName + ".size());\n");
+            readExternal.append("             int n" + n + " = (Integer)in.readObject();");
+            writeExternal.append("            this._" + propertyName + ".forEach(new  DefendedProcedure() ")
+                    .append("{\n").append("            @Override\n").append("            public void value(Object anEnum) {\n").append("            try{out.writeObject(((org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum)anEnum).getFullSystemPath());out.writeObject(((org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum)anEnum)._name());}catch (IOException e){throw new RuntimeException(e);}\n").append("            }});\n");
+            readExternal.append("             for (int i=0;i<n" + n + ";i++){\n" +
+                    "            try { _" + propertyName + "((org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum) ((org.finos.legend.pure.runtime.java.compiled.execution.CompiledExecutionSupport)Class.forName(\"" + pureExternalPackage + ".PureExternal\").getMethod(\"_getExecutionSupport\").invoke(null)).getMetadata().getEnum(((String)in.readObject()).substring(6), (String)in.readObject()), true); }\n" +
+                    "                    catch (IllegalAccessException | java.lang.reflect.InvocationTargetException | NoSuchMethodException | ClassNotFoundException e ) {\n" +
+                    "                             throw  new RuntimeException(e);\n" +
+                    "                         }\n            }\n");
+        }
 
     }
 
@@ -237,12 +230,15 @@ public class ClassImplProcessor
     {
         if (multiplicityOne)
         {
-            return "try { this._" + propertyName + " = (org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum) ((org.finos.legend.pure.runtime.java.compiled.execution.CompiledExecutionSupport)Class.forName(\""+pureExternalPackage+".PureExternal\").getMethod(\"_getExecutionSupport\").invoke(null)).getMetadata().getEnum(((String)in.readObject()).substring(6), (String)in.readObject()); } " +
+            return "try { this._" + propertyName + " = (org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum) ((org.finos.legend.pure.runtime.java.compiled.execution.CompiledExecutionSupport)Class.forName(\"" + pureExternalPackage + ".PureExternal\").getMethod(\"_getExecutionSupport\").invoke(null)).getMetadata().getEnum(((String)in.readObject()).substring(6), (String)in.readObject()); } " +
                     "catch (IllegalAccessException | java.lang.reflect.InvocationTargetException | NoSuchMethodException | ClassNotFoundException e ) {\n" +
                     "         throw  new RuntimeException(e);\n" +
                     "     };";
         }
-        else return "";
+        else
+        {
+            return "";
+        }
     }
 
     static String buildFactory(String className, String systemPath)
@@ -327,10 +323,10 @@ public class ClassImplProcessor
                 "        switch (keyName)\n" +
                 "        {\n" +
                 toOneProperties.collect(property ->
-                "            case \"" + property.getName() + "\":\n" +
-                "            {\n" +
-                "                return ValCoreInstance.toCoreInstance(_" + property.getName() + "());\n" +
-                "            }\n").makeString("") +
+                        "            case \"" + property.getName() + "\":\n" +
+                                "            {\n" +
+                                "                return ValCoreInstance.toCoreInstance(_" + property.getName() + "());\n" +
+                                "            }\n").makeString("") +
                 "            default:\n" +
                 "            {\n" +
                 "                return super.getValueForMetaPropertyToOne(keyName);\n" +
@@ -350,10 +346,10 @@ public class ClassImplProcessor
                 "        switch (keyName)\n" +
                 "        {\n" +
                 toManyProperties.collect(property ->
-                "            case \"" + property.getName() + "\":\n" +
-                "            {\n" +
-                "                return ValCoreInstance.toCoreInstances(_" + property.getName() + "());\n" +
-                "            }\n").makeString("") +
+                        "            case \"" + property.getName() + "\":\n" +
+                                "            {\n" +
+                                "                return ValCoreInstance.toCoreInstances(_" + property.getName() + "());\n" +
+                                "            }\n").makeString("") +
                 "            default:\n" +
                 "            {\n" +
                 "                return super.getValueForMetaPropertyToMany(keyName);\n" +
@@ -547,7 +543,7 @@ public class ClassImplProcessor
     {
         return buildPropertyToOneSetOne(name, owner, className, reversePropertyName, typePrimitive, setCachedOrMutated) +
                 buildPropertyToOneSetMany(name, owner, className, typeObject, reversePropertyName, setCachedOrMutated) +
-                buildPropertyToOneRemove(name, owner, className, defaultValue) +
+                buildPropertyToOneRemove(name, owner, className, defaultValue, setCachedOrMutated) +
                 buildPropertyToOneSetterCoreInstance(property, propertyReturnGenericType, className, name, processorContext);
     }
 
@@ -573,10 +569,11 @@ public class ClassImplProcessor
                 "\n";
     }
 
-    private static String buildPropertyToOneRemove(String name, String owner, String className, String defaultValue)
+    private static String buildPropertyToOneRemove(String name, String owner, String className, String defaultValue, boolean setCachedOrMutated)
     {
         return "    public " + className + " _" + name + "Remove()\n" +
                 "    {\n" +
+                (setCachedOrMutated ? "        " + owner + "._" + name + "();\n" : "") +
                 "        " + owner + "._" + name + " = " + defaultValue + ";\n" +
                 "        return this;\n" +
                 "    }\n" +
@@ -590,7 +587,7 @@ public class ClassImplProcessor
                         "    public void _reverse_" + name + "(" + typePrimitive + " val)\n" +
                         "    {\n" +
                         (setCachedOrMutated ? "        " + owner + "._" + name + "();\n" : "") +
-                        "        if(!(" + owner + "._" + name + " instanceof MutableList))\n" +
+                        "        if (!(" + owner + "._" + name + " instanceof MutableList))\n" +
                         "        {\n" +
                         "            " + owner + "._" + name + " = " + owner + "._" + name + ".toList();\n" +
                         "        }\n" +
@@ -600,7 +597,7 @@ public class ClassImplProcessor
                         "    public void _sever_reverse_" + name + "(" + typePrimitive + " val)\n" +
                         "    {\n" +
                         (setCachedOrMutated ? "        " + owner + "._" + name + "();\n" : "") +
-                        "        if(!(" + owner + "._" + name + " instanceof MutableList))\n" +
+                        "        if (!(" + owner + "._" + name + " instanceof MutableList))\n" +
                         "        {\n" +
                         "            " + owner + "._" + name + " = " + owner + "._" + name + ".toList();\n" +
                         "        }\n" +
@@ -682,7 +679,7 @@ public class ClassImplProcessor
                 buildPropertyToManySetter(name, owner, className, typeObject) +
                 buildPropertyToManyAdd(name, owner, className, typeObject) +
                 buildPropertyToManyAddAll(name, owner, className, typeObject) +
-                buildPropertyToManyRemove(name, owner, className) +
+                buildPropertyToManyRemove(name, owner, className, setCachedOrMutated) +
                 buildPropertyToManyRemoveItem(name, owner, className, typeObject, setCachedOrMutated) +
                 (processorContext.getGenerator().isStubType(property, propertyReturnGenericType) ?
                         buildPropertyToManyAddCoreInstance(name, owner, className) +
@@ -704,8 +701,7 @@ public class ClassImplProcessor
     {
         return "    public " + className + " _" + name + "Add(" + typeObject + " val)\n" +
                 "    {\n" +
-                "        " + owner + "._" + name + "(Lists.immutable.with(val), true);\n" +
-                "        return this;\n" +
+                "        return " + owner + "._" + name + "(Lists.immutable.with(val), true);\n" +
                 "    }\n" +
                 "\n";
     }
@@ -714,18 +710,19 @@ public class ClassImplProcessor
     {
         return "    public " + className + " _" + name + "AddAll(RichIterable<? extends " + typeObject + "> val)\n" +
                 "    {\n" +
-                "        " + owner + "._" + name + "(val, true);\n" +
-                "        return this;\n" +
+                "        return " + owner + "._" + name + "(val, true);\n" +
                 "    }\n" +
                 "\n";
     }
 
 
-    private static String buildPropertyToManyRemove(String name, String owner, String className)
+    private static String buildPropertyToManyRemove(String name, String owner, String className, boolean setCachedOrMutated)
     {
         return "    public " + className + " _" + name + "Remove()\n" +
                 "    {\n" +
-                "        return " + owner + "._" + name + "(Lists.mutable.empty(), false);\n" +
+                (setCachedOrMutated ? "        " + owner + "._" + name + "();\n" : "") +
+                "        " + owner + "._" + name + " = Lists.mutable.empty();\n" +
+                "        return this;\n" +
                 "    }\n" +
                 "\n";
     }
@@ -777,11 +774,7 @@ public class ClassImplProcessor
             return buildPropertyStandardWriteToOneBuilders(property, returnType, name, owner, className, typeObject, defaultValue, reversePropertyName, typePrimitive, false, processorContext) +
                     (includeGettor ? buildPropertyStandardWriteSeverReverseToOne(name, owner, typePrimitive, isPrimitive, false) +
                             buildPropertyToOneGetterCoreInstance(property, returnType, name, processorContext) +
-                            "    public " + typePrimitive + " _" + name + "()\n" +
-                            "    {\n" +
-                            "        return " + (isDataType || isOverrider || isClassifierGenericType ? owner + "._" + name + ";" :
-                            owner + "._elementOverride() == null || !GetterOverrideExecutor.class.isInstance(" + owner + "._elementOverride()) ? " + owner + "._" + name + " : (" + typePrimitive + ")((GetterOverrideExecutor)" + owner + "._elementOverride()).executeToOne(" + owner + ", \"" + classOwnerFullId + "\", \"" + name + "\");\n") +
-                            "    }\n" : "");
+                            buildPropertyToOneGetter(owner, classOwnerFullId, name, isOverrider, isClassifierGenericType, isDataType, typePrimitive) : "");
         }
         else
         {
@@ -799,7 +792,7 @@ public class ClassImplProcessor
     {
         return "    public RichIterable<? extends " + typeObject + "> _" + name + "()\n" +
                 "    {\n" +
-                "        return " + (isDataType || isOverrider || isClassifierGenericType ? owner + "._" + name + ";" :
+                "        return " + (isDataType || isOverrider || isClassifierGenericType ? owner + "._" + name + ";\n" :
                 owner + "._elementOverride() == null || !GetterOverrideExecutor.class.isInstance(" + owner + "._elementOverride()) ? " + owner + "._" + name + " : (RichIterable<? extends " + typeObject + ">)((GetterOverrideExecutor)" + owner + "._elementOverride()).executeToMany(" + owner + ", \"" + classOwnerFullId + "\", \"" + name + "\");\n") +
                 "    }\n";
     }
@@ -808,7 +801,7 @@ public class ClassImplProcessor
     {
         return "    public " + typeObject + " _" + name + "()\n" +
                 "    {\n" +
-                "        return " + (isDataType || isOverrider || isClassifierGenericType ? owner + "._" + name + ";" :
+                "        return " + (isDataType || isOverrider || isClassifierGenericType ? owner + "._" + name + ";\n" :
                 owner + "._elementOverride() == null || !GetterOverrideExecutor.class.isInstance(" + owner + "._elementOverride()) ? " + owner + "._" + name + " : (" + typeObject + ")((GetterOverrideExecutor)" + owner + "._elementOverride()).executeToOne(" + owner + ", \"" + classOwnerFullId + "\", \"" + name + "\");\n") +
                 "    }\n";
     }
@@ -943,7 +936,7 @@ public class ClassImplProcessor
                                             "\"Constraint :[" + ruleId + "] violated in the Class " + constraintClass.getValueForMetaPropertyToOne(M3Properties.name).getName() + ", Message: \" + (String) " + messageJavaFunction + ".execute(Lists.mutable.with(this),es)";
 
                                     return
-                                            "            if(!(" + eval + "))\n" +
+                                            "            if (!(" + eval + "))\n" +
                                                     "            {\n" +
                                                     "                throw new org.finos.legend.pure.m3.exception.PureExecutionException(sourceInformation, " + errorMessage + ");\n" +
                                                     "            }\n";
