@@ -15,10 +15,10 @@
 package org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance;
 
 import org.eclipse.collections.api.RichIterable;
+import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.set.MutableSet;
-import org.eclipse.collections.impl.factory.Lists;
 import org.eclipse.collections.impl.utility.ArrayIterate;
 import org.finos.legend.pure.m3.coreinstance.helper.AnyHelper;
 import org.finos.legend.pure.m3.coreinstance.helper.AnyStubHelper;

@@ -83,7 +83,7 @@ public class M3CoreInstanceGenerator
 
     static class PropertyTypeResolverUsingInheritence implements M3ToJavaGenerator.PropertyTypeResolver
     {
-        private ProcessorSupport processorSupport;
+        private final ProcessorSupport processorSupport;
 
         PropertyTypeResolverUsingInheritence(ProcessorSupport processorSupport)
         {
