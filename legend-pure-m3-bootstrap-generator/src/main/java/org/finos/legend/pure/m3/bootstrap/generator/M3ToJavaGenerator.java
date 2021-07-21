@@ -69,7 +69,7 @@ public class M3ToJavaGenerator
             .withKeyValue(ModelRepository.STRING_TYPE_NAME, "String")
             .withKeyValue("Number", "Number")
             .asUnmodifiable();
-    private static final Map<String, String> PRIMITIVES_EXTERNAL_0_1 = Maps.mutable.<String, String>empty()
+    private static final Map<String, String> PRIMITIVES_EXTERNAL = Maps.mutable.<String, String>empty()
             .withKeyValue(ModelRepository.INTEGER_TYPE_NAME, "long")
             .withKeyValue(ModelRepository.FLOAT_TYPE_NAME, "double")
             .withKeyValue(ModelRepository.DECIMAL_TYPE_NAME, "java.math.BigDecimal")
@@ -81,7 +81,7 @@ public class M3ToJavaGenerator
             .withKeyValue(ModelRepository.STRING_TYPE_NAME, "String")
             .withKeyValue("Number", "Number")
             .asUnmodifiable();
-    private static final Map<String, String> PRIMITIVES_EXTERNAL = Maps.mutable.<String, String>empty()
+    private static final Map<String, String> PRIMITIVES_EXTERNAL_0_1 = Maps.mutable.<String, String>empty()
             .withKeyValue(ModelRepository.INTEGER_TYPE_NAME, "Long")
             .withKeyValue(ModelRepository.FLOAT_TYPE_NAME, "Double")
             .withKeyValue(ModelRepository.DECIMAL_TYPE_NAME, "java.math.BigDecimal")
