@@ -57,9 +57,15 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.path.Path;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.path.PathElement;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.path.PropertyPathElement;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.relationship.Generalization;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Any;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.ConstraintsOverride;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.ElementOverride;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enumeration;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.*;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.FunctionType;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Nil;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.PrimitiveType;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Type;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.InstanceValue;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.ValueSpecification;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.VariableExpression;
@@ -68,13 +74,14 @@ import org.finos.legend.pure.m3.exception.PureExecutionException;
 import org.finos.legend.pure.m3.execution.ExecutionSupport;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation.generictype.GenericType;
-import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.vcs.ChangeType;
-import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.vcs.ChangedPath;
-import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.vcs.Revision;
 import org.finos.legend.pure.m3.tools.ListHelper;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
-import org.finos.legend.pure.m4.coreinstance.primitive.date.*;
+import org.finos.legend.pure.m4.coreinstance.primitive.date.DateFunctions;
+import org.finos.legend.pure.m4.coreinstance.primitive.date.DateTime;
+import org.finos.legend.pure.m4.coreinstance.primitive.date.LatestDate;
+import org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate;
+import org.finos.legend.pure.m4.coreinstance.primitive.date.StrictDate;
 import org.finos.legend.pure.runtime.java.compiled.compiler.PureDynamicReactivateException;
 import org.finos.legend.pure.runtime.java.compiled.delta.CodeBlockDeltaCompiler;
 import org.finos.legend.pure.runtime.java.compiled.execution.CompiledExecutionSupport;
@@ -97,11 +104,19 @@ import org.json.simple.JSONObject;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.lang.Class;
 
 public class Pure
 {
@@ -427,7 +442,7 @@ public class Pure
                             try
                             {
                                 RichIterable<? extends VariableExpression> params = ((FunctionType) func._classifierGenericType()._typeArguments().getFirst()._rawType())._parameters();
-                                Class[] paramClasses = new Class[params.size() + 1];
+                                Class<?>[] paramClasses = new Class[params.size() + 1];
                                 int index = 0;
                                 for (VariableExpression o : params)
                                 {
@@ -1038,13 +1053,13 @@ public class Pure
                     default:
                     {
                         CompiledExecutionSupport ces = (CompiledExecutionSupport) es;
-                        return ces.getClassCache().getIfAbsentPutInterfaceForType(type, ces.getClassLoader());
+                        return ces.getClassCache().getIfAbsentPutInterfaceForType(type);
                     }
                 }
             }
 
             CompiledExecutionSupport ces = (CompiledExecutionSupport) es;
-            Class<?> theClass = ces.getClassCache().getIfAbsentPutInterfaceForType(type, ces.getClassLoader());
+            Class<?> theClass = ces.getClassCache().getIfAbsentPutInterfaceForType(type);
             return theClass.equals(org.finos.legend.pure.m3.coreinstance.meta.pure.functions.collection.Map.class) ? PureMap.class : theClass;
         } catch (Exception e)
         {
