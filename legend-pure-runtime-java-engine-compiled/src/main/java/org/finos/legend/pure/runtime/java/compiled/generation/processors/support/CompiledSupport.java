@@ -33,7 +33,6 @@ import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.map.primitive.IntObjectMap;
 import org.eclipse.collections.api.ordered.OrderedIterable;
 import org.eclipse.collections.api.ordered.ReversibleIterable;
-import org.eclipse.collections.api.set.ImmutableSet;
 import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.impl.lazy.AbstractLazyIterable;
 import org.eclipse.collections.impl.list.mutable.FastList;
@@ -749,7 +748,7 @@ public class CompiledSupport
 
     public static <T> RichIterable<? extends T> removeAllOptimized(RichIterable<? extends T> main, RichIterable<? extends T> other)
     {
-        Set<?> set = (other instanceof Set) ? (Set<?>) other : ((other instanceof ImmutableSet) ? ((ImmutableSet<?>) other).castToSet() : Sets.mutable.withAll(other));
+        Set<?> set = (other instanceof Set) ? (Set<?>) other : Sets.mutable.withAll(other);
         return main.reject(set::contains);
     }
 
@@ -3141,38 +3140,58 @@ public class CompiledSupport
         return FunctionDescriptor.isValidFunctionDescriptor(possiblyFunctionDescriptor);
     }
 
-    public static Object newObject(org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> aClass, RichIterable<? extends KeyValue> root_meta_pure_functions_lang_keyExpressions, ElementOverride override, org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.Function getterToOne, org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.Function getterToMany, Object payload, PureFunction2 getterToOneExec, PureFunction2 getterToManyExec, final ExecutionSupport es)
+    public static Object newObject(org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> aClass, RichIterable<? extends KeyValue> root_meta_pure_functions_lang_keyExpressions, ElementOverride override, org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.Function getterToOne, org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.Function getterToMany, Object payload, PureFunction2 getterToOneExec, PureFunction2 getterToManyExec, ExecutionSupport es)
     {
+        ClassCache classCache = ((CompiledExecutionSupport)es).getClassCache();
+        Constructor<?> constructor = classCache.getIfAbsentPutConstructorForType(aClass);
+        Any result;
         try
         {
-            final ClassCache classCache = ((CompiledExecutionSupport)es).getClassCache();
-            final Constructor<?> constructor = classCache.getIfAbsentPutConstructorForType(aClass);
-            final Any result = (Any)constructor.newInstance("");
-            root_meta_pure_functions_lang_keyExpressions.forEach(new org.eclipse.collections.impl.block.procedure.checked.CheckedProcedure<KeyValue>()
-            {
-                @Override
-                public void safeValue(KeyValue o) throws Exception
-                {
-                    Method m = classCache.getIfAbsentPutPropertySetterMethodForType(aClass, o._key());
-                    m.invoke(result, o._value());
-                }
-            });
-            PureFunction2Wrapper getterToOneExecFunc = getterToOneExec == null ? null : new PureFunction2Wrapper(getterToOneExec, es);
-            PureFunction2Wrapper getterToManyExecFunc = getterToManyExec == null ? null : new PureFunction2Wrapper(getterToManyExec, es);
-            ElementOverride elementOverride = override;
-            if (override instanceof GetterOverride)
-            {
-                elementOverride = ((GetterOverride)elementOverride)._getterOverrideToOne(getterToOne)._getterOverrideToMany(getterToMany)._hiddenPayload(payload);
-                ((GetterOverrideExecutor)elementOverride).__getterOverrideToOneExec(getterToOneExecFunc);
-                ((GetterOverrideExecutor)elementOverride).__getterOverrideToManyExec(getterToManyExecFunc);
-            }
-            result._elementOverride(elementOverride);
-            return result;
+            result = (Any) constructor.newInstance("");
         }
-        catch (Exception e)
+        catch (InvocationTargetException | InstantiationException | IllegalAccessException e)
         {
-            throw new RuntimeException(e);
+            Throwable cause = (e instanceof InvocationTargetException) ? e.getCause() : e;
+            StringBuilder builder = new StringBuilder("Error instantiating ");
+            PackageableElement.writeUserPathForPackageableElement(builder, aClass);
+            String eMessage = cause.getMessage();
+            if (eMessage != null)
+            {
+                builder.append(": ").append(eMessage);
+            }
+            throw new RuntimeException(builder.toString(), cause);
         }
+        root_meta_pure_functions_lang_keyExpressions.forEach(keyValue ->
+        {
+            Method m = classCache.getIfAbsentPutPropertySetterMethodForType(aClass, keyValue._key());
+            try
+            {
+                m.invoke(result, keyValue._value());
+            }
+            catch (InvocationTargetException | IllegalAccessException e)
+            {
+                Throwable cause = (e instanceof InvocationTargetException) ? e.getCause() : e;
+                StringBuilder builder = new StringBuilder("Error setting property '").append(keyValue._key()).append("' for instance of ");
+                PackageableElement.writeUserPathForPackageableElement(builder, aClass);
+                String eMessage = cause.getMessage();
+                if (eMessage != null)
+                {
+                    builder.append(": ").append(eMessage);
+                }
+                throw new RuntimeException(builder.toString(), cause);
+            }
+        });
+        PureFunction2Wrapper getterToOneExecFunc = getterToOneExec == null ? null : new PureFunction2Wrapper(getterToOneExec, es);
+        PureFunction2Wrapper getterToManyExecFunc = getterToManyExec == null ? null : new PureFunction2Wrapper(getterToManyExec, es);
+        ElementOverride elementOverride = override;
+        if (override instanceof GetterOverride)
+        {
+            elementOverride = ((GetterOverride)elementOverride)._getterOverrideToOne(getterToOne)._getterOverrideToMany(getterToMany)._hiddenPayload(payload);
+            ((GetterOverrideExecutor)elementOverride).__getterOverrideToOneExec(getterToOneExecFunc);
+            ((GetterOverrideExecutor)elementOverride).__getterOverrideToManyExec(getterToManyExecFunc);
+        }
+        result._elementOverride(elementOverride);
+        return result;
     }
 
     public static String encrypt(String value, String key)

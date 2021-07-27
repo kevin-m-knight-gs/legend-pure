@@ -44,6 +44,7 @@ public interface MetadataAccessor
     {
         return (Class<Any>) getClass("Root::meta::pure::metamodel::type::Any");
     }
+
     @SuppressWarnings("unchecked")
     default Class<Nil> getBottomType()
     {
