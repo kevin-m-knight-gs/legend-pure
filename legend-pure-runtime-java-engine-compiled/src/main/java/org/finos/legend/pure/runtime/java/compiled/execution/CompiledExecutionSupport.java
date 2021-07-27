@@ -77,11 +77,7 @@ public class CompiledExecutionSupport implements ExecutionSupport
         this.codeStorage = codeStorage;
         this.incrementalCompiler = incrementalCompiler;
         this.functionCache = functionCache;
-        if (classCache != null)
-        {
-            classCache.possiblySetClassLoader(javaCompilerState.getClassLoader());
-        }
-        this.classCache = (classCache == null) ? new ClassCache(javaCompilerState.getClassLoader()) : classCache;
+        this.classCache = (classCache == null) ? new ClassCache(javaCompilerState.getClassLoader()) : ClassCache.reconcileWithClassLoader(classCache, javaCompilerState.getClassLoader());
         this.metadataProvider = metadataProvider;
         this.executionActivityListener = (executionActivityListener == null) ? VoidExecutionActivityListener.VOID_EXECUTION_ACTIVITY_LISTENER : executionActivityListener;
         this.console = console;

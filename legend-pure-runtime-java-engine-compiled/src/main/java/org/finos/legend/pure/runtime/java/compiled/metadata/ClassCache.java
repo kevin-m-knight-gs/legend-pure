@@ -33,7 +33,7 @@ public class ClassCache
 {
     private final ConcurrentMutableMap<Type, Class<?>> typeToJavaInterface = ConcurrentHashMap.newMap();
     private final ConcurrentMutableMap<Type, ClassAttributes> typeToJavaConstructor = ConcurrentHashMap.newMap();
-    private ClassLoader classLoader;
+    private final ClassLoader classLoader;
 
     public ClassCache(ClassLoader classLoader)
     {
@@ -67,45 +67,12 @@ public class ClassCache
         return getIfAbsentPutPropertySetterMethodForType(_type, propertyName);
     }
 
+    @Deprecated
     private void validateClassLoaderForLegacyMethods(ClassLoader classLoader)
     {
-        if (classLoader != null)
+        if ((classLoader != null) && (classLoader != this.classLoader))
         {
-            synchronized (this)
-            {
-                if (this.classLoader == null)
-                {
-                    this.classLoader = classLoader;
-                }
-                else if (classLoader != this.classLoader)
-                {
-                    throw new IllegalArgumentException("Invalid class loader: " + classLoader);
-                }
-            }
-        }
-    }
-
-    @Deprecated
-    public void possiblySetClassLoader(ClassLoader classLoader)
-    {
-        synchronized (this)
-        {
-            if (this.classLoader == null)
-            {
-                this.classLoader = classLoader;
-            }
-        }
-    }
-
-    private ClassLoader getClassLoader()
-    {
-        synchronized (this)
-        {
-            if (this.classLoader == null)
-            {
-                throw new IllegalStateException("No class loader");
-            }
-            return this.classLoader;
+            throw new IllegalArgumentException("Invalid class loader: " + classLoader);
         }
     }
 
@@ -145,7 +112,7 @@ public class ClassCache
         String javaClassName = CompiledSupport.fullyQualifiedJavaInterfaceNameForPackageableElement(type);
         try
         {
-            return getClassLoader().loadClass(javaClassName);
+            return this.classLoader.loadClass(javaClassName);
         }
         catch (ClassNotFoundException e)
         {
@@ -161,7 +128,7 @@ public class ClassCache
         String javaClassName = JavaPackageAndImportBuilder.buildImplClassReferenceFromType(type);
         try
         {
-            return getClassLoader().loadClass(javaClassName);
+            return this.classLoader.loadClass(javaClassName);
         }
         catch (ClassNotFoundException e)
         {
@@ -188,6 +155,21 @@ public class ClassCache
             throw new RuntimeException(builder.toString(), e);
         }
         return new ClassAttributes(implClass, constructor);
+    }
+
+    @Deprecated
+    public static ClassCache reconcileWithClassLoader(ClassCache classCache, ClassLoader classLoader)
+    {
+        Objects.requireNonNull(classLoader, "null classLoader");
+        if ((classCache == null) || (classCache.classLoader == null))
+        {
+            return new ClassCache(classLoader);
+        }
+        if (classCache.classLoader != classLoader)
+        {
+            throw new RuntimeException("Conflict between class loaders: " + classCache.classLoader + " vs " + classLoader);
+        }
+        return classCache;
     }
 
     private static class ClassAttributes
