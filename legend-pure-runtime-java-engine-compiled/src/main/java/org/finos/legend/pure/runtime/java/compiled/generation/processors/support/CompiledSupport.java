@@ -3140,7 +3140,7 @@ public class CompiledSupport
         return FunctionDescriptor.isValidFunctionDescriptor(possiblyFunctionDescriptor);
     }
 
-    public static Object newObject(org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> aClass, RichIterable<? extends KeyValue> root_meta_pure_functions_lang_keyExpressions, ElementOverride override, org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.Function getterToOne, org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.Function getterToMany, Object payload, PureFunction2 getterToOneExec, PureFunction2 getterToManyExec, ExecutionSupport es)
+    public static Object newObject(org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> aClass, RichIterable<? extends KeyValue> keyExpressions, ElementOverride override, org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.Function getterToOne, org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.Function getterToMany, Object payload, PureFunction2 getterToOneExec, PureFunction2 getterToManyExec, ExecutionSupport es)
     {
         ClassCache classCache = ((CompiledExecutionSupport)es).getClassCache();
         Constructor<?> constructor = classCache.getIfAbsentPutConstructorForType(aClass);
@@ -3161,7 +3161,7 @@ public class CompiledSupport
             }
             throw new RuntimeException(builder.toString(), cause);
         }
-        root_meta_pure_functions_lang_keyExpressions.forEach(keyValue ->
+        keyExpressions.forEach(keyValue ->
         {
             Method m = classCache.getIfAbsentPutPropertySetterMethodForType(aClass, keyValue._key());
             try

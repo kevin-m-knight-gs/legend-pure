@@ -33,7 +33,7 @@ public class ClassCache
 {
     private final ConcurrentMutableMap<Type, Class<?>> typeToJavaInterface = ConcurrentHashMap.newMap();
     private final ConcurrentMutableMap<Type, ClassAttributes> typeToJavaConstructor = ConcurrentHashMap.newMap();
-    private final ClassLoader classLoader;
+    private ClassLoader classLoader;
 
     public ClassCache(ClassLoader classLoader)
     {
@@ -43,25 +43,70 @@ public class ClassCache
     @Deprecated
     public ClassCache()
     {
-        this(Thread.currentThread().getContextClassLoader());
+        this(null);
     }
 
     @Deprecated
     public Class<?> getIfAbsentPutInterfaceForType(Type _type, ClassLoader classLoader)
     {
+        validateClassLoaderForLegacyMethods(classLoader);
         return getIfAbsentPutInterfaceForType(_type);
     }
 
     @Deprecated
     public Constructor<?> getIfAbsentPutConstructorForType(Type _type, ClassLoader classLoader)
     {
+        validateClassLoaderForLegacyMethods(classLoader);
         return getIfAbsentPutConstructorForType(_type);
     }
 
     @Deprecated
     public Method getIfAbsentPutPropertySetterMethodForType(Type _type, String propertyName, ClassLoader classLoader)
     {
+        validateClassLoaderForLegacyMethods(classLoader);
         return getIfAbsentPutPropertySetterMethodForType(_type, propertyName);
+    }
+
+    private void validateClassLoaderForLegacyMethods(ClassLoader classLoader)
+    {
+        if (classLoader != null)
+        {
+            synchronized (this)
+            {
+                if (this.classLoader == null)
+                {
+                    this.classLoader = classLoader;
+                }
+                else if (classLoader != this.classLoader)
+                {
+                    throw new IllegalArgumentException("Invalid class loader: " + classLoader);
+                }
+            }
+        }
+    }
+
+    @Deprecated
+    public void possiblySetClassLoader(ClassLoader classLoader)
+    {
+        synchronized (this)
+        {
+            if (this.classLoader == null)
+            {
+                this.classLoader = classLoader;
+            }
+        }
+    }
+
+    private ClassLoader getClassLoader()
+    {
+        synchronized (this)
+        {
+            if (this.classLoader == null)
+            {
+                throw new IllegalStateException("No class loader");
+            }
+            return this.classLoader;
+        }
     }
 
     public Class<?> getIfAbsentPutInterfaceForType(Type type)
@@ -100,7 +145,7 @@ public class ClassCache
         String javaClassName = CompiledSupport.fullyQualifiedJavaInterfaceNameForPackageableElement(type);
         try
         {
-            return this.classLoader.loadClass(javaClassName);
+            return getClassLoader().loadClass(javaClassName);
         }
         catch (ClassNotFoundException e)
         {
@@ -116,7 +161,7 @@ public class ClassCache
         String javaClassName = JavaPackageAndImportBuilder.buildImplClassReferenceFromType(type);
         try
         {
-            return this.classLoader.loadClass(javaClassName);
+            return getClassLoader().loadClass(javaClassName);
         }
         catch (ClassNotFoundException e)
         {
