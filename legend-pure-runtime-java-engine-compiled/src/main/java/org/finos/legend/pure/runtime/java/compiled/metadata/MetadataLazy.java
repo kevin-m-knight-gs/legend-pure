@@ -46,6 +46,7 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueVis
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Objects;
 
 public class MetadataLazy implements Metadata
@@ -157,6 +158,7 @@ public class MetadataLazy implements Metadata
         return (value == null) ? null : value.visit(this.valueToObjectVisitor);
     }
 
+    @SuppressWarnings("unchecked")
     public RichIterable<Object> valuesToObjects(Object value)
     {
         if (value == null)
@@ -326,9 +328,16 @@ public class MetadataLazy implements Metadata
         {
             return constructor.newInstance(obj, this);
         }
-        catch (ReflectiveOperationException e)
+        catch (InvocationTargetException | InstantiationException | IllegalAccessException e)
         {
-            throw new RuntimeException("Error instantiating " + obj, e);
+            Throwable cause = (e instanceof InvocationTargetException) ? e.getCause() : e;
+            StringBuilder builder = new StringBuilder("Error instantiating ").append(obj).append(" (instance of ").append(classifier).append(")");
+            String eMessage = cause.getMessage();
+            if (eMessage != null)
+            {
+                builder.append(": ").append(eMessage);
+            }
+            throw new RuntimeException(builder.toString(), cause);
         }
     }
 
@@ -353,6 +362,7 @@ public class MetadataLazy implements Metadata
         return this.constructors.getIfAbsentPutWithKey(classifier, this::getLazyImplClassConstructor);
     }
 
+    @SuppressWarnings("unchecked")
     private Constructor<? extends CoreInstance> getLazyImplClassConstructor(String classifier)
     {
         String lazyImplClassName = JavaPackageAndImportBuilder.buildLazyImplClassReferenceFromUserPath(classifier);
@@ -367,6 +377,7 @@ public class MetadataLazy implements Metadata
         }
     }
 
+    @SuppressWarnings("unchecked")
     private Constructor<? extends CoreInstance> getLazyImplEnumConstructor()
     {
         String lazyImplEnumName = JavaPackageAndImportBuilder.rootPackage() + '.' + EnumProcessor.ENUM_LAZY_CLASS_NAME;
