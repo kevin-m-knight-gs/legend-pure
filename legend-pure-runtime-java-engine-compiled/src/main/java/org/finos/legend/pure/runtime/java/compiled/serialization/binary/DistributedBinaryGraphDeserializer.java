@@ -23,11 +23,11 @@ import org.eclipse.collections.api.list.primitive.ByteList;
 import org.eclipse.collections.api.map.ImmutableMap;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.impl.Counter;
 import org.finos.legend.pure.m4.serialization.Reader;
 import org.finos.legend.pure.m4.serialization.binary.BinaryReaders;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Path;
 import java.util.Map;
@@ -63,55 +63,92 @@ public class DistributedBinaryGraphDeserializer
 
     public boolean hasInstance(String classifierId, String instanceId)
     {
-        return hasClassifier(classifierId) && getClassifierIndex(classifierId).hasInstance(instanceId);
+        ClassifierIndex classifierIndex = getClassifierIndex(classifierId);
+        return (classifierIndex != null) && classifierIndex.hasInstance(instanceId);
     }
 
     public RichIterable<String> getClassifierInstanceIds(String classifierId)
     {
-        return hasClassifier(classifierId) ? getClassifierIndex(classifierId).getInstanceIds() : Lists.immutable.empty();
+        ClassifierIndex classifierIndex = getClassifierIndex(classifierId);
+        return (classifierIndex == null) ? Lists.immutable.empty() : classifierIndex.getInstanceIds();
     }
 
-    public Obj getInstance(String classifierId, String instanceId) throws IOException
+    public Obj getInstance(String classifierId, String instanceId)
     {
-        if (!hasClassifier(classifierId))
-        {
-            throw new RuntimeException("Unknown classifier id: '" + classifierId + "'");
-        }
+        return getInstance(classifierId, instanceId, true);
+    }
+
+    public Obj getInstanceIfPresent(String classifierId, String instanceId)
+    {
+        return getInstance(classifierId, instanceId, false);
+    }
+
+    public ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds)
+    {
+        return getInstances(classifierId, instanceIds, true);
+    }
+
+    public ListIterable<Obj> getInstancesIfPresent(String classifierId, Iterable<String> instanceIds)
+    {
+        return getInstances(classifierId, instanceIds, false);
+    }
+
+    private Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
+    {
         ClassifierIndex classifierIndex = getClassifierIndex(classifierId);
+        if (classifierIndex == null)
+        {
+            if (throwIfNotFound)
+            {
+                throw new RuntimeException("Unknown classifier id: '" + classifierId + "'");
+            }
+            return null;
+        }
         SourceCoordinates sourceCoordinates = classifierIndex.getSourceCoordinates(instanceId);
         if (sourceCoordinates == null)
         {
-            throw new RuntimeException("Unknown instance: classifier='" + classifierId + "', id='" + instanceId + "'");
+            if (throwIfNotFound)
+            {
+                throw new RuntimeException("Unknown instance: classifier='" + classifierId + "', id='" + instanceId + "'");
+            }
+            return null;
         }
         return sourceCoordinates.getObj(this.fileReader, this.stringIndex, classifierIndex);
     }
 
-    public ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds) throws IOException
+    private ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound)
     {
-        if (!hasClassifier(classifierId))
+        ClassifierIndex classifierIndex = getClassifierIndex(classifierId);
+        if (classifierIndex == null)
         {
-            throw new RuntimeException("Unknown classifier id: '" + classifierId + "'");
+            if (throwIfNotFound)
+            {
+                throw new RuntimeException("Unknown classifier id: '" + classifierId + "'");
+            }
+            return Lists.immutable.empty();
         }
 
-        ClassifierIndex classifierIndex = getClassifierIndex(classifierId);
         MutableMap<String, MutableList<SourceCoordinates>> sourceCoordinatesByFile = Maps.mutable.empty();
-        int size = 0;
-        for (String instanceId : instanceIds)
+        Counter count = new Counter(0);
+        instanceIds.forEach(id ->
         {
-            SourceCoordinates sourceCoordinates = classifierIndex.getSourceCoordinates(instanceId);
-            if (sourceCoordinates == null)
+            SourceCoordinates sourceCoordinates = classifierIndex.getSourceCoordinates(id);
+            if (sourceCoordinates != null)
             {
-                throw new RuntimeException("Unknown instance: classifier='" + classifierId + "', id='" + instanceId + "'");
+                sourceCoordinatesByFile.getIfAbsentPut(sourceCoordinates.getFilePath(), Lists.mutable::empty).add(sourceCoordinates);
+                count.increment();
             }
-            sourceCoordinatesByFile.getIfAbsentPut(sourceCoordinates.getFilePath(), Lists.mutable::empty).add(sourceCoordinates);
-            size++;
-        }
-        if (size == 0)
+            else if (throwIfNotFound)
+            {
+                throw new RuntimeException("Unknown instance: classifier='" + classifierId + "', id='" + id + "'");
+            }
+        });
+        if (count.getCount() == 0)
         {
             return Lists.immutable.empty();
         }
 
-        MutableList<Obj> objs = Lists.mutable.withInitialCapacity(size);
+        MutableList<Obj> objs = Lists.mutable.withInitialCapacity(count.getCount());
         sourceCoordinatesByFile.forEachKeyValue((filePath, fileSourceCoordinates) ->
         {
             fileSourceCoordinates.sortThis(SourceCoordinates::compareByOffset);

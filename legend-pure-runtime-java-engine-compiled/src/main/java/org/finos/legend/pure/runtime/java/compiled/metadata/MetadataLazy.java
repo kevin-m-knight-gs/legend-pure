@@ -18,6 +18,7 @@ import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
+import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.ConcurrentMutableMap;
@@ -27,6 +28,7 @@ import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.Counter;
 import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
+import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.JavaPackageAndImportBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.EnumProcessor;
@@ -35,6 +37,7 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.Enum;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjRef;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Primitive;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValue;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueMany;
@@ -44,10 +47,11 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValue;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueConsumer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueVisitor;
 
-import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 public class MetadataLazy implements Metadata
 {
@@ -88,17 +92,17 @@ public class MetadataLazy implements Metadata
     };
 
     private final ClassLoader classLoader;
-    private final DistributedBinaryGraphDeserializer deserializer;
+    private final ImmutableList<DistributedBinaryGraphDeserializer> deserializers;
     private final ConcurrentMutableMap<String, Constructor<? extends CoreInstance>> constructors = ConcurrentHashMap.newMap();
     private final ConcurrentMutableMap<String, ConcurrentMutableMap<String, CoreInstance>> instanceCache = ConcurrentHashMap.newMap();
     private final ConcurrentMutableMap<String, MapIterable<String, CoreInstance>> enumCache = ConcurrentHashMap.newMap();
 
     private volatile Constructor<? extends CoreInstance> enumConstructor = null; //NOSONAR we actually want to protect the pointer
 
-    private MetadataLazy(ClassLoader classLoader, DistributedBinaryGraphDeserializer deserializer)
+    private MetadataLazy(ClassLoader classLoader, ImmutableList<DistributedBinaryGraphDeserializer> deserializers)
     {
         this.classLoader = classLoader;
-        this.deserializer = deserializer;
+        this.deserializers = deserializers;
     }
 
     @Override
@@ -122,13 +126,13 @@ public class MetadataLazy implements Metadata
     @Override
     public CoreInstance getMetadata(String classifier, String id)
     {
-        return this.deserializer.hasClassifier(classifier) ? toJavaObject(classifier, id) : null;
+        return hasClassifier(classifier) ? toJavaObject(classifier, id) : null;
     }
 
     @Override
     public MapIterable<String, CoreInstance> getMetadata(String classifier)
     {
-        if (!this.deserializer.hasClassifier(classifier))
+        if (!hasClassifier(classifier))
         {
             return null;
         }
@@ -232,16 +236,7 @@ public class MetadataLazy implements Metadata
             });
             if (idsToDeserialize.notEmpty())
             {
-                ListIterable<Obj> deserialized;
-                try
-                {
-                    deserialized = this.deserializer.getInstances(classifier, idsToDeserialize);
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException("Error deserializing instances of " + classifier, e);
-                }
-
+                ListIterable<Obj> deserialized = getInstances(classifier, idsToDeserialize);
                 deserialized.forEach(obj ->
                 {
                     CoreInstance cachedInstance = classifierCache.getIfAbsentPut(obj.getIdentifier(), () -> newInstance(classifier, obj));
@@ -276,23 +271,168 @@ public class MetadataLazy implements Metadata
         return instance.getPropertyValues().toMap(PropertyValue::getProperty, pv -> pv.visit(VALUES_VISITOR)).toImmutable();
     }
 
+    private boolean hasClassifier(String classifier)
+    {
+        return this.deserializers.anySatisfy(d -> d.hasClassifier(classifier));
+    }
+
+    private RichIterable<String> getClassifierInstanceIds(String classifier)
+    {
+        switch (this.deserializers.size())
+        {
+            case 0:
+            {
+                return Lists.immutable.empty();
+            }
+            case 1:
+            {
+                return this.deserializers.get(0).getClassifierInstanceIds(classifier);
+            }
+            default:
+            {
+                return this.deserializers.flatCollect(d -> d.getClassifierInstanceIds(classifier), Sets.mutable.empty());
+            }
+        }
+    }
+
+    private Obj getInstance(String classifier, String id)
+    {
+        if (this.deserializers.size() == 1)
+        {
+            Obj obj = this.deserializers.get(0).getInstance(classifier, id);
+            if (obj instanceof ObjUpdate)
+            {
+                throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifier + "', id='" + id + "'");
+            }
+            return obj;
+        }
+
+        Obj main = null;
+        List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(this.deserializers.size() - 1);
+        for (DistributedBinaryGraphDeserializer deserializer : this.deserializers)
+        {
+            Obj obj = deserializer.getInstanceIfPresent(classifier, id);
+            if (obj != null)
+            {
+                if (obj instanceof ObjUpdate)
+                {
+                    updates.add((ObjUpdate) obj);
+                }
+                else if (main == null)
+                {
+                    main = obj;
+                }
+                else
+                {
+                    throw new RuntimeException("Multiple main definitions for instance: classifier='" + classifier + "', id='" + id + "'");
+                }
+            }
+        }
+        if (main == null)
+        {
+            String message = updates.isEmpty() ?
+                    "Unknown instance: classifier='" + classifier + "', id='" + id + "'" :
+                    "Cannot find main definition for instance: classifier='" + classifier + "', id='" + id + "'";
+            throw new RuntimeException(message);
+        }
+        return updates.isEmpty() ? main : main.applyUpdates(updates);
+    }
+
+    private ListIterable<Obj> getInstances(String classifier, Iterable<String> instanceIds)
+    {
+        if (this.deserializers.size() == 1)
+        {
+            ListIterable<Obj> objs = this.deserializers.get(0).getInstances(classifier, instanceIds);
+            if (objs.anySatisfy(o -> o instanceof ObjUpdate))
+            {
+                MutableList<String> invalidIds = objs.collectIf(o -> o instanceof ObjUpdate, Obj::getIdentifier, Lists.mutable.empty());
+                boolean many = invalidIds.size() > 1;
+                StringBuilder builder = new StringBuilder("Cannot find main definition for ").append(many ? "instances: " : "instance: ");
+                builder.append("classifier'").append(classifier).append("', id");
+                if (many)
+                {
+                    invalidIds.sortThis().appendString(builder, "s: '", "', '", "'");
+                }
+                else
+                {
+                    builder.append(": '").append(invalidIds.get(0)).append("'");
+                }
+                throw new RuntimeException(builder.toString());
+            }
+            return objs;
+        }
+
+        Set<String> instanceIdSet = (instanceIds instanceof Set) ? (Set<String>) instanceIds : Sets.mutable.withAll(instanceIds);
+        if (instanceIdSet.isEmpty())
+        {
+            return Lists.immutable.empty();
+        }
+
+        MutableMap<String, List<Obj>> objsById = Maps.mutable.withInitialCapacity(instanceIdSet.size());
+        this.deserializers.asLazy().flatCollect(d -> d.getInstancesIfPresent(classifier, instanceIdSet)).forEach(o -> objsById.getIfAbsentPut(o.getIdentifier(), Lists.mutable::empty).add(o));
+        if (instanceIdSet.size() > objsById.size())
+        {
+            boolean many = (instanceIdSet.size() - objsById.size()) > 1;
+            StringBuilder builder = new StringBuilder(many ? "Unknown instances: " : "Unknown instance: ");
+            builder.append("classifier='").append(classifier).append("', id");
+            if (many)
+            {
+                Iterate.reject(instanceIdSet, objsById::containsKey, Lists.mutable.empty()).sortThis().appendString(builder, "s='", "', '", "'");
+            }
+            else
+            {
+                builder.append("='").append(Iterate.detect(instanceIdSet, id -> !objsById.containsKey(id))).append("'");
+            }
+            throw new RuntimeException(builder.toString());
+        }
+        return objsById.valuesView().collect(this::reduceObjs, Lists.mutable.withInitialCapacity(objsById.size()));
+    }
+
+    private Obj reduceObjs(List<Obj> objs)
+    {
+        if (objs.size() == 1)
+        {
+            Obj result = objs.get(0);
+            if (result instanceof ObjUpdate)
+            {
+                throw new RuntimeException("Cannot find main definition for instance: classifier='" + result.getClassifier() + "', id='" + result.getIdentifier() + "'");
+            }
+            return result;
+        }
+
+        Obj main = null;
+        List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(objs.size() - 1);
+        for (Obj obj : objs)
+        {
+            if (obj instanceof ObjUpdate)
+            {
+                updates.add((ObjUpdate) obj);
+            }
+            else if (main == null)
+            {
+                main = obj;
+            }
+            else
+            {
+                throw new RuntimeException("Multiple main definitions for instance: classifier='" + obj.getClassifier() + "', id='" + obj.getIdentifier() + "'");
+            }
+        }
+        if (main == null)
+        {
+            throw new RuntimeException("Cannot find main definition for instance: classifier='" + objs.get(0).getClassifier() + "', id='" + objs.get(0).getIdentifier() + "'");
+        }
+        return main.applyUpdates(updates);
+    }
+
     private void loadAllClassifierInstances(String classifier)
     {
-        RichIterable<String> instanceIds = this.deserializer.getClassifierInstanceIds(classifier);
+        RichIterable<String> instanceIds = getClassifierInstanceIds(classifier);
         ConcurrentMutableMap<String, CoreInstance> classifierCache = getClassifierInstanceCache(classifier);
         int notLoadedCount = instanceIds.size() - classifierCache.size();
         if (notLoadedCount > 0)
         {
             MutableList<String> instanceIdsToLoad = instanceIds.reject(classifierCache::containsKey, Lists.mutable.withInitialCapacity(notLoadedCount));
-            ListIterable<Obj> objs;
-            try
-            {
-                objs = this.deserializer.getInstances(classifier, instanceIdsToLoad);
-            }
-            catch (IOException e)
-            {
-                throw new RuntimeException("Error loading all instances for classifier: " + classifier, e);
-            }
+            ListIterable<Obj> objs = getInstances(classifier, instanceIdsToLoad);
             objs.forEach(obj -> classifierCache.getIfAbsentPut(obj.getIdentifier(), () -> newInstance(classifier, obj)));
         }
     }
@@ -309,15 +449,7 @@ public class MetadataLazy implements Metadata
 
     private CoreInstance newInstance(String classifier, String id)
     {
-        Obj obj;
-        try
-        {
-            obj = this.deserializer.getInstance(classifier, id);
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException("Error loading instance '" + id + "' with classifier '" + classifier + "'", e);
-        }
+        Obj obj = getInstance(classifier, id);
         return newInstance(classifier, obj);
     }
 
@@ -398,20 +530,51 @@ public class MetadataLazy implements Metadata
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
         Objects.requireNonNull(deserializer, "deserializer may not be null");
-        return new MetadataLazy(classLoader, deserializer);
+        return new MetadataLazy(classLoader, Lists.immutable.with(deserializer));
+    }
+
+    public static MetadataLazy newMetadata(ClassLoader classLoader, Iterable<? extends DistributedBinaryGraphDeserializer> deserializers)
+    {
+        Objects.requireNonNull(classLoader, "class loader may not be null");
+        Objects.requireNonNull(deserializers, "deserializers may not be null");
+        ImmutableList<DistributedBinaryGraphDeserializer> deserializerList = Lists.immutable.withAll(deserializers);
+        if (deserializerList.isEmpty())
+        {
+            throw new IllegalArgumentException("deserializers are required");
+        }
+        deserializerList.forEach(d -> Objects.requireNonNull(d, "deserializer may not be null"));
+        return new MetadataLazy(classLoader, deserializerList);
     }
 
     public static MetadataLazy fromClassLoader(ClassLoader classLoader)
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
         DistributedBinaryGraphDeserializer deserializer = DistributedBinaryGraphDeserializer.fromClassLoader(classLoader);
-        return new MetadataLazy(classLoader, deserializer);
+        return new MetadataLazy(classLoader, Lists.immutable.with(deserializer));
     }
 
     public static MetadataLazy fromClassLoader(ClassLoader classLoader, String metadataName)
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
+        Objects.requireNonNull(metadataName, "metadata name may not be null");
         DistributedBinaryGraphDeserializer deserializer = DistributedBinaryGraphDeserializer.fromClassLoader(metadataName, classLoader);
-        return new MetadataLazy(classLoader, deserializer);
+        return new MetadataLazy(classLoader, Lists.immutable.with(deserializer));
+    }
+
+    public static MetadataLazy fromClassLoader(ClassLoader classLoader, Iterable<String> metadataNames)
+    {
+        Objects.requireNonNull(classLoader, "class loader may not be null");
+        Objects.requireNonNull(metadataNames, "metadata names may not be null");
+        Set<String> metadataNamesSet = (metadataNames instanceof Set) ? (Set<String>) metadataNames : Sets.mutable.withAll(metadataNames);
+        if (metadataNamesSet.isEmpty())
+        {
+            throw new IllegalArgumentException("metadata names are required");
+        }
+        if (metadataNamesSet.contains(null))
+        {
+            throw new NullPointerException("metadata name may not be null");
+        }
+        ImmutableList<DistributedBinaryGraphDeserializer> deserializers = Iterate.collectWith(metadataNamesSet, DistributedBinaryGraphDeserializer::fromClassLoader, classLoader, Lists.mutable.withInitialCapacity(metadataNamesSet.size())).toImmutable();
+        return new MetadataLazy(classLoader, deserializers);
     }
 }

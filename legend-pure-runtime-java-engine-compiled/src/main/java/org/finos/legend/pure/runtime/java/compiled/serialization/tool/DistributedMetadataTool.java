@@ -130,21 +130,14 @@ public class DistributedMetadataTool implements Closeable
 
     private void instance(String classifier, String id)
     {
-        try
+        Obj instance = this.deserializer.getInstanceIfPresent(classifier, id);
+        if (instance != null)
         {
-            if (this.deserializer.hasInstance(classifier, id))
-            {
-                Obj instance = this.deserializer.getInstance(classifier, id);
-                new ObjPrinter(instance).printObj();
-            }
-            else
-            {
-                this.out.println("Instance not found");
-            }
+            new ObjPrinter(instance).printObj();
         }
-        catch (IOException e)
+        else
         {
-            throw new UncheckedIOException(e);
+            this.out.println("Instance not found");
         }
     }
 
