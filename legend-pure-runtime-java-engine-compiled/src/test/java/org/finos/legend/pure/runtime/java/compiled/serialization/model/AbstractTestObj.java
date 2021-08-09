@@ -125,14 +125,86 @@ abstract class AbstractTestObj<T extends Obj>
                 update.getPropertyValues());
     }
 
+    @Test
+    public void testComputeUpdate()
+    {
+        String property1 = "prop1";
+        String property2 = "prop2";
+        String property3 = "prop3";
+
+        T original = newObjForUpdateTests(newPrimitivePropertyValue(property1, "a", "b"), newPrimitivePropertyValue(property2, 1, 2));
+        String identifier = original.getIdentifier();
+        String classifier = original.getClassifier();
+
+        // no property values
+        Assert.assertNull(original.computeUpdate(newObj(identifier, classifier)));
+
+        // no new property values
+        Assert.assertNull(original.computeUpdate(original));
+        Assert.assertNull(original.computeUpdate(newObj(identifier, classifier, original.getPropertyValues())));
+        Assert.assertNull(original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "a"), newPrimitivePropertyValue(property2, 2))));
+
+        // new property values
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property1, "c")),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "c"))));
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property1, "c")),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b", "c"))));
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property1, "c")),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "c", "b", "a"), newPrimitivePropertyValue(property2, 2))));
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property1, "c")),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property2, 2), newPrimitivePropertyValue(property1, "c", "b", "a"))));
+
+        // new property values plus new property
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property2, 3), newPrimitivePropertyValue(property3, true)),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property2, 3), newPrimitivePropertyValue(property3, true))));
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property2, 3), newPrimitivePropertyValue(property3, true)),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true))));
+    }
+
+    @Test
+    public void testInvalidComputeUpdate()
+    {
+        T original = newObjForUpdateTests();
+        String identifier = original.getIdentifier();
+        String classifier = original.getClassifier();
+
+        String otherIdentifier = original.getIdentifier() + "_Other";
+        String otherClassifier = original.getClassifier() + "_Other";
+
+        IllegalArgumentException e1 = Assert.assertThrows(IllegalArgumentException.class, () -> original.computeUpdate(newObj(otherIdentifier, classifier)));
+        Assert.assertEquals("Cannot compute update for " + identifier + " (classifier: " + classifier + ") from " + otherIdentifier + " (classifier: " + classifier + ")", e1.getMessage());
+
+        IllegalArgumentException e2 = Assert.assertThrows(IllegalArgumentException.class, () -> original.computeUpdate(newObj(identifier, otherClassifier)));
+        Assert.assertEquals("Cannot compute update for " + identifier + " (classifier: " + classifier + ") from " + identifier + " (classifier: " + otherClassifier + ")", e2.getMessage());
+
+        IllegalArgumentException e3 = Assert.assertThrows(IllegalArgumentException.class, () -> original.computeUpdate(newObj(otherIdentifier, otherClassifier)));
+        Assert.assertEquals("Cannot compute update for " + identifier + " (classifier: " + classifier + ") from " + otherIdentifier + " (classifier: " + otherClassifier + ")", e3.getMessage());
+    }
+
     protected abstract Class<T> getObjClass();
+
+    protected T newObj(String identifier, String classifier, PropertyValue... propertiesValues)
+    {
+        return newObj(identifier, classifier, ArrayAdapter.adapt(propertiesValues).asUnmodifiable());
+    }
+
+    protected abstract T newObj(String identifier, String classifier, ListIterable<PropertyValue> propertiesValues);
 
     protected T newObjForUpdateTests(PropertyValue... propertiesValues)
     {
         return newObjForUpdateTests(ArrayAdapter.adapt(propertiesValues).asUnmodifiable());
     }
 
-    protected abstract T newObjForUpdateTests(ListIterable<PropertyValue> propertiesValues);
+    protected T newObjForUpdateTests(ListIterable<PropertyValue> propertiesValues)
+    {
+        return newObj("test::SomeId", "meta::pure::SomeClassifier", propertiesValues);
+    }
 
     private ObjUpdate newObjUpdate(String identifier, String classifier, PropertyValue... propertyValues)
     {

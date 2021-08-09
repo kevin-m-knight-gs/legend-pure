@@ -12,13 +12,13 @@ public class TestObj extends AbstractTestObj<Obj>
     }
 
     @Override
-    protected Obj newObjForUpdateTests(ListIterable<PropertyValue> propertiesValues)
+    protected Obj newObj(String identifier, String classifier, ListIterable<PropertyValue> propertiesValues)
     {
         return new Obj(
                 new SourceInformation("source1.pure", 1, 2, 3, 4, 5, 6),
-                "test::SomeId",
-                "meta::pure::SomeClassifier",
-                "SomeId",
+                identifier,
+                classifier,
+                identifier.substring(identifier.lastIndexOf(':') + 1),
                 propertiesValues
         );
     }

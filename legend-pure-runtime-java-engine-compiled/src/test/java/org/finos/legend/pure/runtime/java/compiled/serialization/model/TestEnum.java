@@ -14,11 +14,17 @@ public class TestEnum extends AbstractTestObj<Enum>
     @Override
     protected Enum newObjForUpdateTests(ListIterable<PropertyValue> propertiesValues)
     {
+        return newObj("test::SomeEnum.VAL1", "test::SomeEnum", propertiesValues);
+    }
+
+    @Override
+    protected Enum newObj(String identifier, String classifier, ListIterable<PropertyValue> propertiesValues)
+    {
         return new Enum(
                 new SourceInformation("source2.pure", 6, 5, 4, 3, 2, 1),
-                "test::SomeEnum.VAL1",
-                "meta::pure::SomeEnumeration",
-                "VAL1",
+                identifier,
+                classifier,
+                identifier.substring(identifier.lastIndexOf('.') + 1),
                 propertiesValues
         );
     }

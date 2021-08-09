@@ -11,12 +11,8 @@ public class TestObjUpdate extends AbstractTestObj<ObjUpdate>
     }
 
     @Override
-    protected ObjUpdate newObjForUpdateTests(ListIterable<PropertyValue> propertiesValues)
+    protected ObjUpdate newObj(String identifier, String classifier, ListIterable<PropertyValue> propertiesValues)
     {
-        return new ObjUpdate(
-                "test::SomeId",
-                "meta::pure::SomeClassifier",
-                propertiesValues
-        );
+        return new ObjUpdate(identifier, classifier, propertiesValues);
     }
 }

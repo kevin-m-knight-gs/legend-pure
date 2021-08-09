@@ -16,13 +16,17 @@ package org.finos.legend.pure.runtime.java.compiled.serialization.model;
 
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
+import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 
 public class Obj
 {
@@ -97,21 +101,18 @@ public class Obj
     public String toString()
     {
         StringBuilder builder = new StringBuilder(getClass().getSimpleName());
-        builder.append('{');
+        builder.append("{classifier='").append(this.classifier).append("'");
+        builder.append(", identifier='").append(this.identifier).append("'");
+        if (this.name != null)
+        {
+            builder.append(", name='").append(this.name).append("'");
+        }
+        this.properties.appendString(builder, ", properties=[", ", ", "]");
         if (this.sourceInformation != null)
         {
-            builder.append("sourceInformation=");
+            builder.append(", sourceInformation=");
             this.sourceInformation.writeMessage(builder);
-            builder.append(", ");
         }
-        builder.append("classifier='");
-        builder.append(this.classifier);
-        builder.append("', identifier='");
-        builder.append(this.identifier);
-        builder.append("', name='");
-        builder.append(this.name);
-        builder.append("', properties=");
-        this.properties.appendString(builder);
         builder.append('}');
         return builder.toString();
     }
@@ -203,6 +204,75 @@ public class Obj
 
         // Return a copy of this with updated property values
         return cloneWithNewPropertyValues(updatedPropertyValues);
+    }
+
+    public ObjUpdate computeUpdate(Obj other)
+    {
+        if (!this.identifier.equals(other.getIdentifier()) || !this.classifier.equals(other.getClassifier()))
+        {
+            throw new IllegalArgumentException("Cannot compute update for " + this.identifier + " (classifier: " + this.classifier + ") from " + other.getIdentifier() + " (classifier: " + other.getClassifier() + ")");
+        }
+        MapIterable<String, PropertyValue> currentPropertyValues = this.properties.groupByUniqueKey(PropertyValue::getProperty);
+        MutableList<PropertyValue> additionalPropertyValues = Lists.mutable.empty();
+        other.getPropertyValues().forEach(value ->
+        {
+            PropertyValue additionalValues = computePropertyValueUpdate(currentPropertyValues.get(value.getProperty()), value);
+            if (additionalValues != null)
+            {
+                additionalPropertyValues.add(additionalValues);
+            }
+        });
+        return additionalPropertyValues.isEmpty() ? null : new ObjUpdate(this.identifier, this.classifier, additionalPropertyValues.asUnmodifiable());
+    }
+
+    private PropertyValue computePropertyValueUpdate(PropertyValue currentValue, PropertyValue otherValue)
+    {
+        if ((currentValue == null) || (otherValue == null))
+        {
+            return otherValue;
+        }
+        return otherValue.visit(new PropertyValueVisitor<PropertyValue>()
+        {
+            @Override
+            public PropertyValue visit(PropertyValueMany otherMany)
+            {
+                Set<RValue> currentRValues = currentValue.visit(new PropertyValueVisitor<Set<RValue>>()
+                {
+                    @Override
+                    public Set<RValue> visit(PropertyValueMany currentMany)
+                    {
+                        return Sets.mutable.withAll(currentMany.getValues());
+                    }
+
+                    @Override
+                    public Set<RValue> visit(PropertyValueOne currentOne)
+                    {
+                        return Collections.singleton(currentOne.getValue());
+                    }
+                });
+                ListIterable<RValue> additionalRValues = otherMany.getValues().reject(currentRValues::contains);
+                return additionalRValues.isEmpty() ? null : newPropertyValue(otherMany.getProperty(), additionalRValues);
+            }
+
+            @Override
+            public PropertyValue visit(PropertyValueOne otherOne)
+            {
+                return currentValue.visit(new PropertyValueVisitor<PropertyValue>()
+                {
+                    @Override
+                    public PropertyValue visit(PropertyValueMany currentMany)
+                    {
+                        return currentMany.getValues().contains(otherOne.getValue()) ? null : otherValue;
+                    }
+
+                    @Override
+                    public PropertyValue visit(PropertyValueOne currentOne)
+                    {
+                        return Objects.equals(currentOne.getValue(), otherOne.getValue()) ? null : otherValue;
+                    }
+                });
+            }
+        });
     }
 
     protected Obj cloneWithNewPropertyValues(ListIterable<PropertyValue> newPropertyValues)
