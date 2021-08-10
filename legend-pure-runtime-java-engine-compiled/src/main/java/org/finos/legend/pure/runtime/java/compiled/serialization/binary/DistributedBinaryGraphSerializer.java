@@ -18,9 +18,9 @@ import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.factory.Stacks;
-import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.map.sorted.SortedMapIterable;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.stack.MutableStack;
 import org.eclipse.collections.impl.block.factory.Functions;
@@ -92,12 +92,13 @@ public class DistributedBinaryGraphSerializer
             ByteArrayOutputStream indexByteStream = new ByteArrayOutputStream();
             try (Writer indexWriter = BinaryWriters.newBinaryWriter(indexByteStream))
             {
+                GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
                 for (String classifierId : nodesByClassifierId.keysView().toSortedList())
                 {
-                    ListIterable<CoreInstance> classifierObjs = nodesByClassifierId.get(classifierId).sortThisBy(coreInstance -> IdBuilder.buildId(coreInstance, processorSupport));
+                    SortedMapIterable<String, CoreInstance> classifierObjsById = nodesByClassifierId.get(classifierId).toSortedMap(i -> IdBuilder.buildId(i, processorSupport), Functions.identity());
 
                     // Initial index information
-                    indexWriter.writeInt(classifierObjs.size()); // total obj count
+                    indexWriter.writeInt(classifierObjsById.size()); // total obj count
                     indexWriter.writeInt(partition); // initial partition
                     indexWriter.writeInt(partitionTotalBytes); // initial byte offset in partition
 
@@ -105,8 +106,7 @@ public class DistributedBinaryGraphSerializer
                     ByteArrayOutputStream objByteStream = new ByteArrayOutputStream();
                     try (Writer objWriter = BinaryWriters.newBinaryWriter(objByteStream))
                     {
-                        GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
-                        for (CoreInstance coreInstance : classifierObjs)
+                        for (CoreInstance coreInstance : classifierObjsById.valuesView())
                         {
                             // Obj serialization
                             Obj obj = GraphSerializer.buildObj(coreInstance, classifierCaches, processorSupport);
@@ -147,6 +147,7 @@ public class DistributedBinaryGraphSerializer
                         indexWriter.writeInt(partitionObjIndexInfos.size());
                         partitionObjIndexInfos.forEach(info -> info.write(indexWriter, stringCache));
                     }
+
                     // Write classifier index
                     try (Writer indexFileWriter = fileWriter.getWriter(DistributedMetadataFiles.getMetadataClassifierIndexFilePath(this.metadataName, classifierId)))
                     {
