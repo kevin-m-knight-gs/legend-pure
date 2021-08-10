@@ -21,10 +21,9 @@ import org.eclipse.collections.api.factory.Stacks;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
-import org.eclipse.collections.api.multimap.list.MutableListMultimap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.stack.MutableStack;
-import org.eclipse.collections.impl.factory.Multimaps;
+import org.eclipse.collections.impl.block.factory.Functions;
 import org.eclipse.collections.impl.utility.LazyIterate;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
@@ -75,10 +74,10 @@ public class DistributedBinaryGraphSerializer
     public void serialize(FileWriter fileWriter)
     {
         ProcessorSupport processorSupport = this.runtime.getProcessorSupport();
-        MutableListMultimap<String, CoreInstance> nodesByClassifierId = getNodesByClassifierId(this.runtime.getModelRepository(), processorSupport);
+        MutableMap<String, MutableList<CoreInstance>> nodesByClassifierId = getNodesByClassifierId(this.runtime.getModelRepository(), processorSupport);
 
         // Build string cache
-        DistributedStringCache stringCache = DistributedStringCache.fromNodes(nodesByClassifierId.valuesView(), processorSupport);
+        DistributedStringCache stringCache = DistributedStringCache.fromNodes(nodesByClassifierId.valuesView().flatCollect(Functions.identity()), processorSupport);
         BinaryObjSerializer serializer = new BinaryObjSerializerWithStringCacheAndImplicitIdentifiers(stringCache);
 
         // Write string cache
@@ -183,9 +182,9 @@ public class DistributedBinaryGraphSerializer
         newSerializer(runtime).serializeToDirectory(directory);
     }
 
-    private static MutableListMultimap<String, CoreInstance> getNodesByClassifierId(ModelRepository repository, ProcessorSupport processorSupport)
+    private static MutableMap<String, MutableList<CoreInstance>> getNodesByClassifierId(ModelRepository repository, ProcessorSupport processorSupport)
     {
-        MutableListMultimap<String, CoreInstance> nodesByClassifierId = Multimaps.mutable.list.empty();
+        MutableMap<String, MutableList<CoreInstance>> nodesByClassifierId = Maps.mutable.empty();
 
         MutableMap<CoreInstance, String> classifierIds = Maps.mutable.empty();
         MutableSet<CoreInstance> primitiveTypes = PrimitiveUtilities.getPrimitiveTypes(repository).toSet();
@@ -198,7 +197,7 @@ public class DistributedBinaryGraphSerializer
             {
                 CoreInstance classifier = node.getClassifier();
                 String classifierId = classifierIds.getIfAbsentPutWithKey(classifier, c -> MetadataJavaPaths.buildMetadataKeyFromType(c).intern());
-                nodesByClassifierId.put(classifierId, node);
+                nodesByClassifierId.getIfAbsentPut(classifierId, Lists.mutable::empty).add(node);
                 LazyIterate.flatCollect(node.getKeys(), key -> Instance.getValueForMetaPropertyToManyResolved(node, key, processorSupport))
                         .select(v -> !primitiveTypes.contains(v.getClassifier()))
                         .forEach(stack::push);
