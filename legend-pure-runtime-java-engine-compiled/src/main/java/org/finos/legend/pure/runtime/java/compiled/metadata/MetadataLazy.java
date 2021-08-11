@@ -28,16 +28,15 @@ import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.Counter;
 import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
-import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.JavaPackageAndImportBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.EnumProcessor;
 import org.finos.legend.pure.runtime.java.compiled.serialization.binary.DistributedBinaryGraphDeserializer;
+import org.finos.legend.pure.runtime.java.compiled.serialization.binary.MultiDistributedBinaryGraphDeserializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Enum;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjRef;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Primitive;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValue;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueMany;
@@ -49,7 +48,6 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueVis
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -92,17 +90,17 @@ public class MetadataLazy implements Metadata
     };
 
     private final ClassLoader classLoader;
-    private final ImmutableList<DistributedBinaryGraphDeserializer> deserializers;
+    private final MultiDistributedBinaryGraphDeserializer deserializer;
     private final ConcurrentMutableMap<String, Constructor<? extends CoreInstance>> constructors = ConcurrentHashMap.newMap();
     private final ConcurrentMutableMap<String, ConcurrentMutableMap<String, CoreInstance>> instanceCache = ConcurrentHashMap.newMap();
     private final ConcurrentMutableMap<String, MapIterable<String, CoreInstance>> enumCache = ConcurrentHashMap.newMap();
 
     private volatile Constructor<? extends CoreInstance> enumConstructor = null; //NOSONAR we actually want to protect the pointer
 
-    private MetadataLazy(ClassLoader classLoader, ImmutableList<DistributedBinaryGraphDeserializer> deserializers)
+    private MetadataLazy(ClassLoader classLoader, MultiDistributedBinaryGraphDeserializer deserializer)
     {
         this.classLoader = classLoader;
-        this.deserializers = deserializers;
+        this.deserializer = deserializer;
     }
 
     @Override
@@ -273,155 +271,22 @@ public class MetadataLazy implements Metadata
 
     private boolean hasClassifier(String classifier)
     {
-        return this.deserializers.anySatisfy(d -> d.hasClassifier(classifier));
+        return this.deserializer.hasClassifier(classifier);
     }
 
     private RichIterable<String> getClassifierInstanceIds(String classifier)
     {
-        switch (this.deserializers.size())
-        {
-            case 0:
-            {
-                return Lists.immutable.empty();
-            }
-            case 1:
-            {
-                return this.deserializers.get(0).getClassifierInstanceIds(classifier);
-            }
-            default:
-            {
-                return this.deserializers.flatCollect(d -> d.getClassifierInstanceIds(classifier), Sets.mutable.empty());
-            }
-        }
+        return this.deserializer.getClassifierInstanceIds(classifier);
     }
 
     private Obj getInstance(String classifier, String id)
     {
-        if (this.deserializers.size() == 1)
-        {
-            Obj obj = this.deserializers.get(0).getInstance(classifier, id);
-            if (obj instanceof ObjUpdate)
-            {
-                throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifier + "', id='" + id + "'");
-            }
-            return obj;
-        }
-
-        Obj main = null;
-        List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(this.deserializers.size() - 1);
-        for (DistributedBinaryGraphDeserializer deserializer : this.deserializers)
-        {
-            Obj obj = deserializer.getInstanceIfPresent(classifier, id);
-            if (obj != null)
-            {
-                if (obj instanceof ObjUpdate)
-                {
-                    updates.add((ObjUpdate) obj);
-                }
-                else if (main == null)
-                {
-                    main = obj;
-                }
-                else
-                {
-                    throw new RuntimeException("Multiple main definitions for instance: classifier='" + classifier + "', id='" + id + "'");
-                }
-            }
-        }
-        if (main == null)
-        {
-            String message = updates.isEmpty() ?
-                    "Unknown instance: classifier='" + classifier + "', id='" + id + "'" :
-                    "Cannot find main definition for instance: classifier='" + classifier + "', id='" + id + "'";
-            throw new RuntimeException(message);
-        }
-        return updates.isEmpty() ? main : main.applyUpdates(updates);
+        return this.deserializer.getInstance(classifier, id);
     }
 
     private ListIterable<Obj> getInstances(String classifier, Iterable<String> instanceIds)
     {
-        if (this.deserializers.size() == 1)
-        {
-            ListIterable<Obj> objs = this.deserializers.get(0).getInstances(classifier, instanceIds);
-            if (objs.anySatisfy(o -> o instanceof ObjUpdate))
-            {
-                MutableList<String> invalidIds = objs.collectIf(o -> o instanceof ObjUpdate, Obj::getIdentifier, Lists.mutable.empty());
-                boolean many = invalidIds.size() > 1;
-                StringBuilder builder = new StringBuilder("Cannot find main definition for ").append(many ? "instances: " : "instance: ");
-                builder.append("classifier'").append(classifier).append("', id");
-                if (many)
-                {
-                    invalidIds.sortThis().appendString(builder, "s: '", "', '", "'");
-                }
-                else
-                {
-                    builder.append(": '").append(invalidIds.get(0)).append("'");
-                }
-                throw new RuntimeException(builder.toString());
-            }
-            return objs;
-        }
-
-        Set<String> instanceIdSet = (instanceIds instanceof Set) ? (Set<String>) instanceIds : Sets.mutable.withAll(instanceIds);
-        if (instanceIdSet.isEmpty())
-        {
-            return Lists.immutable.empty();
-        }
-
-        MutableMap<String, List<Obj>> objsById = Maps.mutable.withInitialCapacity(instanceIdSet.size());
-        this.deserializers.asLazy().flatCollect(d -> d.getInstancesIfPresent(classifier, instanceIdSet)).forEach(o -> objsById.getIfAbsentPut(o.getIdentifier(), Lists.mutable::empty).add(o));
-        if (instanceIdSet.size() > objsById.size())
-        {
-            boolean many = (instanceIdSet.size() - objsById.size()) > 1;
-            StringBuilder builder = new StringBuilder(many ? "Unknown instances: " : "Unknown instance: ");
-            builder.append("classifier='").append(classifier).append("', id");
-            if (many)
-            {
-                Iterate.reject(instanceIdSet, objsById::containsKey, Lists.mutable.empty()).sortThis().appendString(builder, "s='", "', '", "'");
-            }
-            else
-            {
-                builder.append("='").append(Iterate.detect(instanceIdSet, id -> !objsById.containsKey(id))).append("'");
-            }
-            throw new RuntimeException(builder.toString());
-        }
-        return objsById.valuesView().collect(this::reduceObjs, Lists.mutable.withInitialCapacity(objsById.size()));
-    }
-
-    private Obj reduceObjs(List<Obj> objs)
-    {
-        if (objs.size() == 1)
-        {
-            Obj result = objs.get(0);
-            if (result instanceof ObjUpdate)
-            {
-                throw new RuntimeException("Cannot find main definition for instance: classifier='" + result.getClassifier() + "', id='" + result.getIdentifier() + "'");
-            }
-            return result;
-        }
-
-        Obj main = null;
-        List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(objs.size() - 1);
-        for (Obj obj : objs)
-        {
-            if (obj instanceof ObjUpdate)
-            {
-                updates.add((ObjUpdate) obj);
-            }
-            else if (main == null)
-            {
-                main = obj;
-            }
-            else
-            {
-                throw new RuntimeException("Multiple main definitions for instance: classifier='" + obj.getClassifier() + "', id='" + obj.getIdentifier() + "'");
-            }
-        }
-        if (main == null)
-        {
-            throw new RuntimeException("Cannot find main definition for instance: classifier='" + objs.get(0).getClassifier() + "', id='" + objs.get(0).getIdentifier() + "'");
-        }
-        return main.applyUpdates(updates);
+        return this.deserializer.getInstances(classifier, instanceIds);
     }
 
     private void loadAllClassifierInstances(String classifier)
@@ -530,7 +395,7 @@ public class MetadataLazy implements Metadata
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
         Objects.requireNonNull(deserializer, "deserializer may not be null");
-        return new MetadataLazy(classLoader, Lists.immutable.with(deserializer));
+        return new MetadataLazy(classLoader, MultiDistributedBinaryGraphDeserializer.fromDeserializers(deserializer));
     }
 
     public static MetadataLazy newMetadata(ClassLoader classLoader, Iterable<? extends DistributedBinaryGraphDeserializer> deserializers)
@@ -542,23 +407,22 @@ public class MetadataLazy implements Metadata
         {
             throw new IllegalArgumentException("deserializers are required");
         }
-        deserializerList.forEach(d -> Objects.requireNonNull(d, "deserializer may not be null"));
-        return new MetadataLazy(classLoader, deserializerList);
+        return new MetadataLazy(classLoader, MultiDistributedBinaryGraphDeserializer.fromDeserializers(deserializerList));
     }
 
     public static MetadataLazy fromClassLoader(ClassLoader classLoader)
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
         DistributedBinaryGraphDeserializer deserializer = DistributedBinaryGraphDeserializer.fromClassLoader(classLoader);
-        return new MetadataLazy(classLoader, Lists.immutable.with(deserializer));
+        return new MetadataLazy(classLoader, MultiDistributedBinaryGraphDeserializer.fromDeserializers(deserializer));
     }
 
     public static MetadataLazy fromClassLoader(ClassLoader classLoader, String metadataName)
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
         Objects.requireNonNull(metadataName, "metadata name may not be null");
-        DistributedBinaryGraphDeserializer deserializer = DistributedBinaryGraphDeserializer.fromClassLoader(metadataName, classLoader);
-        return new MetadataLazy(classLoader, Lists.immutable.with(deserializer));
+        MultiDistributedBinaryGraphDeserializer deserializer = MultiDistributedBinaryGraphDeserializer.fromClassLoader(Lists.immutable.with(metadataName), classLoader);
+        return new MetadataLazy(classLoader, deserializer);
     }
 
     public static MetadataLazy fromClassLoader(ClassLoader classLoader, Iterable<String> metadataNames)
@@ -574,7 +438,7 @@ public class MetadataLazy implements Metadata
         {
             throw new NullPointerException("metadata name may not be null");
         }
-        ImmutableList<DistributedBinaryGraphDeserializer> deserializers = Iterate.collectWith(metadataNamesSet, DistributedBinaryGraphDeserializer::fromClassLoader, classLoader, Lists.mutable.withInitialCapacity(metadataNamesSet.size())).toImmutable();
-        return new MetadataLazy(classLoader, deserializers);
+        MultiDistributedBinaryGraphDeserializer deserializer = MultiDistributedBinaryGraphDeserializer.fromClassLoader(metadataNamesSet, classLoader);
+        return new MetadataLazy(classLoader, deserializer);
     }
 }
