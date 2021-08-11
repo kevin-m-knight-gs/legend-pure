@@ -93,7 +93,7 @@ public class DistributedBinaryGraphDeserializer
         return getInstances(classifierId, instanceIds, false);
     }
 
-    private Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
+    Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
     {
         ClassifierIndex classifierIndex = getClassifierIndex(classifierId);
         if (classifierIndex == null)
@@ -116,7 +116,7 @@ public class DistributedBinaryGraphDeserializer
         return sourceCoordinates.getObj(this.fileReader, this.stringIndex, classifierIndex);
     }
 
-    private ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound)
+    ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound)
     {
         ClassifierIndex classifierIndex = getClassifierIndex(classifierId);
         if (classifierIndex == null)

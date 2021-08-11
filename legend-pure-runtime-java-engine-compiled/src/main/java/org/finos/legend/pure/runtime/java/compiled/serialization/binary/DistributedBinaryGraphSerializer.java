@@ -19,6 +19,7 @@ import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.factory.Stacks;
 import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.stack.MutableStack;
@@ -32,6 +33,7 @@ import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.serialization.Writer;
 import org.finos.legend.pure.m4.serialization.binary.BinaryWriters;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.MetadataJavaPaths;
 import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
@@ -40,7 +42,6 @@ import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.BiFunction;
 import java.util.jar.JarOutputStream;
 
 public class DistributedBinaryGraphSerializer
@@ -51,15 +52,15 @@ public class DistributedBinaryGraphSerializer
     private final PureRuntime runtime;
     private final ProcessorSupport processorSupport;
     private final GraphSerializer.ClassifierCaches classifierCaches;
-    private final BiFunction<String, String, Obj> existingObjFinder;
+    private final MultiDistributedBinaryGraphDeserializer alreadySerialized;
 
-    private DistributedBinaryGraphSerializer(String metadataName, PureRuntime runtime, BiFunction<String, String, Obj> existingObjFinder)
+    private DistributedBinaryGraphSerializer(String metadataName, PureRuntime runtime, MultiDistributedBinaryGraphDeserializer alreadySerialized)
     {
         this.metadataName = metadataName;
         this.runtime = runtime;
         this.processorSupport = this.runtime.getProcessorSupport();
         this.classifierCaches = new GraphSerializer.ClassifierCaches(this.processorSupport);
-        this.existingObjFinder = existingObjFinder;
+        this.alreadySerialized = alreadySerialized;
     }
 
     public void serializeToDirectory(Path directory)
@@ -99,10 +100,7 @@ public class DistributedBinaryGraphSerializer
             {
                 for (String classifierId : nodesByClassifierId.keysView().toSortedList())
                 {
-                    MutableList<Obj> classifierObjs = nodesByClassifierId.get(classifierId).asLazy()
-                            .collect(this::buildObj)
-                            .select(Objects::nonNull, Lists.mutable.empty())
-                            .sortThisBy(Obj::getIdentifier);
+                    MutableList<Obj> classifierObjs = buildObjs(classifierId, nodesByClassifierId.get(classifierId)).sortThisBy(Obj::getIdentifier);
 
                     // Initial index information
                     indexWriter.writeInt(classifierObjs.size()); // total obj count
@@ -174,18 +172,34 @@ public class DistributedBinaryGraphSerializer
         }
     }
 
+    private String buildId(CoreInstance instance)
+    {
+        return IdBuilder.buildId(instance, this.processorSupport);
+    }
+
     private Obj buildObj(CoreInstance instance)
     {
-        Obj obj = GraphSerializer.buildObj(instance, this.classifierCaches, this.processorSupport);
-        if (this.existingObjFinder != null)
+        return GraphSerializer.buildObj(instance, this.classifierCaches, this.processorSupport);
+    }
+
+    private MutableList<Obj> buildObjs(String classifierId, MutableList<CoreInstance> instances)
+    {
+        if (this.alreadySerialized != null)
         {
-            Obj existingObj = this.existingObjFinder.apply(obj.getClassifier(), obj.getIdentifier());
-            if (existingObj != null)
+            MapIterable<String, Obj> existingObjs = this.alreadySerialized.getInstancesIfPresent(classifierId, instances.asLazy().collect(this::buildId)).groupByUniqueKey(Obj::getIdentifier);
+            if (existingObjs.notEmpty())
             {
-                return existingObj.computeUpdate(obj);
+                return instances.asLazy()
+                        .collect(instance ->
+                        {
+                            Obj obj = buildObj(instance);
+                            Obj existingObj = existingObjs.get(obj.getIdentifier());
+                            return (existingObj == null) ? obj : existingObj.computeUpdate(obj);
+                        })
+                        .select(Objects::nonNull, Lists.mutable.empty());
             }
         }
-        return obj;
+        return instances.collect(this::buildObj);
     }
 
     public static DistributedBinaryGraphSerializer newSerializer(PureRuntime runtime)
@@ -196,6 +210,11 @@ public class DistributedBinaryGraphSerializer
     public static DistributedBinaryGraphSerializer newSerializer(String metadataName, PureRuntime runtime)
     {
         return new DistributedBinaryGraphSerializer(metadataName, runtime, null);
+    }
+
+    public static DistributedBinaryGraphSerializer newSerializer(String metadataName, PureRuntime runtime, MultiDistributedBinaryGraphDeserializer alreadySerialized)
+    {
+        return new DistributedBinaryGraphSerializer(metadataName, runtime, alreadySerialized);
     }
 
     public static void serialize(PureRuntime runtime, Path directory)

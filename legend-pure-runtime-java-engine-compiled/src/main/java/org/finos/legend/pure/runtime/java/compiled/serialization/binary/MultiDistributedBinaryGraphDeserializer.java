@@ -8,7 +8,6 @@ import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
-import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
@@ -19,7 +18,7 @@ import java.util.Set;
 
 public abstract class MultiDistributedBinaryGraphDeserializer
 {
-    protected MultiDistributedBinaryGraphDeserializer()
+    private MultiDistributedBinaryGraphDeserializer()
     {
     }
 
@@ -31,9 +30,29 @@ public abstract class MultiDistributedBinaryGraphDeserializer
 
     public abstract RichIterable<String> getClassifierInstanceIds(String classifierId);
 
-    public abstract Obj getInstance(String classifierId, String instanceId);
+    public final Obj getInstance(String classifierId, String instanceId)
+    {
+        return getInstance(classifierId, instanceId, true);
+    }
 
-    public abstract ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds);
+    public final Obj getInstanceIfPresent(String classifierId, String instanceId)
+    {
+        return getInstance(classifierId, instanceId, false);
+    }
+
+    protected abstract Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound);
+
+    public final ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds)
+    {
+        return getInstances(classifierId, instanceIds, true);
+    }
+
+    public final ListIterable<Obj> getInstancesIfPresent(String classifierId, Iterable<String> instanceIds)
+    {
+        return getInstances(classifierId, instanceIds, false);
+    }
+
+    protected abstract ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound);
 
     public static MultiDistributedBinaryGraphDeserializer fromDeserializers(DistributedBinaryGraphDeserializer... deserializers)
     {
@@ -68,22 +87,22 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         {
             case 0:
             {
-                return new EmptyDeserializer();
+                return new Empty();
             }
             case 1:
             {
-                return new SingleDeserializer(deserializers.get(0));
+                return new Single(deserializers.get(0));
             }
             default:
             {
-                return new ManyDeserializer(deserializers);
+                return new Many(deserializers);
             }
         }
     }
 
-    private static class EmptyDeserializer extends MultiDistributedBinaryGraphDeserializer
+    private static class Empty extends MultiDistributedBinaryGraphDeserializer
     {
-        private EmptyDeserializer()
+        private Empty()
         {
         }
 
@@ -96,7 +115,7 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         @Override
         public RichIterable<String> getClassifiers()
         {
-            return Sets.immutable.empty();
+            return Lists.immutable.empty();
         }
 
         @Override
@@ -108,42 +127,42 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         @Override
         public RichIterable<String> getClassifierInstanceIds(String classifierId)
         {
-            return Sets.immutable.empty();
+            return Lists.immutable.empty();
         }
 
         @Override
-        public Obj getInstance(String classifierId, String instanceId)
+        protected Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
         {
-            throw new RuntimeException("Unknown instance: classifier='" + classifierId + "', id='" + instanceId + "'");
-        }
-
-        @Override
-        public ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds)
-        {
-            MutableSet<String> instanceIdSet = Sets.mutable.withAll(instanceIds);
-            switch (instanceIdSet.size())
+            if (throwIfNotFound)
             {
-                case 0:
+                throw new RuntimeException("Unknown instance: classifier='" + classifierId + "', id='" + instanceId + "'");
+            }
+            return null;
+        }
+
+        @Override
+        protected ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound)
+        {
+            if (throwIfNotFound)
+            {
+                Set<String> instanceIdSet = (instanceIds instanceof Set) ? (Set<String>) instanceIds : Sets.mutable.withAll(instanceIds);
+                if (!instanceIdSet.isEmpty())
                 {
-                    return Lists.immutable.empty();
-                }
-                case 1:
-                {
-                    throw new RuntimeException("Unknown instance: classifier='" + classifierId + "', id='" + instanceIdSet.getAny() + "'");
-                }
-                default:
-                {
-                    throw new RuntimeException(instanceIdSet.toSortedList().makeString("Unknown instance: classifier='" + classifierId + "', ids='", "', '", "'"));
+                    String message = (instanceIdSet.size() == 1) ?
+                            "Unknown instance: classifier='" + classifierId + "', id='" + Iterate.getFirst(instanceIdSet) + "'" :
+                            Lists.mutable.withAll(instanceIdSet).sortThis().makeString("Unknown instance: classifier='" + classifierId + "', ids='", "', '", "'");
+                    throw new RuntimeException(message);
                 }
             }
+            return Lists.immutable.empty();
         }
     }
 
-    private static class SingleDeserializer extends MultiDistributedBinaryGraphDeserializer
+    private static class Single extends MultiDistributedBinaryGraphDeserializer
     {
         private final DistributedBinaryGraphDeserializer deserializer;
 
-        private SingleDeserializer(DistributedBinaryGraphDeserializer deserializer)
+        private Single(DistributedBinaryGraphDeserializer deserializer)
         {
             this.deserializer = deserializer;
         }
@@ -173,9 +192,9 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         }
 
         @Override
-        public Obj getInstance(String classifierId, String instanceId)
+        protected Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
         {
-            Obj obj = this.deserializer.getInstance(classifierId, instanceId);
+            Obj obj = this.deserializer.getInstance(classifierId, instanceId, throwIfNotFound);
             if (obj instanceof ObjUpdate)
             {
                 throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
@@ -184,9 +203,9 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         }
 
         @Override
-        public ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds)
+        protected ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound)
         {
-            ListIterable<Obj> objs = this.deserializer.getInstances(classifierId, instanceIds);
+            ListIterable<Obj> objs = this.deserializer.getInstances(classifierId, instanceIds, throwIfNotFound);
             if (objs.anySatisfy(o -> o instanceof ObjUpdate))
             {
                 MutableList<String> invalidIds = objs.collectIf(o -> o instanceof ObjUpdate, Obj::getIdentifier, Lists.mutable.empty());
@@ -207,11 +226,11 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         }
     }
 
-    private static class ManyDeserializer extends MultiDistributedBinaryGraphDeserializer
+    private static class Many extends MultiDistributedBinaryGraphDeserializer
     {
         private final ImmutableList<DistributedBinaryGraphDeserializer> deserializers;
 
-        private ManyDeserializer(ImmutableList<DistributedBinaryGraphDeserializer> deserializers)
+        private Many(ImmutableList<DistributedBinaryGraphDeserializer> deserializers)
         {
             this.deserializers = deserializers;
         }
@@ -241,7 +260,7 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         }
 
         @Override
-        public Obj getInstance(String classifierId, String instanceId)
+        protected Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
         {
             Obj main = null;
             List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(this.deserializers.size() - 1);
@@ -264,18 +283,26 @@ public abstract class MultiDistributedBinaryGraphDeserializer
                     }
                 }
             }
+            if (updates.isEmpty())
+            {
+                // No updates, but possibly a main definition
+                if ((main == null) && throwIfNotFound)
+                {
+                    throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
+                }
+                return main;
+            }
+
             if (main == null)
             {
-                String message = updates.isEmpty() ?
-                        "Unknown instance: classifier='" + classifierId + "', id='" + instanceId + "'" :
-                        "Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'";
-                throw new RuntimeException(message);
+                // We have updates but no main definition
+                throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
             }
-            return updates.isEmpty() ? main : main.applyUpdates(updates);
+            return main.applyUpdates(updates);
         }
 
         @Override
-        public ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds)
+        protected ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound)
         {
             Set<String> instanceIdSet = (instanceIds instanceof Set) ? (Set<String>) instanceIds : Sets.mutable.withAll(instanceIds);
             if (instanceIdSet.isEmpty())
@@ -285,7 +312,7 @@ public abstract class MultiDistributedBinaryGraphDeserializer
 
             MutableMap<String, List<Obj>> objsById = Maps.mutable.withInitialCapacity(instanceIdSet.size());
             this.deserializers.asLazy().flatCollect(d -> d.getInstancesIfPresent(classifierId, instanceIdSet)).forEach(o -> objsById.getIfAbsentPut(o.getIdentifier(), Lists.mutable::empty).add(o));
-            if (instanceIdSet.size() > objsById.size())
+            if (throwIfNotFound && (instanceIdSet.size() > objsById.size()))
             {
                 boolean many = (instanceIdSet.size() - objsById.size()) > 1;
                 StringBuilder builder = new StringBuilder(many ? "Unknown instances: " : "Unknown instance: ");
