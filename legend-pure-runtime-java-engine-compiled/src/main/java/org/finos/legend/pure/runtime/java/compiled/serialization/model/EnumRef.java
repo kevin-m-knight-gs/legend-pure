@@ -59,6 +59,12 @@ public class EnumRef implements RValue
     }
 
     @Override
+    public String toString()
+    {
+        return "EnumRef{enumerationId='" + this.enumerationId + "', enumName='" + this.enumName + "'}";
+    }
+
+    @Override
     public <T> T visit(RValueVisitor<T> visitor)
     {
         return visitor.visit(this);

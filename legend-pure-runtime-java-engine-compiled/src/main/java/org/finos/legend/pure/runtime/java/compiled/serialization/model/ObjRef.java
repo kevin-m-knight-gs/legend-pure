@@ -65,6 +65,12 @@ public class ObjRef implements RValue
     }
 
     @Override
+    public String toString()
+    {
+        return "ObjRef{classifierId='" + this.classifierId + "', id='" + this.id + "'}";
+    }
+
+    @Override
     public <T> T visit(RValueVisitor<T> visitor)
     {
         return visitor.visit(this);
