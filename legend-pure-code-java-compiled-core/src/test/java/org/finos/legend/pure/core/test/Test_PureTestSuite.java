@@ -25,8 +25,8 @@ import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.factory.Lists;
 import org.eclipse.collections.impl.factory.Sets;
-import org.eclipse.collections.impl.list.fixed.ArrayAdapter;
 import org.eclipse.collections.impl.list.mutable.FastList;
+import org.eclipse.collections.impl.utility.ArrayIterate;
 import org.finos.legend.pure.m3.execution.ExecutionSupport;
 import org.finos.legend.pure.m3.execution.test.TestCollection;
 import org.finos.legend.pure.m3.navigation.Instance;
@@ -65,7 +65,7 @@ public class Test_PureTestSuite extends TestSuite
 
     private static MutableSet<CoreInstance> buildExclusionList(ProcessorSupport processorSupport, String... exclusions)
     {
-        return ArrayAdapter.adapt(exclusions).collect(e -> Objects.requireNonNull(processorSupport.package_getByUserPath(e))).toSet();
+        return ArrayIterate.collect(exclusions, e -> Objects.requireNonNull(processorSupport.package_getByUserPath(e), e), Sets.mutable.ofInitialCapacity(exclusions.length));
     }
 
     private static TestSuite buildSuite(TestCollection testCollection, ExecutionSupport executionSupport)
@@ -186,7 +186,7 @@ public class Test_PureTestSuite extends TestSuite
         ClassLoader classLoader = Test_PureTestSuite.class.getClassLoader();
         return new CompiledExecutionSupport(
                 new JavaCompilerState(null, classLoader),
-                new CompiledProcessorSupport(Test_PureTestSuite.class.getClassLoader(), MetadataLazy.fromClassLoader(classLoader), Sets.mutable.empty()),
+                new CompiledProcessorSupport(classLoader, MetadataLazy.fromClassLoader(classLoader), Sets.mutable.empty()),
                 null,
                 new PureCodeStorage(null, new ClassLoaderCodeStorage(classLoader, codeRepos)),
                 null,

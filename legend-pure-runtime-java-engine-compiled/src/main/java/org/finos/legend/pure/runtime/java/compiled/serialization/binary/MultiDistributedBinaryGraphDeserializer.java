@@ -12,7 +12,6 @@ import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdateConsumer;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdateVisitor;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 
 import java.util.List;
@@ -56,6 +55,12 @@ public abstract class MultiDistributedBinaryGraphDeserializer
     }
 
     protected abstract ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound);
+
+    public static MultiDistributedBinaryGraphDeserializer fromDeserializer(DistributedBinaryGraphDeserializer deserializer)
+    {
+        Objects.requireNonNull(deserializer, "deserializer may not be null");
+        return new Single(deserializer);
+    }
 
     public static MultiDistributedBinaryGraphDeserializer fromDeserializers(DistributedBinaryGraphDeserializer... deserializers)
     {
@@ -197,20 +202,12 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         @Override
         protected Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
         {
-            return this.deserializer.getInstance(classifierId, instanceId, throwIfNotFound).visit(new ObjOrUpdateVisitor<Obj>()
+            ObjOrUpdate objOrUpdate = this.deserializer.getInstance(classifierId, instanceId, throwIfNotFound);
+            if (!(objOrUpdate instanceof Obj))
             {
-                @Override
-                public Obj visit(Obj obj)
-                {
-                    return obj;
-                }
-
-                @Override
-                public Obj visit(ObjUpdate objUpdate)
-                {
-                    throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
-                }
-            });
+                throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
+            }
+            return (Obj) objOrUpdate;
         }
 
         @Override
@@ -219,7 +216,7 @@ public abstract class MultiDistributedBinaryGraphDeserializer
             ListIterable<ObjOrUpdate> objOrUpdates = this.deserializer.getInstances(classifierId, instanceIds, throwIfNotFound);
             MutableList<Obj> objs = Lists.mutable.ofInitialCapacity(objOrUpdates.size());
             MutableList<ObjUpdate> objUpdates = Lists.mutable.ofInitialCapacity(0);
-            objUpdates.forEach(new ObjOrUpdateConsumer()
+            objOrUpdates.forEach(new ObjOrUpdateConsumer()
             {
                 @Override
                 protected void accept(Obj obj)
@@ -367,24 +364,16 @@ public abstract class MultiDistributedBinaryGraphDeserializer
 
             if (objs.size() == 1)
             {
-                return objs.get(0).visit(new ObjOrUpdateVisitor<Obj>()
+                ObjOrUpdate obj = objs.get(0);
+                if (!(obj instanceof Obj))
                 {
-                    @Override
-                    public Obj visit(Obj obj)
-                    {
-                        return obj;
-                    }
-
-                    @Override
-                    public Obj visit(ObjUpdate objUpdate)
-                    {
-                        throw new RuntimeException("Cannot find main definition for instance: classifier='" + objUpdate.getClassifier() + "', id='" + objUpdate.getIdentifier() + "'");
-                    }
-                });
+                    throw new RuntimeException("Cannot find main definition for instance: classifier='" + obj.getClassifier() + "', id='" + obj.getIdentifier() + "'");
+                }
+                return (Obj) obj;
             }
 
             List<Obj> main = Lists.mutable.withInitialCapacity(1);
-            List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(objs.size());
+            List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(objs.size() - 1);
             objs.forEach(new ObjOrUpdateConsumer()
             {
                 @Override

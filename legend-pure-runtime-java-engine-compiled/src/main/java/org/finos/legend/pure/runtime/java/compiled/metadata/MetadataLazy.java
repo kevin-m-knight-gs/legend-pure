@@ -414,7 +414,7 @@ public class MetadataLazy implements Metadata
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
         DistributedBinaryGraphDeserializer deserializer = DistributedBinaryGraphDeserializer.fromClassLoader(classLoader);
-        return new MetadataLazy(classLoader, MultiDistributedBinaryGraphDeserializer.fromDeserializers(deserializer));
+        return new MetadataLazy(classLoader, MultiDistributedBinaryGraphDeserializer.fromDeserializer(deserializer));
     }
 
     public static MetadataLazy fromClassLoader(ClassLoader classLoader, String metadataName)
