@@ -21,6 +21,7 @@ import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.DateFunctions;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.LatestDate;
 import org.finos.legend.pure.m4.serialization.Reader;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Enum;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
@@ -37,7 +38,7 @@ import java.math.BigDecimal;
 abstract class AbstractBinaryObjDeserializer implements BinaryObjDeserializer
 {
     @Override
-    public Obj deserialize(Reader reader)
+    public ObjOrUpdate deserialize(Reader reader)
     {
         byte objType = reader.readByte();
         switch (objType)

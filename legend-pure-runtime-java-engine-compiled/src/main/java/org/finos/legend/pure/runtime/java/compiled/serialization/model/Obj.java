@@ -28,7 +28,7 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
-public class Obj
+public class Obj implements ObjOrUpdate
 {
     private final SourceInformation sourceInformation;
     private final String identifier;
@@ -45,19 +45,22 @@ public class Obj
         this.properties = (propertiesList == null) ? Lists.immutable.empty() : propertiesList;
     }
 
-    public SourceInformation getSourceInformation()
-    {
-        return this.sourceInformation;
-    }
-
+    @Override
     public String getIdentifier()
     {
         return this.identifier;
     }
 
+    @Override
     public String getClassifier()
     {
         return this.classifier;
+    }
+
+    @Override
+    public ListIterable<PropertyValue> getPropertyValues()
+    {
+        return this.properties;
     }
 
     public String getName()
@@ -65,9 +68,15 @@ public class Obj
         return this.name;
     }
 
-    public ListIterable<PropertyValue> getPropertyValues()
+    public SourceInformation getSourceInformation()
     {
-        return this.properties;
+        return this.sourceInformation;
+    }
+
+    @Override
+    public <T> T visit(ObjOrUpdateVisitor<T> visitor)
+    {
+        return visitor.visit(this);
     }
 
     @Override

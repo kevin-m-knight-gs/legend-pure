@@ -15,9 +15,9 @@
 package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 
 import org.finos.legend.pure.m4.serialization.Reader;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
 
 public interface BinaryObjDeserializer
 {
-    Obj deserialize(Reader reader);
+    ObjOrUpdate deserialize(Reader reader);
 }

@@ -10,6 +10,9 @@ import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdateConsumer;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdateVisitor;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 
 import java.util.List;
@@ -194,31 +197,54 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         @Override
         protected Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
         {
-            Obj obj = this.deserializer.getInstance(classifierId, instanceId, throwIfNotFound);
-            if (obj instanceof ObjUpdate)
+            return this.deserializer.getInstance(classifierId, instanceId, throwIfNotFound).visit(new ObjOrUpdateVisitor<Obj>()
             {
-                throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
-            }
-            return obj;
+                @Override
+                public Obj visit(Obj obj)
+                {
+                    return obj;
+                }
+
+                @Override
+                public Obj visit(ObjUpdate objUpdate)
+                {
+                    throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
+                }
+            });
         }
 
         @Override
         protected ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound)
         {
-            ListIterable<Obj> objs = this.deserializer.getInstances(classifierId, instanceIds, throwIfNotFound);
-            if (objs.anySatisfy(o -> o instanceof ObjUpdate))
+            ListIterable<ObjOrUpdate> objOrUpdates = this.deserializer.getInstances(classifierId, instanceIds, throwIfNotFound);
+            MutableList<Obj> objs = Lists.mutable.ofInitialCapacity(objOrUpdates.size());
+            MutableList<ObjUpdate> objUpdates = Lists.mutable.ofInitialCapacity(0);
+            objUpdates.forEach(new ObjOrUpdateConsumer()
             {
-                MutableList<String> invalidIds = objs.collectIf(o -> o instanceof ObjUpdate, Obj::getIdentifier, Lists.mutable.empty());
-                boolean many = invalidIds.size() > 1;
+                @Override
+                protected void accept(Obj obj)
+                {
+                    objs.add(obj);
+                }
+
+                @Override
+                protected void accept(ObjUpdate objUpdate)
+                {
+                    objUpdates.add(objUpdate);
+                }
+            });
+            if (objUpdates.notEmpty())
+            {
+                boolean many = objUpdates.size() > 1;
                 StringBuilder builder = new StringBuilder("Cannot find main definition for ").append(many ? "instances: " : "instance: ");
-                builder.append("classifier'").append(classifierId).append("', id");
+                builder.append("classifier='").append(classifierId).append("', id");
                 if (many)
                 {
-                    invalidIds.sortThis().appendString(builder, "s: '", "', '", "'");
+                    objUpdates.collect(ObjUpdate::getIdentifier).sortThis().appendString(builder, "s='", "', '", "'");
                 }
                 else
                 {
-                    builder.append(": '").append(invalidIds.get(0)).append("'");
+                    builder.append("='").append(objUpdates.get(0).getIdentifier()).append("'");
                 }
                 throw new RuntimeException(builder.toString());
             }
@@ -262,43 +288,45 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         @Override
         protected Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
         {
-            Obj main = null;
-            List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(this.deserializers.size() - 1);
-            for (DistributedBinaryGraphDeserializer deserializer : this.deserializers)
+            MutableList<Obj> main = Lists.mutable.withInitialCapacity(1);
+            MutableList<ObjUpdate> updates = Lists.mutable.withInitialCapacity(this.deserializers.size() - 1);
+            this.deserializers.asLazy()
+                    .collect(d -> d.getInstanceIfPresent(classifierId, instanceId))
+                    .select(Objects::nonNull)
+                    .forEach(new ObjOrUpdateConsumer()
+                    {
+                        @Override
+                        protected void accept(Obj obj)
+                        {
+                            main.add(obj);
+                        }
+
+                        @Override
+                        protected void accept(ObjUpdate objUpdate)
+                        {
+                            updates.add(objUpdate);
+                        }
+                    });
+            if (main.isEmpty())
             {
-                Obj obj = deserializer.getInstanceIfPresent(classifierId, instanceId);
-                if (obj != null)
+                if (updates.notEmpty())
                 {
-                    if (obj instanceof ObjUpdate)
-                    {
-                        updates.add((ObjUpdate) obj);
-                    }
-                    else if (main == null)
-                    {
-                        main = obj;
-                    }
-                    else
-                    {
-                        throw new RuntimeException("Multiple main definitions for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
-                    }
-                }
-            }
-            if (updates.isEmpty())
-            {
-                // No updates, but possibly a main definition
-                if ((main == null) && throwIfNotFound)
-                {
+                    // We have updates but no main definition
                     throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
                 }
-                return main;
+                if (throwIfNotFound)
+                {
+                    // No updates or main definition
+                    throw new RuntimeException("Unknown instance: classifier='" + classifierId + "', id='" + instanceId + "'");
+                }
+                return null;
             }
-
-            if (main == null)
+            if (main.size() > 1)
             {
-                // We have updates but no main definition
-                throw new RuntimeException("Cannot find main definition for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
+                throw new RuntimeException("Multiple (" + main.size() + ") main definitions for instance: classifier='" + classifierId + "', id='" + instanceId + "'");
             }
-            return main.applyUpdates(updates);
+            Obj obj = main.get(0);
+            return updates.isEmpty() ? obj : obj.applyUpdates(updates);
         }
 
         @Override
@@ -310,7 +338,7 @@ public abstract class MultiDistributedBinaryGraphDeserializer
                 return Lists.immutable.empty();
             }
 
-            MutableMap<String, List<Obj>> objsById = Maps.mutable.withInitialCapacity(instanceIdSet.size());
+            MutableMap<String, List<ObjOrUpdate>> objsById = Maps.mutable.withInitialCapacity(instanceIdSet.size());
             this.deserializers.asLazy().flatCollect(d -> d.getInstancesIfPresent(classifierId, instanceIdSet)).forEach(o -> objsById.getIfAbsentPut(o.getIdentifier(), Lists.mutable::empty).add(o));
             if (throwIfNotFound && (instanceIdSet.size() > objsById.size()))
             {
@@ -327,43 +355,59 @@ public abstract class MultiDistributedBinaryGraphDeserializer
                 }
                 throw new RuntimeException(builder.toString());
             }
-            return objsById.valuesView().collect(this::reduceObjs, Lists.mutable.withInitialCapacity(objsById.size()));
+            return objsById.valuesView().collect(this::reduceToObj, Lists.mutable.withInitialCapacity(objsById.size()));
         }
 
-        private Obj reduceObjs(List<Obj> objs)
+        private Obj reduceToObj(List<ObjOrUpdate> objs)
         {
-            if (objs.size() == 1)
+            if (objs.isEmpty())
             {
-                Obj result = objs.get(0);
-                if (result instanceof ObjUpdate)
-                {
-                    throw new RuntimeException("Cannot find main definition for instance: classifier='" + result.getClassifier() + "', id='" + result.getIdentifier() + "'");
-                }
-                return result;
+                throw new IllegalArgumentException("objs may not be empty");
             }
 
-            Obj main = null;
-            List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(objs.size() - 1);
-            for (Obj obj : objs)
+            if (objs.size() == 1)
             {
-                if (obj instanceof ObjUpdate)
+                return objs.get(0).visit(new ObjOrUpdateVisitor<Obj>()
                 {
-                    updates.add((ObjUpdate) obj);
-                }
-                else if (main == null)
-                {
-                    main = obj;
-                }
-                else
-                {
-                    throw new RuntimeException("Multiple main definitions for instance: classifier='" + obj.getClassifier() + "', id='" + obj.getIdentifier() + "'");
-                }
+                    @Override
+                    public Obj visit(Obj obj)
+                    {
+                        return obj;
+                    }
+
+                    @Override
+                    public Obj visit(ObjUpdate objUpdate)
+                    {
+                        throw new RuntimeException("Cannot find main definition for instance: classifier='" + objUpdate.getClassifier() + "', id='" + objUpdate.getIdentifier() + "'");
+                    }
+                });
             }
-            if (main == null)
+
+            List<Obj> main = Lists.mutable.withInitialCapacity(1);
+            List<ObjUpdate> updates = Lists.mutable.withInitialCapacity(objs.size());
+            objs.forEach(new ObjOrUpdateConsumer()
+            {
+                @Override
+                protected void accept(Obj obj)
+                {
+                    main.add(obj);
+                }
+
+                @Override
+                protected void accept(ObjUpdate objUpdate)
+                {
+                    updates.add(objUpdate);
+                }
+            });
+            if (main.isEmpty())
             {
                 throw new RuntimeException("Cannot find main definition for instance: classifier='" + objs.get(0).getClassifier() + "', id='" + objs.get(0).getIdentifier() + "'");
             }
-            return main.applyUpdates(updates);
+            if (main.size() > 1)
+            {
+                throw new RuntimeException("Multiple (" + main.size() + ") main definitions for instance: classifier='" + objs.get(0).getClassifier() + "', id='" + objs.get(0).getIdentifier() + "'");
+            }
+            return main.get(0).applyUpdates(updates);
         }
     }
 }

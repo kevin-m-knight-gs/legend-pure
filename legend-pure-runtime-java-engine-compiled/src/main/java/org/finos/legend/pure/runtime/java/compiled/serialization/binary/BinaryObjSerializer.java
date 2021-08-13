@@ -16,8 +16,31 @@ package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 
 import org.finos.legend.pure.m4.serialization.Writer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdateConsumer;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 
 public interface BinaryObjSerializer
 {
+    default void serializeObjOrUpdate(Writer writer, ObjOrUpdate objOrUpdate)
+    {
+        objOrUpdate.visit(new ObjOrUpdateConsumer()
+        {
+            @Override
+            protected void accept(Obj obj)
+            {
+                serializeObj(writer, obj);
+            }
+
+            @Override
+            public void accept(ObjUpdate objUpdate)
+            {
+                serializeObjUpdate(writer, objUpdate);
+            }
+        });
+    }
+
     void serializeObj(Writer writer, Obj obj);
+
+    void serializeObjUpdate(Writer writer, ObjUpdate objUpdate);
 }

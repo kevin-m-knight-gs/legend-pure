@@ -37,6 +37,7 @@ import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuild
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.MetadataJavaPaths;
 import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
@@ -100,7 +101,7 @@ public class DistributedBinaryGraphSerializer
             {
                 for (String classifierId : nodesByClassifierId.keysView().toSortedList())
                 {
-                    MutableList<Obj> classifierObjs = buildObjs(classifierId, nodesByClassifierId.get(classifierId)).sortThisBy(Obj::getIdentifier);
+                    MutableList<ObjOrUpdate> classifierObjs = buildObjOrUpdates(classifierId, nodesByClassifierId.get(classifierId)).sortThisBy(ObjOrUpdate::getIdentifier);
 
                     // Initial index information
                     indexWriter.writeInt(classifierObjs.size()); // total obj count
@@ -111,11 +112,11 @@ public class DistributedBinaryGraphSerializer
                     ByteArrayOutputStream objByteStream = new ByteArrayOutputStream();
                     try (Writer objWriter = BinaryWriters.newBinaryWriter(objByteStream))
                     {
-                        for (Obj obj : classifierObjs)
+                        for (ObjOrUpdate obj : classifierObjs)
                         {
                             // Obj serialization
                             objByteStream.reset();
-                            serializer.serializeObj(objWriter, obj);
+                            serializer.serializeObjOrUpdate(objWriter, obj);
                             int objByteCount = objByteStream.size();
                             if (partitionTotalBytes + objByteCount > MAX_BIN_FILE_BYTES)
                             {
@@ -182,7 +183,7 @@ public class DistributedBinaryGraphSerializer
         return GraphSerializer.buildObj(instance, this.classifierCaches, this.processorSupport);
     }
 
-    private MutableList<Obj> buildObjs(String classifierId, MutableList<CoreInstance> instances)
+    private MutableList<ObjOrUpdate> buildObjOrUpdates(String classifierId, MutableList<CoreInstance> instances)
     {
         if (this.alreadySerialized != null)
         {

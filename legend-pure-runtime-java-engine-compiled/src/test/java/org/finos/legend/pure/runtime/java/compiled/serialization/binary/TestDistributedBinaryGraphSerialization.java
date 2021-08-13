@@ -27,6 +27,7 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.tools.GraphNodeIterable;
 import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -90,7 +91,7 @@ public abstract class TestDistributedBinaryGraphSerialization extends AbstractPu
             MutableList<Obj> instances = objsByClassifier.get(classifierId).toSortedListBy(Obj::getIdentifier);
             MutableList<String> instanceIds = instances.collect(Obj::getIdentifier);
             Assert.assertEquals(classifierId, instanceIds.makeString("\n"), deserializer.getClassifierInstanceIds(classifierId).toSortedList().makeString("\n"));
-            Assert.assertEquals(classifierId, instances, deserializer.getInstances(classifierId, instanceIds).toSortedListBy(Obj::getIdentifier));
+            Assert.assertEquals(classifierId, instances, deserializer.getInstances(classifierId, instanceIds).toSortedListBy(ObjOrUpdate::getIdentifier));
         }
 
         // Validate all individual objs

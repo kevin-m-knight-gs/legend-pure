@@ -39,23 +39,22 @@ abstract class AbstractBinaryObjSerializer implements BinaryObjSerializer
     @Override
     public void serializeObj(Writer writer, Obj obj)
     {
-        if (obj instanceof ObjUpdate)
-        {
-            writer.writeByte(BinaryGraphSerializationTypes.OBJ_UPDATE);
-            writeIdentifier(writer, obj.getIdentifier());
-            writeClassifier(writer, obj.getClassifier());
-            writePropertyValues(writer, obj.getPropertyValues());
-        }
-        else
-        {
-            byte objType = (obj instanceof Enum) ? BinaryGraphSerializationTypes.ENUM : BinaryGraphSerializationTypes.OBJ;
-            writer.writeByte(objType);
-            writeSourceInformation(writer, obj.getSourceInformation());
-            writeIdentifier(writer, obj.getIdentifier());
-            writeClassifier(writer, obj.getClassifier());
-            writeName(writer, obj.getName());
-            writePropertyValues(writer, obj.getPropertyValues());
-        }
+        byte objType = (obj instanceof Enum) ? BinaryGraphSerializationTypes.ENUM : BinaryGraphSerializationTypes.OBJ;
+        writer.writeByte(objType);
+        writeSourceInformation(writer, obj.getSourceInformation());
+        writeIdentifier(writer, obj.getIdentifier());
+        writeClassifier(writer, obj.getClassifier());
+        writeName(writer, obj.getName());
+        writePropertyValues(writer, obj.getPropertyValues());
+    }
+
+    @Override
+    public void serializeObjUpdate(Writer writer, ObjUpdate objUpdate)
+    {
+        writer.writeByte(BinaryGraphSerializationTypes.OBJ_UPDATE);
+        writeIdentifier(writer, objUpdate.getIdentifier());
+        writeClassifier(writer, objUpdate.getClassifier());
+        writePropertyValues(writer, objUpdate.getPropertyValues());
     }
 
     protected void writeSourceInformation(Writer writer, SourceInformation sourceInformation)

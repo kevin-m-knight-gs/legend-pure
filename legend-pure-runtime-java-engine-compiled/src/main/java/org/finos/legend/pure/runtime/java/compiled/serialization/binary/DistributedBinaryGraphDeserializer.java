@@ -26,7 +26,7 @@ import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.impl.Counter;
 import org.finos.legend.pure.m4.serialization.Reader;
 import org.finos.legend.pure.m4.serialization.binary.BinaryReaders;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
 
 import java.io.Serializable;
 import java.nio.file.Path;
@@ -73,27 +73,27 @@ public class DistributedBinaryGraphDeserializer
         return (classifierIndex == null) ? Lists.immutable.empty() : classifierIndex.getInstanceIds();
     }
 
-    public Obj getInstance(String classifierId, String instanceId)
+    public ObjOrUpdate getInstance(String classifierId, String instanceId)
     {
         return getInstance(classifierId, instanceId, true);
     }
 
-    public Obj getInstanceIfPresent(String classifierId, String instanceId)
+    public ObjOrUpdate getInstanceIfPresent(String classifierId, String instanceId)
     {
         return getInstance(classifierId, instanceId, false);
     }
 
-    public ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds)
+    public ListIterable<ObjOrUpdate> getInstances(String classifierId, Iterable<String> instanceIds)
     {
         return getInstances(classifierId, instanceIds, true);
     }
 
-    public ListIterable<Obj> getInstancesIfPresent(String classifierId, Iterable<String> instanceIds)
+    public ListIterable<ObjOrUpdate> getInstancesIfPresent(String classifierId, Iterable<String> instanceIds)
     {
         return getInstances(classifierId, instanceIds, false);
     }
 
-    Obj getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
+    ObjOrUpdate getInstance(String classifierId, String instanceId, boolean throwIfNotFound)
     {
         ClassifierIndex classifierIndex = getClassifierIndex(classifierId);
         if (classifierIndex == null)
@@ -113,10 +113,10 @@ public class DistributedBinaryGraphDeserializer
             }
             return null;
         }
-        return sourceCoordinates.getObj(this.fileReader, this.stringIndex, classifierIndex);
+        return sourceCoordinates.getObjOrUpdate(this.fileReader, this.stringIndex, classifierIndex);
     }
 
-    ListIterable<Obj> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound)
+    ListIterable<ObjOrUpdate> getInstances(String classifierId, Iterable<String> instanceIds, boolean throwIfNotFound)
     {
         ClassifierIndex classifierIndex = getClassifierIndex(classifierId);
         if (classifierIndex == null)
@@ -148,7 +148,7 @@ public class DistributedBinaryGraphDeserializer
             return Lists.immutable.empty();
         }
 
-        MutableList<Obj> objs = Lists.mutable.withInitialCapacity(count.getCount());
+        MutableList<ObjOrUpdate> objs = Lists.mutable.withInitialCapacity(count.getCount());
         sourceCoordinatesByFile.forEachKeyValue((filePath, fileSourceCoordinates) ->
         {
             fileSourceCoordinates.sortThis(SourceCoordinates::compareByOffset);
@@ -157,7 +157,7 @@ public class DistributedBinaryGraphDeserializer
                 int offset = 0;
                 for (SourceCoordinates sourceCoordinates : fileSourceCoordinates)
                 {
-                    objs.add(sourceCoordinates.getObj(reader, offset, this.stringIndex, classifierIndex));
+                    objs.add(sourceCoordinates.getObjOrUpdate(reader, offset, this.stringIndex, classifierIndex));
                     offset = sourceCoordinates.getOffsetAfterReading();
                 }
             }
@@ -336,17 +336,17 @@ public class DistributedBinaryGraphDeserializer
             return this.filePath;
         }
 
-        private Obj getObj(FileReader fileReader, StringIndex stringIndex, ClassifierIndex classifierIndex)
+        private ObjOrUpdate getObjOrUpdate(FileReader fileReader, StringIndex stringIndex, ClassifierIndex classifierIndex)
         {
-            return getObj(getBytes(fileReader), stringIndex, classifierIndex);
+            return getObjOrUpdate(getBytes(fileReader), stringIndex, classifierIndex);
         }
 
-        private Obj getObj(Reader reader, long currentOffset, StringIndex stringIndex, ClassifierIndex classifierIndex)
+        private ObjOrUpdate getObjOrUpdate(Reader reader, long currentOffset, StringIndex stringIndex, ClassifierIndex classifierIndex)
         {
-            return getObj(getBytes(reader, currentOffset), stringIndex, classifierIndex);
+            return getObjOrUpdate(getBytes(reader, currentOffset), stringIndex, classifierIndex);
         }
 
-        private Obj getObj(byte[] bytes, StringIndex stringIndex, ClassifierIndex classifierIndex)
+        private ObjOrUpdate getObjOrUpdate(byte[] bytes, StringIndex stringIndex, ClassifierIndex classifierIndex)
         {
             try (Reader reader = BinaryReaders.newBinaryReader(bytes))
             {

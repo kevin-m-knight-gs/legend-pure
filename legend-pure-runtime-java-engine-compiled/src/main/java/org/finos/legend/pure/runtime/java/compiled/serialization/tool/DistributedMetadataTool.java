@@ -17,7 +17,10 @@ package org.finos.legend.pure.runtime.java.compiled.serialization.tool;
 import org.finos.legend.pure.runtime.java.compiled.serialization.binary.DistributedBinaryGraphDeserializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdateVisitor;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjRef;
+import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Primitive;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueMany;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueOne;
@@ -130,10 +133,10 @@ public class DistributedMetadataTool implements Closeable
 
     private void instance(String classifier, String id)
     {
-        Obj instance = this.deserializer.getInstanceIfPresent(classifier, id);
+        ObjOrUpdate instance = this.deserializer.getInstanceIfPresent(classifier, id);
         if (instance != null)
         {
-            new ObjPrinter(instance).printObj();
+            new ObjOrUpdatePrinter(instance).printObjOrUpdate();
         }
         else
         {
@@ -147,29 +150,50 @@ public class DistributedMetadataTool implements Closeable
         this.zipFile.close();
     }
 
-    private class ObjPrinter implements PropertyValueVisitor<Void>, RValueVisitor<Void>
+    private class ObjOrUpdatePrinter implements ObjOrUpdateVisitor<Void>, PropertyValueVisitor<Void>, RValueVisitor<Void>
     {
-        private final Obj obj;
+        private final ObjOrUpdate objOrUpdate;
 
-        ObjPrinter(Obj obj)
+        ObjOrUpdatePrinter(ObjOrUpdate objOrUpdate)
         {
-            this.obj = obj;
+            this.objOrUpdate = objOrUpdate;
         }
 
-        void printObj()
+        void printObjOrUpdate()
         {
-            printf("%s (%s)", this.obj.getName(), this.obj.getClassifier());
+            this.objOrUpdate.visit(this);
+        }
+
+        @Override
+        public Void visit(Obj obj)
+        {
+            printf("%s (%s)", obj.getName(), obj.getClassifier());
             indent();
-            if (this.obj.getSourceInformation() != null)
+            if (obj.getSourceInformation() != null)
             {
-                printf("sourceInfo = %s", this.obj.getSourceInformation().toString());
+                printf("sourceInfo = %s", obj.getSourceInformation().toString());
             }
-            printf("identifier = %s", this.obj.getIdentifier());
+            printf("identifier = %s", obj.getIdentifier());
             printf("properties =");
             indent();
-            this.obj.getPropertyValues().forEach(v -> v.visit(this));
+            obj.getPropertyValues().forEach(v -> v.visit(this));
             outdent();
             outdent();
+            return null;
+        }
+
+        @Override
+        public Void visit(ObjUpdate objUpdate)
+        {
+            printf("<update> (%s)", objUpdate.getClassifier());
+            indent();
+            printf("identifier = %s", objUpdate.getIdentifier());
+            printf("properties =");
+            indent();
+            objUpdate.getPropertyValues().forEach(v -> v.visit(this));
+            outdent();
+            outdent();
+            return null;
         }
 
         @Override
