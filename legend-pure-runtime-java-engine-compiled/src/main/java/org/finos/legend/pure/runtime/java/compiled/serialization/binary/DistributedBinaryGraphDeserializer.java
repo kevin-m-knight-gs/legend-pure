@@ -44,7 +44,7 @@ public class DistributedBinaryGraphDeserializer
 
     private DistributedBinaryGraphDeserializer(String metadataName, FileReader fileReader)
     {
-        this.metadataName = metadataName;
+        this.metadataName = DistributedMetadataFiles.validateMetadataName(metadataName, true);
         this.fileReader = fileReader;
         this.stringIndex = LazyStringIndex.fromFileReader(this.metadataName, fileReader);
         RichIterable<String> classifierIds = this.stringIndex.getClassifierIds();

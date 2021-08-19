@@ -1,5 +1,7 @@
 package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 
+import org.eclipse.collections.impl.utility.StringIterate;
+
 class DistributedMetadataFiles
 {
     private static final String META_DATA_DIRNAME = "metadata/";
@@ -7,6 +9,37 @@ class DistributedMetadataFiles
     private static final String INDEX_FILE_EXTENSION = ".idx";
 
     // Metadata
+
+    static String validateMetadataName(String string)
+    {
+        return validateMetadataName(string, false);
+    }
+
+    static String validateMetadataName(String string, boolean allowNull)
+    {
+        if (!isValidMetadataName(string, allowNull))
+        {
+            throw new IllegalArgumentException("Invalid metadata name: " + ((string == null) ? null : ('"' + string + '"')));
+        }
+        return string;
+    }
+
+    static boolean isValidMetadataName(String string)
+    {
+        return isValidMetadataName(string, false);
+    }
+
+    static boolean isValidMetadataName(String string, boolean allowNull)
+    {
+        return (string == null) ?
+                allowNull :
+                (!string.isEmpty() && StringIterate.allSatisfyCodePoint(string, DistributedMetadataFiles::isValidMetadataNameCodePoint));
+    }
+
+    private static boolean isValidMetadataNameCodePoint(int codePoint)
+    {
+        return (codePoint == '_') || ((codePoint < 128) && Character.isLetterOrDigit(codePoint));
+    }
 
     static String getMetadataClassifierIndexFilePath(String metadataName, String classifierName)
     {

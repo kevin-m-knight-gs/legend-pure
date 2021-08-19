@@ -57,7 +57,7 @@ public class DistributedBinaryGraphSerializer
 
     private DistributedBinaryGraphSerializer(String metadataName, PureRuntime runtime, MultiDistributedBinaryGraphDeserializer alreadySerialized)
     {
-        this.metadataName = metadataName;
+        this.metadataName = DistributedMetadataFiles.validateMetadataName(metadataName, true);
         this.runtime = runtime;
         this.processorSupport = this.runtime.getProcessorSupport();
         this.classifierCaches = new GraphSerializer.ClassifierCaches(this.processorSupport);
