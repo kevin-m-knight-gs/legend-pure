@@ -25,31 +25,35 @@ public class TestDistributedMetadataFiles
     @Test
     public void testValidateMetadataName()
     {
-        Assert.assertNull(DistributedMetadataFiles.validateMetadataName(null, true));
+        Assert.assertNull(DistributedMetadataFiles.validateMetadataNameIfPresent(null));
 
-        IllegalArgumentException eNull = Assert.assertThrows(IllegalArgumentException.class, () -> DistributedMetadataFiles.validateMetadataName(null, false));
+        IllegalArgumentException eNull = Assert.assertThrows(IllegalArgumentException.class, () -> DistributedMetadataFiles.validateMetadataName(null));
         Assert.assertEquals("Invalid metadata name: null", eNull.getMessage());
 
         IllegalArgumentException eEmpty = Assert.assertThrows(IllegalArgumentException.class, () -> DistributedMetadataFiles.validateMetadataName(""));
         Assert.assertEquals("Invalid metadata name: \"\"", eEmpty.getMessage());
 
+        IllegalArgumentException eEmpty2 = Assert.assertThrows(IllegalArgumentException.class, () -> DistributedMetadataFiles.validateMetadataNameIfPresent(""));
+        Assert.assertEquals("Invalid metadata name: \"\"", eEmpty2.getMessage());
+
+
         IllegalArgumentException eInvalid = Assert.assertThrows(IllegalArgumentException.class, () -> DistributedMetadataFiles.validateMetadataName("invalid name"));
         Assert.assertEquals("Invalid metadata name: \"invalid name\"", eInvalid.getMessage());
 
+        IllegalArgumentException eInvalid2 = Assert.assertThrows(IllegalArgumentException.class, () -> DistributedMetadataFiles.validateMetadataNameIfPresent("invalid name"));
+        Assert.assertEquals("Invalid metadata name: \"invalid name\"", eInvalid2.getMessage());
+
         Assert.assertEquals("valid_name", DistributedMetadataFiles.validateMetadataName("valid_name"));
+        Assert.assertEquals("valid_name", DistributedMetadataFiles.validateMetadataNameIfPresent("valid_name"));
     }
 
     @Test
     public void testIsValidMetadataName()
     {
-        Assert.assertTrue(DistributedMetadataFiles.isValidMetadataName(null, true));
-        Assert.assertFalse(DistributedMetadataFiles.isValidMetadataName(null, false));
-        Assert.assertFalse(DistributedMetadataFiles.isValidMetadataName(null));
-
         String[] validNames = {"abc", "_", "_abc_", "0123456789_AbC_xYz", "__", "\u0030\u0031\u0045", "0123456789_abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ"};
         Assert.assertEquals("should be valid", Collections.emptyList(), ArrayIterate.reject(validNames, DistributedMetadataFiles::isValidMetadataName));
 
-        String[] invalidNames = {"", "xyz+abc", ".", "\u0080", "\u1234", "\u00EA", "a_\u9975_b", "$#abc"};
+        String[] invalidNames = {null, "", "xyz+abc", ".", "\u0080", "\u1234", "\u00EA", "a_\u9975_b", "$#abc"};
         Assert.assertEquals("should be invalid", Collections.emptyList(), ArrayIterate.select(invalidNames, DistributedMetadataFiles::isValidMetadataName));
     }
 

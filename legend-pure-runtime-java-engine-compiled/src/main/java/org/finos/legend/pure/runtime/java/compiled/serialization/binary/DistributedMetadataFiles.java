@@ -12,28 +12,23 @@ class DistributedMetadataFiles
 
     static String validateMetadataName(String string)
     {
-        return validateMetadataName(string, false);
-    }
-
-    static String validateMetadataName(String string, boolean allowNull)
-    {
-        if (!isValidMetadataName(string, allowNull))
+        if (!isValidMetadataName(string))
         {
             throw new IllegalArgumentException("Invalid metadata name: " + ((string == null) ? null : ('"' + string + '"')));
         }
         return string;
     }
 
-    static boolean isValidMetadataName(String string)
+    static String validateMetadataNameIfPresent(String string)
     {
-        return isValidMetadataName(string, false);
+        return (string == null) ? null : validateMetadataName(string);
     }
 
-    static boolean isValidMetadataName(String string, boolean allowNull)
+    static boolean isValidMetadataName(String string)
     {
-        return (string == null) ?
-                allowNull :
-                (!string.isEmpty() && StringIterate.allSatisfyCodePoint(string, DistributedMetadataFiles::isValidMetadataNameCodePoint));
+        return (string != null) &&
+                !string.isEmpty() &&
+                StringIterate.allSatisfyCodePoint(string, DistributedMetadataFiles::isValidMetadataNameCodePoint);
     }
 
     private static boolean isValidMetadataNameCodePoint(int codePoint)
