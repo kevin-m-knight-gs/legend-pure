@@ -2,13 +2,13 @@ package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 
 import org.eclipse.collections.impl.utility.StringIterate;
 
-class DistributedMetadataFiles
+class DistributedMetadataHelper
 {
     private static final String META_DATA_DIRNAME = "metadata/";
     private static final String BIN_FILE_EXTENSION = ".bin";
     private static final String INDEX_FILE_EXTENSION = ".idx";
 
-    // Metadata
+    // Metadata name
 
     static String validateMetadataName(String string)
     {
@@ -28,13 +28,20 @@ class DistributedMetadataFiles
     {
         return (string != null) &&
                 !string.isEmpty() &&
-                StringIterate.allSatisfyCodePoint(string, DistributedMetadataFiles::isValidMetadataNameCodePoint);
+                StringIterate.allSatisfyCodePoint(string, DistributedMetadataHelper::isValidMetadataNameCodePoint);
     }
 
     private static boolean isValidMetadataNameCodePoint(int codePoint)
     {
         return (codePoint == '_') || ((codePoint < 128) && Character.isLetterOrDigit(codePoint));
     }
+
+    static String getMetadataIdPrefix(String metadataName)
+    {
+        return (metadataName == null) ? null : ('$' + metadataName + '$');
+    }
+
+    // Metadata file paths
 
     static String getMetadataClassifierIndexFilePath(String metadataName, String classifierName)
     {

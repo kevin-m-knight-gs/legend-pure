@@ -269,7 +269,7 @@ public class ValueSpecificationProcessor
                 // TODO We need to do this process earlier so that we can push collections faster
                 return "((" + type + ")valMap.get(\"" + processorContext.addObjectToPassToDynamicallyGeneratedCode(content) + "\"))";
             }
-            return "((" + type + ")((CompiledExecutionSupport)es).getMetadata(\"" + MetadataJavaPaths.buildMetadataKeyFromType(rawType) + "\",\"" + IdBuilder.buildId(content, processorContext.getSupport()) + "\"))";
+            return "((" + type + ")((CompiledExecutionSupport)es).getMetadata(\"" + MetadataJavaPaths.buildMetadataKeyFromType(rawType) + "\",\"" + processorContext.getIdBuilder().buildId(content) + "\"))";
         }
     }
 
@@ -315,7 +315,7 @@ public class ValueSpecificationProcessor
         if (!containsTypeParams && notOpenVariables && !processorContext.isInLineAllLambda())
         {
             String sourceId = IdBuilder.sourceToId(function.getSourceInformation());
-            String functionId = IdBuilder.buildId(function, processorSupport);
+            String functionId = processorContext.getIdBuilder().buildId(function);
 
             //Only need to create this if we are currently generating this file
             if (registerLambdasInProcessorContext && (topLevelElement == null || function.getSourceInformation().getSourceId().equals(topLevelElement.getSourceInformation().getSourceId())))

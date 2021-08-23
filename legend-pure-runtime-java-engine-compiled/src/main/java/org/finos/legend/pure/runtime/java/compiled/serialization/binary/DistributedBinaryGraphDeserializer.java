@@ -44,7 +44,7 @@ public class DistributedBinaryGraphDeserializer
 
     private DistributedBinaryGraphDeserializer(String metadataName, FileReader fileReader)
     {
-        this.metadataName = DistributedMetadataFiles.validateMetadataNameIfPresent(metadataName);
+        this.metadataName = DistributedMetadataHelper.validateMetadataNameIfPresent(metadataName);
         this.fileReader = fileReader;
         this.stringIndex = LazyStringIndex.fromFileReader(this.metadataName, fileReader);
         RichIterable<String> classifierIds = this.stringIndex.getClassifierIds();
@@ -172,7 +172,7 @@ public class DistributedBinaryGraphDeserializer
 
     private MapIterable<String, SourceCoordinates> readInstanceIndex(String classifier)
     {
-        String indexFilePath = DistributedMetadataFiles.getMetadataClassifierIndexFilePath(this.metadataName, classifier);
+        String indexFilePath = DistributedMetadataHelper.getMetadataClassifierIndexFilePath(this.metadataName, classifier);
         try (Reader reader = this.fileReader.getReader(indexFilePath))
         {
             int instanceCount = reader.readInt();
@@ -180,7 +180,7 @@ public class DistributedBinaryGraphDeserializer
 
             int instancePartition = reader.readInt();
             int offset = reader.readInt();
-            String filePath = DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, instancePartition);
+            String filePath = DistributedMetadataHelper.getMetadataPartitionBinFilePath(this.metadataName, instancePartition);
 
             int instancesRead = 0;
             while (instancesRead < instanceCount)
@@ -196,7 +196,7 @@ public class DistributedBinaryGraphDeserializer
                 instancesRead += partitionInstanceCount;
                 instancePartition++;
                 offset = 0;
-                filePath = DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, instancePartition);
+                filePath = DistributedMetadataHelper.getMetadataPartitionBinFilePath(this.metadataName, instancePartition);
             }
 
             return index;

@@ -41,21 +41,33 @@ public class MetadataBuilder
     {
     }
 
-    public static MetadataEager indexAll(Iterable<? extends CoreInstance> startingNodes, final ProcessorSupport processorSupport)
+    @Deprecated
+    public static MetadataEager indexAll(Iterable<? extends CoreInstance> startingNodes, ProcessorSupport processorSupport)
+    {
+        return indexAll(startingNodes, IdBuilder.newIdBuilder(processorSupport), processorSupport);
+    }
+
+    public static MetadataEager indexAll(Iterable<? extends CoreInstance> startingNodes, IdBuilder idBuilder, ProcessorSupport processorSupport)
     {
         MetadataEager metadataEager = new MetadataEager();
         PrivateSetSearchStateWithCompileStateMarking state = new PrivateSetSearchStateWithCompileStateMarking(Stacks.mutable.withAll(startingNodes), processorSupport);
-        indexNodes(state, metadataEager, processorSupport);
+        indexNodes(state, metadataEager, idBuilder, processorSupport);
         return metadataEager;
     }
 
-    public static MetadataEager indexNew(MetadataEager metadataEager, Iterable<? extends CoreInstance> startingNodes, final ProcessorSupport processorSupport)
+    @Deprecated
+    public static MetadataEager indexNew(MetadataEager metadataEager, Iterable<? extends CoreInstance> startingNodes, ProcessorSupport processorSupport)
     {
-        CompiledStateSearchState state = new CompiledStateSearchState(Stacks.mutable.withAll(startingNodes), processorSupport);
-        return indexNodes(state, metadataEager, processorSupport);
+        return indexNew(metadataEager, startingNodes, IdBuilder.newIdBuilder(processorSupport), processorSupport);
     }
 
-    private static MetadataEager indexNodes(SearchState state, MetadataEager metadataEager, final ProcessorSupport processorSupport)
+    public static MetadataEager indexNew(MetadataEager metadataEager, Iterable<? extends CoreInstance> startingNodes, IdBuilder idBuilder, ProcessorSupport processorSupport)
+    {
+        CompiledStateSearchState state = new CompiledStateSearchState(Stacks.mutable.withAll(startingNodes), processorSupport);
+        return indexNodes(state, metadataEager, idBuilder, processorSupport);
+    }
+
+    private static MetadataEager indexNodes(SearchState state, MetadataEager metadataEager, IdBuilder idBuilder, ProcessorSupport processorSupport)
     {
         while (state.hasNodes())
         {
@@ -64,7 +76,7 @@ public class MetadataBuilder
             {
                 state.noteVisited(instance);
 
-                String id = IdBuilder.buildId(instance, processorSupport);
+                String id = idBuilder.buildId(instance);
                 CoreInstance classifier = instance.getClassifier();
 
                 for (String key : instance.getKeys())

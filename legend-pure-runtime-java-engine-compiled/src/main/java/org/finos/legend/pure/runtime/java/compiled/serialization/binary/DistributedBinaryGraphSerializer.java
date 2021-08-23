@@ -52,14 +52,16 @@ public class DistributedBinaryGraphSerializer
     private final String metadataName;
     private final PureRuntime runtime;
     private final ProcessorSupport processorSupport;
+    private final IdBuilder idBuilder;
     private final GraphSerializer.ClassifierCaches classifierCaches;
     private final MultiDistributedBinaryGraphDeserializer alreadySerialized;
 
     private DistributedBinaryGraphSerializer(String metadataName, PureRuntime runtime, MultiDistributedBinaryGraphDeserializer alreadySerialized)
     {
-        this.metadataName = DistributedMetadataFiles.validateMetadataNameIfPresent(metadataName);
+        this.metadataName = DistributedMetadataHelper.validateMetadataNameIfPresent(metadataName);
         this.runtime = runtime;
         this.processorSupport = this.runtime.getProcessorSupport();
+        this.idBuilder = IdBuilder.newIdBuilder(DistributedMetadataHelper.getMetadataIdPrefix(this.metadataName), this.processorSupport);
         this.classifierCaches = new GraphSerializer.ClassifierCaches(this.processorSupport);
         this.alreadySerialized = alreadySerialized;
     }
@@ -84,7 +86,7 @@ public class DistributedBinaryGraphSerializer
         MutableMap<String, MutableList<CoreInstance>> nodesByClassifierId = getNodesByClassifierId(this.runtime.getModelRepository(), this.processorSupport);
 
         // Build string cache
-        DistributedStringCache stringCache = DistributedStringCache.fromNodes(nodesByClassifierId.valuesView().flatCollect(Functions.identity()), this.processorSupport);
+        DistributedStringCache stringCache = DistributedStringCache.fromNodes(nodesByClassifierId.valuesView().flatCollect(Functions.identity()), this.idBuilder, this.processorSupport);
         BinaryObjSerializer serializer = new BinaryObjSerializerWithStringCacheAndImplicitIdentifiers(stringCache);
 
         // Write string cache
@@ -121,7 +123,7 @@ public class DistributedBinaryGraphSerializer
                             if (partitionTotalBytes + objByteCount > MAX_BIN_FILE_BYTES)
                             {
                                 // Write current partition
-                                try (Writer partitionWriter = fileWriter.getWriter(DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, partition)))
+                                try (Writer partitionWriter = fileWriter.getWriter(DistributedMetadataHelper.getMetadataPartitionBinFilePath(this.metadataName, partition)))
                                 {
                                     partitionWriter.writeBytes(binByteStream.toByteArray());
                                     binByteStream.reset();
@@ -154,7 +156,7 @@ public class DistributedBinaryGraphSerializer
                     }
 
                     // Write classifier index
-                    try (Writer indexFileWriter = fileWriter.getWriter(DistributedMetadataFiles.getMetadataClassifierIndexFilePath(this.metadataName, classifierId)))
+                    try (Writer indexFileWriter = fileWriter.getWriter(DistributedMetadataHelper.getMetadataClassifierIndexFilePath(this.metadataName, classifierId)))
                     {
                         indexFileWriter.writeBytes(indexByteStream.toByteArray());
                         indexByteStream.reset();
@@ -166,7 +168,7 @@ public class DistributedBinaryGraphSerializer
         // Write final partition
         if (binByteStream.size() > 0)
         {
-            try (Writer writer = fileWriter.getWriter(DistributedMetadataFiles.getMetadataPartitionBinFilePath(this.metadataName, partition)))
+            try (Writer writer = fileWriter.getWriter(DistributedMetadataHelper.getMetadataPartitionBinFilePath(this.metadataName, partition)))
             {
                 writer.writeBytes(binByteStream.toByteArray());
             }
@@ -175,12 +177,12 @@ public class DistributedBinaryGraphSerializer
 
     private String buildId(CoreInstance instance)
     {
-        return IdBuilder.buildId(instance, this.processorSupport);
+        return this.idBuilder.buildId(instance);
     }
 
     private Obj buildObj(CoreInstance instance)
     {
-        return GraphSerializer.buildObj(instance, this.classifierCaches, this.processorSupport);
+        return GraphSerializer.buildObj(instance, this.idBuilder, this.classifierCaches, this.processorSupport);
     }
 
     private MutableList<ObjOrUpdate> buildObjOrUpdates(String classifierId, MutableList<CoreInstance> instances)

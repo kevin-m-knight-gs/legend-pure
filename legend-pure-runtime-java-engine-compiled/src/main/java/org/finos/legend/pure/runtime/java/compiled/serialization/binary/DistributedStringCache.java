@@ -24,6 +24,7 @@ import org.eclipse.collections.impl.factory.Multimaps;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.serialization.Writer;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 
 import java.util.Objects;
 
@@ -40,7 +41,7 @@ class DistributedStringCache extends AbstractStringCache
     public void write(String metadataName, FileWriter fileWriter)
     {
         // Write classifier strings
-        try (Writer writer = fileWriter.getWriter(DistributedMetadataFiles.getClassifierIdStringsIndexFilePath(metadataName)))
+        try (Writer writer = fileWriter.getWriter(DistributedMetadataHelper.getClassifierIdStringsIndexFilePath(metadataName)))
         {
             writer.writeStringArray(getClassifierStringArray());
         }
@@ -48,7 +49,7 @@ class DistributedStringCache extends AbstractStringCache
         // Write other strings index
         String[] otherStrings = getOtherStringsArray();
         int otherStringsCount = otherStrings.length;
-        try (Writer writer = fileWriter.getWriter(DistributedMetadataFiles.getOtherStringsIndexFilePath(metadataName)))
+        try (Writer writer = fileWriter.getWriter(DistributedMetadataHelper.getOtherStringsIndexFilePath(metadataName)))
         {
             writer.writeInt(otherStringsCount);
         }
@@ -56,7 +57,7 @@ class DistributedStringCache extends AbstractStringCache
         // Write other strings partitions
         for (int partitionStart = 0; partitionStart < otherStringsCount; partitionStart += PARTITION_SIZE)
         {
-            try (Writer writer = fileWriter.getWriter(DistributedMetadataFiles.getOtherStringsIndexPartitionFilePath(metadataName, partitionStart)))
+            try (Writer writer = fileWriter.getWriter(DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath(metadataName, partitionStart)))
             {
                 int partitionEnd = Math.min(partitionStart + PARTITION_SIZE, otherStringsCount);
                 writer.writeInt(partitionEnd - partitionStart);
@@ -68,10 +69,10 @@ class DistributedStringCache extends AbstractStringCache
         }
     }
 
-    static DistributedStringCache fromNodes(Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
+    static DistributedStringCache fromNodes(Iterable<? extends CoreInstance> nodes, IdBuilder idBuilder, ProcessorSupport processorSupport)
     {
         DistributedStringCollector collector = new DistributedStringCollector();
-        collectStrings(collector, nodes, processorSupport);
+        collectStrings(collector, nodes, idBuilder, processorSupport);
 
         MutableSet<String> allStrings = Sets.mutable.ofInitialCapacity(collector.classifierIds.size() + collector.identifiers.size() + collector.otherStrings.size());
 

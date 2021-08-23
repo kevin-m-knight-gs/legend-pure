@@ -42,6 +42,7 @@ import org.finos.legend.pure.runtime.java.compiled.compiler.StringJavaSource;
 import org.finos.legend.pure.runtime.java.compiled.extension.CompiledExtension;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.ClassJsonFactoryProcessor;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.FunctionProcessor;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.CoreExtensionCompiled;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.EnumProcessor;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.TypeProcessor;
@@ -51,6 +52,7 @@ import org.finos.legend.pure.runtime.java.compiled.generation.processors.type._c
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.measureUnit.MeasureProcessor;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.measureUnit.UnitProcessor;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -136,6 +138,7 @@ public final class JavaSourceCodeGenerator
                     "\n";
 
     private final ProcessorSupport processorSupport;
+    private final IdBuilder idBuilder;
     private final CodeStorage codeStorage;
     private final boolean writeFilesToDisk;
     private final Path directoryToWriteFilesTo;
@@ -151,10 +154,11 @@ public final class JavaSourceCodeGenerator
 
     private final String name;
 
-    public JavaSourceCodeGenerator(ProcessorSupport processorSupport, CodeStorage codeStorage, boolean writeFilesToDisk, Path directoryToWriteFilesTo, boolean includePureStackTrace, Iterable<? extends CompiledExtension> extensions, String name, String externalAPIPackage)
+    public JavaSourceCodeGenerator(ProcessorSupport processorSupport, IdBuilder idBuilder, CodeStorage codeStorage, boolean writeFilesToDisk, Path directoryToWriteFilesTo, boolean includePureStackTrace, Iterable<? extends CompiledExtension> extensions, String name, String externalAPIPackage)
     {
         this.name = name;
         this.processorSupport = processorSupport;
+        this.idBuilder = (idBuilder == null) ? IdBuilder.newIdBuilder(this.processorSupport) : idBuilder;
         this.codeStorage = codeStorage;
         this.writeFilesToDisk = writeFilesToDisk;
         this.directoryToWriteFilesTo = directoryToWriteFilesTo;
@@ -165,6 +169,11 @@ public final class JavaSourceCodeGenerator
         {
             this.javaClassesToDisk(this.extensions.flatCollect(CompiledExtension::getExtraJavaSources));
         }
+    }
+
+    public JavaSourceCodeGenerator(ProcessorSupport processorSupport, CodeStorage codeStorage, boolean writeFilesToDisk, Path directoryToWriteFilesTo, boolean includePureStackTrace, Iterable<? extends CompiledExtension> extensions, String name, String externalAPIPackage)
+    {
+        this(processorSupport, null, codeStorage, writeFilesToDisk, directoryToWriteFilesTo, includePureStackTrace, extensions, name, externalAPIPackage);
     }
 
     public ProcessorSupport getProcessorSupport()
@@ -178,7 +187,7 @@ public final class JavaSourceCodeGenerator
         {
             try
             {
-                ProcessorContext processorContext = new ProcessorContext(this.processorSupport, this.extensions, this.includePureStackTrace);
+                ProcessorContext processorContext = new ProcessorContext(this.processorSupport, this.extensions, this.idBuilder, this.includePureStackTrace);
 
                 for (CoreInstance coreInstance : source.getNewInstances())
                 {
@@ -208,16 +217,9 @@ public final class JavaSourceCodeGenerator
     {
         CoreInstance root = this.processorSupport.package_getByUserPath("::");
 
-        ProcessorContext processorContext = new ProcessorContext(this.processorSupport, this.extensions, this.includePureStackTrace);
-        try
-        {
-            this.toJava(this.processorSupport.repository_getTopLevel(M3Paths.Package), processorContext);
-            this.toJava(root, processorContext);
-        }
-        catch (PureCompilationException e)
-        {
-            throw new RuntimeException(e);
-        }
+        ProcessorContext processorContext = new ProcessorContext(this.processorSupport, this.extensions, this.idBuilder, this.includePureStackTrace);
+        toJava(this.processorSupport.repository_getTopLevel(M3Paths.Package), processorContext);
+        toJava(root, processorContext);
 
         MutableList<StringJavaSource> javaClasses = FastList.newList();
         javaClasses.addAll(this.buildJavaClasses(processorContext));
@@ -249,7 +251,7 @@ public final class JavaSourceCodeGenerator
     void collectClassesToSerialize()
     {
         CoreInstance externalizableStereotype = AccessLevel.EXTERNALIZABLE.getStereotype(this.processorSupport);
-        ProcessorContext processorContext = new ProcessorContext(this.processorSupport, this.extensions, this.includePureStackTrace);
+        ProcessorContext processorContext = new ProcessorContext(this.processorSupport, this.extensions, this.idBuilder, this.includePureStackTrace);
         ProcessorSupport processorSupport = processorContext.getSupport();
 
         for (CoreInstance element : externalizableStereotype.getValueForMetaPropertyToMany(M3Properties.modelElements))
@@ -282,11 +284,10 @@ public final class JavaSourceCodeGenerator
 
     private void addClassToSerialize(CoreInstance coreInstanceClass, MutableSet<CoreInstance> set)
     {
-        if (set.contains(coreInstanceClass))
+        if (!set.add(coreInstanceClass))
         {
             return;
         }
-        set.add(coreInstanceClass);
 
         boolean isInherit = !coreInstanceClass.getValueForMetaPropertyToMany(M3Properties.generalizations).isEmpty();
 
@@ -326,7 +327,6 @@ public final class JavaSourceCodeGenerator
                 addClassToSerialize(rawType, set);
             }
         });
-
     }
 
     ListIterable<StringJavaSource> generateExternalizableAPI(String pack)
@@ -335,7 +335,7 @@ public final class JavaSourceCodeGenerator
 
         MutableList<String> externalizableFunctionCode = Lists.mutable.empty();
         CoreInstance functionClass = this.processorSupport.package_getByUserPath(M3Paths.Function);
-        ProcessorContext processorContext = new ProcessorContext(this.processorSupport, this.extensions, this.includePureStackTrace);
+        ProcessorContext processorContext = new ProcessorContext(this.processorSupport, this.extensions, this.idBuilder, this.includePureStackTrace);
         for (CoreInstance element : externalizableStereotype.getValueForMetaPropertyToMany(M3Properties.modelElements))
         {
             if (Instance.instanceOf(element, functionClass, this.processorSupport))
@@ -355,12 +355,12 @@ public final class JavaSourceCodeGenerator
             for (StringJavaSource source : javaClasses)
             {
                 //String fileUri = "file://" + source.toUri().getPath();
-                Path file = Paths.get(this.directoryToWriteFilesTo.toString() + source.toUri().getPath());
+                Path file = Paths.get(this.directoryToWriteFilesTo + source.toUri().getPath());
                 Files.createDirectories(file.getParent());
                 Files.write(file, source.getCode().getBytes(StandardCharsets.UTF_8));
             }
         }
-        catch (Exception e)
+        catch (IOException e)
         {
             throw new RuntimeException(e);
         }

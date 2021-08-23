@@ -14,29 +14,107 @@
 
 package org.finos.legend.pure.runtime.java.compiled.generation.processors;
 
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.PackageableElement;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.property.AbstractProperty;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Any;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.PrimitiveType;
 import org.finos.legend.pure.m3.navigation.M3Paths;
-import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorageTools;
 import org.finos.legend.pure.m3.serialization.runtime.Source;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
+import org.finos.legend.pure.m4.coreinstance.primitive.PrimitiveCoreInstance;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.ValCoreInstance;
 
 public class IdBuilder
 {
+    private final String defaultIdPrefix;
+    private final ProcessorSupport processorSupport;
+
+    private IdBuilder(String defaultIdPrefix, ProcessorSupport processorSupport)
+    {
+        this.defaultIdPrefix = defaultIdPrefix;
+        this.processorSupport = processorSupport;
+    }
+
+    public String buildId(CoreInstance instance)
+    {
+        if (isPrimitiveValue(instance))
+        {
+            return buildIdForPrimitiveValue(instance);
+        }
+        if (isNonPropertyPackageableElement(instance))
+        {
+            return buildIdForNonPropertyPackageableElement(instance);
+        }
+        return buildDefaultId(instance);
+    }
+
+    private String buildIdForPrimitiveValue(CoreInstance instance)
+    {
+        return instance.getName();
+    }
+
+    private String buildIdForNonPropertyPackageableElement(CoreInstance instance)
+    {
+        return org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement.getSystemPathForPackageableElement(instance);
+    }
+
+    private String buildDefaultId(CoreInstance instance)
+    {
+        int syntheticId = instance.getSyntheticId();
+        return (this.defaultIdPrefix == null) ? Integer.toString(syntheticId) : (this.defaultIdPrefix + syntheticId);
+    }
+
+    private boolean isPrimitiveValue(CoreInstance instance)
+    {
+        if ((instance instanceof PrimitiveCoreInstance) || (instance instanceof ValCoreInstance))
+        {
+            return true;
+        }
+        if (instance instanceof Any)
+        {
+            return false;
+        }
+
+        CoreInstance classifier = this.processorSupport.getClassifier(instance);
+        return (classifier instanceof PrimitiveType) || this.processorSupport.instance_instanceOf(classifier, M3Paths.PrimitiveType);
+    }
+
+    private boolean isNonPropertyPackageableElement(CoreInstance instance)
+    {
+        if ((instance instanceof AbstractProperty))
+        {
+            return false;
+        }
+        if (instance instanceof PackageableElement)
+        {
+            return true;
+        }
+        if ((instance instanceof Any) || (instance instanceof PrimitiveCoreInstance) || (instance instanceof ValCoreInstance))
+        {
+            return false;
+        }
+
+        return this.processorSupport.instance_instanceOf(instance, M3Paths.PackageableElement) && !this.processorSupport.instance_instanceOf(instance, M3Paths.AbstractProperty);
+    }
+
+    public static IdBuilder newIdBuilder(String defaultIdPrefix, ProcessorSupport processorSupport)
+    {
+        return new IdBuilder(defaultIdPrefix, processorSupport);
+    }
+
+    public static IdBuilder newIdBuilder(ProcessorSupport processorSupport)
+    {
+        return newIdBuilder(null, processorSupport);
+    }
+
+    @Deprecated
     public static String buildId(CoreInstance coreInstance, ProcessorSupport processorSupport)
     {
-        CoreInstance classifier = processorSupport.getClassifier(coreInstance);
-        if (processorSupport.instance_instanceOf(classifier, M3Paths.PrimitiveType))
-        {
-            return coreInstance.getName();
-        }
-        if (!processorSupport.instance_instanceOf(coreInstance, M3Paths.AbstractProperty) && processorSupport.instance_instanceOf(coreInstance, M3Paths.PackageableElement))
-        {
-            return PackageableElement.getSystemPathForPackageableElement(coreInstance, "::");
-        }
-        return String.valueOf(coreInstance.getSyntheticId());
+        return newIdBuilder(null, processorSupport).buildId(coreInstance);
     }
 
     public static String sourceToId(SourceInformation sourceInformation)

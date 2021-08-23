@@ -25,6 +25,7 @@ import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.tools.GraphNodeIterable;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdate;
@@ -57,18 +58,19 @@ public abstract class TestDistributedBinaryGraphSerialization extends AbstractPu
 
     private void testFromRuntime(String metadataName) throws IOException
     {
-        ListIterable<Obj> expectedObjs = getExpectedObjsFromRuntime();
+        ListIterable<Obj> expectedObjs = getExpectedObjsFromRuntime(metadataName);
         testSerialization(expectedObjs, metadataName, m -> DistributedBinaryGraphSerializer.newSerializer(m, runtime));
     }
 
-    private ListIterable<Obj> getExpectedObjsFromRuntime()
+    private ListIterable<Obj> getExpectedObjsFromRuntime(String metadataName)
     {
         MutableSet<CoreInstance> ignoredClassifiers = PrimitiveUtilities.getPrimitiveTypes(repository).toSet();
         ArrayAdapter.adapt(M3Paths.EnumStub, M3Paths.ImportStub, M3Paths.PropertyStub, M3Paths.RouteNodePropertyStub).collect(processorSupport::package_getByUserPath, ignoredClassifiers);
+        IdBuilder idBuilder = IdBuilder.newIdBuilder(DistributedMetadataHelper.getMetadataIdPrefix(metadataName), processorSupport);
         GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
         return GraphNodeIterable.fromModelRepository(repository)
                 .reject(i -> ignoredClassifiers.contains(i.getClassifier()))
-                .collect(i -> GraphSerializer.buildObj(i, classifierCaches, processorSupport), Lists.mutable.empty());
+                .collect(i -> GraphSerializer.buildObj(i, idBuilder, classifierCaches, processorSupport), Lists.mutable.empty());
     }
 
     private void testSerialization(ListIterable<Obj> expectedObjs, String metadataName, Function<String, DistributedBinaryGraphSerializer> serializerFn) throws IOException

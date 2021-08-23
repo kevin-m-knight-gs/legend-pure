@@ -57,18 +57,24 @@ import java.math.BigDecimal;
 
 public class GraphSerializer
 {
+    @Deprecated
     public static Obj buildObj(CoreInstance instance, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
     {
+        return buildObj(instance, IdBuilder.newIdBuilder(processorSupport), classifierCaches, processorSupport);
+    }
+
+    public static Obj buildObj(CoreInstance instance, IdBuilder idBuilder, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
+    {
         SourceInformation sourceInformation = instance.getSourceInformation();
-        String identifier = IdBuilder.buildId(instance, processorSupport);
+        String identifier = idBuilder.buildId(instance);
         String classifierString = classifierCaches.getClassifierId(instance.getClassifier());
-        ListIterable<PropertyValue> propertyValues = collectProperties(instance, classifierCaches, processorSupport);
+        ListIterable<PropertyValue> propertyValues = collectProperties(instance, idBuilder, classifierCaches, processorSupport);
         return classifierCaches.isEnum(instance) ?
                 new Enum(sourceInformation, identifier, classifierString, instance.getName(), propertyValues) :
                 new Obj(sourceInformation, identifier, classifierString, instance.getName(), propertyValues);
     }
 
-    private static ListIterable<PropertyValue> collectProperties(CoreInstance instance, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
+    private static ListIterable<PropertyValue> collectProperties(CoreInstance instance, IdBuilder idBuilder, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
     {
         MutableList<PropertyValue> propertyValues = Lists.mutable.empty();
         instance.getKeys().forEach(key ->
@@ -77,15 +83,15 @@ public class GraphSerializer
             if (values.notEmpty())
             {
                 PropertyValue propertyValue = (values.size() == 1) ?
-                        new PropertyValueOne(key, buildRValue(values.get(0), classifierCaches, processorSupport)) :
-                        new PropertyValueMany(key, values.collect(value -> buildRValue(value, classifierCaches, processorSupport), Lists.mutable.withInitialCapacity(values.size())));
+                        new PropertyValueOne(key, buildRValue(values.get(0), idBuilder, classifierCaches, processorSupport)) :
+                        new PropertyValueMany(key, values.collect(value -> buildRValue(value, idBuilder, classifierCaches, processorSupport), Lists.mutable.withInitialCapacity(values.size())));
                 propertyValues.add(propertyValue);
             }
         });
         return propertyValues.isEmpty() ? null : propertyValues;
     }
 
-    private static RValue buildRValue(CoreInstance value, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
+    private static RValue buildRValue(CoreInstance value, IdBuilder idBuilder, ClassifierCaches classifierCaches, ProcessorSupport processorSupport)
     {
         CoreInstance classifier = value.getClassifier();
         if (classifierCaches.isPrimitiveType(classifier))
@@ -93,7 +99,7 @@ public class GraphSerializer
             return new Primitive(processPrimitiveTypeJava(value, processorSupport));
         }
         String classifierId = classifierCaches.getClassifierId(classifier);
-        return classifierCaches.isEnumeration(classifier) ? new EnumRef(classifierId, value.getName()) : new ObjRef(classifierId, IdBuilder.buildId(value, processorSupport));
+        return classifierCaches.isEnumeration(classifier) ? new EnumRef(classifierId, value.getName()) : new ObjRef(classifierId, idBuilder.buildId(value));
     }
 
     private static Object processPrimitiveTypeJava(CoreInstance instance, ProcessorSupport processorSupport)

@@ -21,6 +21,7 @@ import org.eclipse.collections.impl.factory.Sets;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.serialization.Writer;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 
 import java.util.Objects;
 
@@ -37,10 +38,10 @@ class SimpleStringCache extends AbstractStringCache
         writer.writeStringArray(getOtherStringsArray());
     }
 
-    static SimpleStringCache fromNodes(Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
+    static SimpleStringCache fromNodes(Iterable<? extends CoreInstance> nodes, IdBuilder idBuilder, ProcessorSupport processorSupport)
     {
         SimpleStringCollector collector = new SimpleStringCollector();
-        collectStrings(collector, nodes, processorSupport);
+        collectStrings(collector, nodes, idBuilder, processorSupport);
         MutableList<String> classifierIds = collector.classifierIds.toSortedList();
         MutableList<String> otherStrings = collector.otherStrings.asLazy().reject(collector.classifierIds::contains).toSortedList();
         return new SimpleStringCache(listToIndexIdMap(classifierIds, 0), listToIndexIdMap(otherStrings, classifierIds.size()));

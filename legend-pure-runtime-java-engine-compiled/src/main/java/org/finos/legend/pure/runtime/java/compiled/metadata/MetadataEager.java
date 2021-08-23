@@ -91,18 +91,19 @@ public final class MetadataEager implements Metadata
         return this.getMetadata(enumerationName, enumName);
     }
 
-
+    @Deprecated
     public void invalidateCoreInstances(RichIterable<? extends CoreInstance> instances, ProcessorSupport processorSupport)
     {
+        IdBuilder idBuilder = IdBuilder.newIdBuilder(processorSupport);
         for (CoreInstance coreInstance : instances)
         {
-            String identifier = IdBuilder.buildId(coreInstance, processorSupport);
+            String identifier = idBuilder.buildId(coreInstance);
             String classifier = MetadataJavaPaths.buildMetadataKeyFromType(coreInstance.getClassifier()).intern();
 
             CoreInstance pack = coreInstance.getValueForMetaPropertyToOne(M3Properties._package);
             if (pack != null)
             {
-                String packIdentifier = IdBuilder.buildId(pack, processorSupport);
+                String packIdentifier = idBuilder.buildId(pack);
                 String packClassifier = MetadataJavaPaths.buildMetadataKeyFromType(pack.getClassifier()).intern();
 
                 this.getMetamodel().remove(classifier, identifier, packClassifier, packIdentifier);

@@ -22,6 +22,7 @@ import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
@@ -84,11 +85,11 @@ abstract class AbstractStringCache implements StringCache
         return index;
     }
 
-    protected static void collectStrings(StringCollector collector, Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
+    protected static void collectStrings(StringCollector collector, Iterable<? extends CoreInstance> nodes, IdBuilder idBuilder, ProcessorSupport processorSupport)
     {
         AbstractStringCache.PropertyValueCollectorVisitor propertyValueVisitor = new AbstractStringCache.PropertyValueCollectorVisitor(collector);
         GraphSerializer.ClassifierCaches classifierCaches = new GraphSerializer.ClassifierCaches(processorSupport);
-        nodes.forEach(node -> collectStringsFromObj(collector, propertyValueVisitor, GraphSerializer.buildObj(node, classifierCaches, processorSupport)));
+        nodes.forEach(node -> collectStringsFromObj(collector, propertyValueVisitor, GraphSerializer.buildObj(node, idBuilder, classifierCaches, processorSupport)));
     }
 
     protected static void collectStringsFromObj(StringCollector collector, PropertyValueCollectorVisitor propertyValueVisitor, Obj obj)
