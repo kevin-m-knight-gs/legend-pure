@@ -22,7 +22,6 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.set.SetIterable;
-import org.finos.legend.pure.generated.Root_meta_pure_metamodel_type_generics_GenericType_Impl;
 import org.finos.legend.pure.m3.compiler.Context;
 import org.finos.legend.pure.m3.coreinstance.BaseCoreInstance;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.FunctionAccessor;
@@ -31,6 +30,7 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enumeratio
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.generics.GenericType;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.ValueSpecification;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.ValueSpecificationCoreInstanceWrapper;
+import org.finos.legend.pure.m3.exception.PureExecutionException;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
@@ -47,7 +47,6 @@ import org.finos.legend.pure.m4.coreinstance.primitive.PrimitiveCoreInstance;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate;
 import org.finos.legend.pure.runtime.java.compiled.generation.JavaPackageAndImportBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.CompiledSupport;
-import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.Pure;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.ReflectiveCoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.ValCoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.FullJavaPaths;
@@ -443,12 +442,18 @@ public class CompiledProcessorSupport implements ProcessorSupport
         {
             Any any = (Any) instance;
             GenericType genericType = any._classifierGenericType();
-            org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Type type = genericType != null ? genericType._rawType() : null;
-            return type == null ? CompiledSupport.getType((Any) instance, this.metadataAccessor) : type;
+            if (genericType != null)
+            {
+                org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Type type = genericType._rawType();
+                if (type != null)
+                {
+                    return type;
+                }
+            }
+            return CompiledSupport.getType(any, this.metadataAccessor);
         }
 
-        GenericType genericType = Pure.safeGetGenericType(instance, this.metadataAccessor, () -> new Root_meta_pure_metamodel_type_generics_GenericType_Impl(""), this);
-        return genericType._rawType();
+        throw new PureExecutionException("ERROR unhandled type for value: " + instance + " (instance of " + instance.getClass() + ")");
     }
 
     @Override
