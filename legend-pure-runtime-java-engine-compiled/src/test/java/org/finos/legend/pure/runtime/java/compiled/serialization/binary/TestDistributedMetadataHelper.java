@@ -58,6 +58,15 @@ public class TestDistributedMetadataHelper
     }
 
     @Test
+    public void testGetMetadataIdPrefix()
+    {
+        Assert.assertNull(DistributedMetadataHelper.getMetadataIdPrefix(null));
+        Assert.assertEquals("$$", DistributedMetadataHelper.getMetadataIdPrefix(""));
+        Assert.assertEquals("$abcd$", DistributedMetadataHelper.getMetadataIdPrefix("abcd"));
+        Assert.assertEquals("$_$", DistributedMetadataHelper.getMetadataIdPrefix("_"));
+    }
+
+    @Test
     public void testGetMetadataPartitionBinFilePath()
     {
         Assert.assertEquals("metadata/0.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath(null, 0));
