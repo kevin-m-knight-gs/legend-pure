@@ -85,13 +85,9 @@ public class IdBuilder
 
     private boolean isNonPropertyPackageableElement(CoreInstance instance)
     {
-        if ((instance instanceof AbstractProperty))
-        {
-            return false;
-        }
         if (instance instanceof PackageableElement)
         {
-            return true;
+            return !(instance instanceof AbstractProperty);
         }
         if ((instance instanceof Any) || (instance instanceof PrimitiveCoreInstance) || (instance instanceof ValCoreInstance))
         {

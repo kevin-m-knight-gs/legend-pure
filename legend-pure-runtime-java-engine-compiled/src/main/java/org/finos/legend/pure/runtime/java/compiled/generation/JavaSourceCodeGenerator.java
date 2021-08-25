@@ -15,13 +15,12 @@
 package org.finos.legend.pure.runtime.java.compiled.generation;
 
 import org.eclipse.collections.api.RichIterable;
+import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.set.MutableSet;
-import org.eclipse.collections.impl.factory.Lists;
-import org.eclipse.collections.impl.factory.Sets;
-import org.eclipse.collections.impl.list.mutable.FastList;
 import org.eclipse.collections.impl.utility.LazyIterate;
 import org.finos.legend.pure.m3.bootstrap.generator.M3ToJavaGenerator;
 import org.finos.legend.pure.m3.compiler.visibility.AccessLevel;
@@ -117,8 +116,8 @@ public final class JavaSourceCodeGenerator
                     "import org.finos.legend.pure.runtime.java.compiled.*;\n" +
                     "import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.function.defended.*;\n" +
                     "import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.function.*;\n" +
-                    "import org.finos.legend.pure.runtime.java.compiled.execution.*;\n"+
-                    "import org.finos.legend.pure.runtime.java.compiled.execution.sourceInformation.*;\n"+
+                    "import org.finos.legend.pure.runtime.java.compiled.execution.*;\n" +
+                    "import org.finos.legend.pure.runtime.java.compiled.execution.sourceInformation.*;\n" +
                     "import org.finos.legend.pure.runtime.java.compiled.serialization.model.*;\n" +
                     "import org.finos.legend.pure.runtime.java.compiled.metadata.*;\n" +
 
@@ -221,7 +220,7 @@ public final class JavaSourceCodeGenerator
         toJava(this.processorSupport.repository_getTopLevel(M3Paths.Package), processorContext);
         toJava(root, processorContext);
 
-        MutableList<StringJavaSource> javaClasses = FastList.newList();
+        MutableList<StringJavaSource> javaClasses = Lists.mutable.empty();
         javaClasses.addAll(this.buildJavaClasses(processorContext));
         if (this.writeFilesToDisk)
         {
@@ -368,7 +367,7 @@ public final class JavaSourceCodeGenerator
 
     private MutableList<StringJavaSource> buildJavaClasses(ProcessorContext processorContext)
     {
-        MutableList<StringJavaSource> javaClasses = FastList.newList();
+        MutableList<StringJavaSource> javaClasses = Lists.mutable.empty();
         javaClasses.addAll(processorContext.getClasses());
 
         MutableSet<String> processedSources = Sets.mutable.empty();
@@ -493,9 +492,9 @@ public final class JavaSourceCodeGenerator
         {
             java.lang.Class<?> externalClass = Thread.currentThread().getContextClassLoader().loadClass("org.finos.legend.pure.runtime.java.compiled.generation.ExternalClassBuilder");
             Method method = externalClass.getMethod("buildExternalizableFunctionClass", RichIterable.class, String.class, RichIterable.class);
-            return (String)method.invoke(null, functionDefinitions, EXTERNAL_FUNCTIONS_CLASS_NAME, this.codeStorage.getAllRepoNames());
+            return (String) method.invoke(null, functionDefinitions, EXTERNAL_FUNCTIONS_CLASS_NAME, this.codeStorage.getAllRepoNames());
         }
-        catch (Exception e)
+        catch (ReflectiveOperationException e)
         {
             throw new RuntimeException(e);
         }
