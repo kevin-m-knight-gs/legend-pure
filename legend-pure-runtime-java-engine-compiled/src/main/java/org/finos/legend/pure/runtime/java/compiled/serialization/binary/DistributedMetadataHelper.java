@@ -24,6 +24,13 @@ class DistributedMetadataHelper
         return (string == null) ? null : validateMetadataName(string);
     }
 
+    /**
+     * Return whether string is a valid metadata name. This is true if it is a non-empty string consisting of ASCII
+     * letters, numbers, and underscore (_a-zA-Z0-9).
+     *
+     * @param string string
+     * @return whether string is a valid metadata name
+     */
     static boolean isValidMetadataName(String string)
     {
         return (string != null) &&
@@ -31,6 +38,12 @@ class DistributedMetadataHelper
                 StringIterate.allSatisfyCodePoint(string, DistributedMetadataHelper::isValidMetadataNameCodePoint);
     }
 
+    /**
+     * Only ASCII letters, numbers, and underscore are valid (_a-zA-Z0-9).
+     *
+     * @param codePoint code point
+     * @return whether it is a valid metadata name code point
+     */
     private static boolean isValidMetadataNameCodePoint(int codePoint)
     {
         return (codePoint == '_') || ((codePoint < 128) && Character.isLetterOrDigit(codePoint));
