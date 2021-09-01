@@ -19,8 +19,9 @@ import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
-import org.eclipse.collections.api.RichIterable;
-import org.eclipse.collections.impl.factory.Sets;
+import org.eclipse.collections.api.factory.Sets;
+import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.utility.ArrayIterate;
 import org.finos.legend.pure.configuration.PureRepositoriesExternal;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepository;
@@ -28,10 +29,7 @@ import org.finos.legend.pure.m3.serialization.filesystem.repository.GenericCodeR
 import org.finos.legend.pure.m4.exception.PureException;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.util.Arrays;
-import java.util.Set;
 
 @Mojo(name = "build-pure-jar")
 public class PureJarMojo extends AbstractMojo
@@ -52,7 +50,7 @@ public class PureJarMojo extends AbstractMojo
     private String[] excludedRepositories;
 
     @Parameter
-    private String[] extraRepositories;
+    private File[] extraRepositories;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException
@@ -61,8 +59,8 @@ public class PureJarMojo extends AbstractMojo
         getLog().info("  Requested repositories: " + Arrays.toString(this.repositories));
         getLog().info("  Excluded repositories: " + Arrays.toString(this.excludedRepositories));
         getLog().info("  Extra repositories: " + Arrays.toString(this.extraRepositories));
-        RichIterable<CodeRepository> resolvedRepositories = resolveRepositories(this.repositories, this.excludedRepositories, this.extraRepositories);
-        getLog().info("  Repositories with resolved dependencies: "+resolvedRepositories);
+        MutableList<CodeRepository> resolvedRepositories = resolveRepositories();
+        getLog().info("  Repositories with resolved dependencies: " + resolvedRepositories);
         getLog().info("  Pure platform version: " + this.purePlatformVersion);
         getLog().info("  Pure source directory: " + this.sourceDirectory);
         getLog().info("  Output directory: " + this.outputDirectory);
@@ -92,26 +90,19 @@ public class PureJarMojo extends AbstractMojo
         getLog().info(String.format("  -> Finished Pure PAR generation in %.3fs", (System.currentTimeMillis() - start) / 1000.0));
     }
 
-    private RichIterable<CodeRepository> resolveRepositories(String[] repositories, String[] excludedRepositories, String[] extraRepositories)
+    private MutableList<CodeRepository> resolveRepositories()
     {
-        if (extraRepositories != null)
+        if (this.extraRepositories != null)
         {
-            RichIterable<CodeRepository> resolvedRepositories = ArrayIterate.collect(extraRepositories, r -> {
-                try
-                {
-                    return GenericCodeRepository.build(new FileInputStream(r));
-                }
-                catch (FileNotFoundException e)
-                {
-                    throw new RuntimeException(e);
-                }
-            });
-            PureRepositoriesExternal.addRepositories(resolvedRepositories);
+            PureRepositoriesExternal.addRepositories(ArrayIterate.collect(this.extraRepositories, GenericCodeRepository::build));
         }
 
-        RichIterable<CodeRepository> selectedRepos = repositories == null?PureRepositoriesExternal.repositories():ArrayIterate.collect(repositories, PureRepositoriesExternal::getRepository);
-        Set<String> excludedRepositoriesSet = Sets.mutable.of(excludedRepositories == null?new String[0]:excludedRepositories);
-        return selectedRepos.select(r -> !excludedRepositoriesSet.contains(r.getName()));
+        MutableList<CodeRepository> selectedRepos = (this.repositories == null) ? PureRepositoriesExternal.repositories().toList() : ArrayIterate.collect(this.repositories, PureRepositoriesExternal::getRepository);
+        if (this.excludedRepositories != null)
+        {
+            MutableSet<String> excludedReposSet = Sets.mutable.with(this.excludedRepositories);
+            selectedRepos.removeIf(r -> excludedReposSet.contains(r.getName()));
+        }
+        return selectedRepos;
     }
-
 }
