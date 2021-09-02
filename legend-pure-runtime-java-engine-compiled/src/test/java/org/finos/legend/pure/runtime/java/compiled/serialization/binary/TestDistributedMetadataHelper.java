@@ -67,17 +67,32 @@ public class TestDistributedMetadataHelper
     }
 
     @Test
+    public void testGetMetadataDefinitionsDirectory()
+    {
+        Assert.assertEquals("metadata/definitions/", DistributedMetadataHelper.getMetadataDefinitionsDirectory());
+    }
+
+    @Test
+    public void testGetMetadataDefinitionFilePath()
+    {
+        Assert.assertEquals("metadata/definitions/abc.json", DistributedMetadataHelper.getMetadataDefinitionFilePath("abc"));
+        Assert.assertEquals("metadata/definitions/_.json", DistributedMetadataHelper.getMetadataDefinitionFilePath("_"));
+        Assert.assertEquals("metadata/definitions/core.json", DistributedMetadataHelper.getMetadataDefinitionFilePath("core"));
+        Assert.assertEquals("metadata/definitions/platform.json", DistributedMetadataHelper.getMetadataDefinitionFilePath("platform"));
+    }
+
+    @Test
     public void testGetMetadataPartitionBinFilePath()
     {
-        Assert.assertEquals("metadata/0.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath(null, 0));
-        Assert.assertEquals("metadata/1.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath(null, 1));
-        Assert.assertEquals("metadata/5706003.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath(null, 5706003));
-        Assert.assertEquals("metadata/123456789.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath(null, 123456789));
+        Assert.assertEquals("metadata/bin/0.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath(null, 0));
+        Assert.assertEquals("metadata/bin/1.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath(null, 1));
+        Assert.assertEquals("metadata/bin/5706003.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath(null, 5706003));
+        Assert.assertEquals("metadata/bin/123456789.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath(null, 123456789));
 
-        Assert.assertEquals("metadata/xyz/0.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath("xyz", 0));
-        Assert.assertEquals("metadata/abc/1.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath("abc", 1));
-        Assert.assertEquals("metadata/_/5706003.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath("_", 5706003));
-        Assert.assertEquals("metadata/platform/123456789.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath("platform", 123456789));
+        Assert.assertEquals("metadata/bin/xyz/0.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath("xyz", 0));
+        Assert.assertEquals("metadata/bin/abc/1.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath("abc", 1));
+        Assert.assertEquals("metadata/bin/_/5706003.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath("_", 5706003));
+        Assert.assertEquals("metadata/bin/platform/123456789.bin", DistributedMetadataHelper.getMetadataPartitionBinFilePath("platform", 123456789));
     }
 
     @Test
@@ -88,20 +103,20 @@ public class TestDistributedMetadataHelper
         Assert.assertEquals("metadata/classifiers/meta/pure/metamodel/type/Enumeration.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath(null, "meta::pure::metamodel::type::Enumeration"));
         Assert.assertEquals("metadata/classifiers/meta/pure/metamodel/type/generics/GenericType.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath(null, "meta::pure::metamodel::type::generics::GenericType"));
 
-        Assert.assertEquals("metadata/12345/classifiers/meta/pure/metamodel/type/Class.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath("12345", "meta::pure::metamodel::type::Class"));
-        Assert.assertEquals("metadata/core/classifiers/meta/pure/metamodel/relationship/Association.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath("core", "meta::pure::metamodel::relationship::Association"));
-        Assert.assertEquals("metadata/__/classifiers/meta/pure/metamodel/type/Enumeration.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath("__", "meta::pure::metamodel::type::Enumeration"));
-        Assert.assertEquals("metadata/platform/classifiers/meta/pure/metamodel/type/generics/GenericType.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath("platform", "meta::pure::metamodel::type::generics::GenericType"));
+        Assert.assertEquals("metadata/classifiers/12345/meta/pure/metamodel/type/Class.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath("12345", "meta::pure::metamodel::type::Class"));
+        Assert.assertEquals("metadata/classifiers/core/meta/pure/metamodel/relationship/Association.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath("core", "meta::pure::metamodel::relationship::Association"));
+        Assert.assertEquals("metadata/classifiers/__/meta/pure/metamodel/type/Enumeration.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath("__", "meta::pure::metamodel::type::Enumeration"));
+        Assert.assertEquals("metadata/classifiers/platform/meta/pure/metamodel/type/generics/GenericType.idx", DistributedMetadataHelper.getMetadataClassifierIndexFilePath("platform", "meta::pure::metamodel::type::generics::GenericType"));
     }
 
     @Test
     public void testGetStringIndexFilePath()
     {
         Assert.assertEquals("metadata/strings/classifiers.idx", DistributedMetadataHelper.getClassifierIdStringsIndexFilePath(null));
-        Assert.assertEquals("metadata/platform/strings/classifiers.idx", DistributedMetadataHelper.getClassifierIdStringsIndexFilePath("platform"));
+        Assert.assertEquals("metadata/strings/platform/classifiers.idx", DistributedMetadataHelper.getClassifierIdStringsIndexFilePath("platform"));
 
         Assert.assertEquals("metadata/strings/other.idx", DistributedMetadataHelper.getOtherStringsIndexFilePath(null));
-        Assert.assertEquals("metadata/platform/strings/other.idx", DistributedMetadataHelper.getOtherStringsIndexFilePath("platform"));
+        Assert.assertEquals("metadata/strings/platform/other.idx", DistributedMetadataHelper.getOtherStringsIndexFilePath("platform"));
 
         Assert.assertEquals("metadata/strings/other-0.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath(null, 0));
         Assert.assertEquals("metadata/strings/other-32768.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath(null, 32768));
@@ -109,10 +124,10 @@ public class TestDistributedMetadataHelper
         Assert.assertEquals("metadata/strings/other-131072.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath(null, 131072));
         Assert.assertEquals("metadata/strings/other-1638400.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath(null, 1638400));
 
-        Assert.assertEquals("metadata/core/strings/other-0.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("core", 0));
-        Assert.assertEquals("metadata/platform/strings/other-32768.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("platform", 32768));
-        Assert.assertEquals("metadata/_ABC_/strings/other-65536.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("_ABC_", 65536));
-        Assert.assertEquals("metadata/null/strings/other-131072.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("null", 131072));
-        Assert.assertEquals("metadata/_-_/strings/other-1638400.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("_-_", 1638400));
+        Assert.assertEquals("metadata/strings/core/other-0.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("core", 0));
+        Assert.assertEquals("metadata/strings/platform/other-32768.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("platform", 32768));
+        Assert.assertEquals("metadata/strings/_ABC_/other-65536.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("_ABC_", 65536));
+        Assert.assertEquals("metadata/strings/null/other-131072.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("null", 131072));
+        Assert.assertEquals("metadata/strings/_-_/other-1638400.idx", DistributedMetadataHelper.getOtherStringsIndexPartitionFilePath("_-_", 1638400));
     }
 }

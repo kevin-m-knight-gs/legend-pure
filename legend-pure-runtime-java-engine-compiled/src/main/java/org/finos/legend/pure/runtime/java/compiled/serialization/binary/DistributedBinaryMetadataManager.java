@@ -1,19 +1,21 @@
 package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.impl.utility.Iterate;
-import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataLazy;
 
+import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.Set;
 
 public class DistributedBinaryMetadataManager
@@ -60,34 +62,41 @@ public class DistributedBinaryMetadataManager
         return closure;
     }
 
-    public MultiDistributedBinaryGraphDeserializer getDeserializer(FileReader fileReader)
+    public static DistributedBinaryMetadataManager fromClassLoader(ClassLoader classLoader, String... metadataNames)
     {
-        return MultiDistributedBinaryGraphDeserializer.fromFileReader(getAllMetadataNames(), fileReader);
+        return fromClassLoader(classLoader, Arrays.asList(metadataNames));
     }
 
-    public MultiDistributedBinaryGraphDeserializer getDeserializer(FileReader fileReader, Iterable<String> metadataNames)
+    public static DistributedBinaryMetadataManager fromClassLoader(ClassLoader classLoader, Iterable<String> metadataNames)
     {
-        return MultiDistributedBinaryGraphDeserializer.fromFileReader(metadataNames, fileReader);
-    }
-
-    public MetadataLazy getMetadataLazy(ClassLoader classLoader)
-    {
-        return MetadataLazy.fromClassLoader(classLoader, getAllMetadataNames());
-    }
-
-    public MetadataLazy getMetadataLazy(ClassLoader classLoader, Iterable<String> metadataNames)
-    {
-        return MetadataLazy.fromClassLoader(classLoader, computeMetadataClosure(metadataNames));
-    }
-
-    public static DistributedBinaryMetadataManager fromAvailableMetadata()
-    {
-        return fromMetadata(ServiceLoader.load(DistributedBinaryMetadata.class));
-    }
-
-    public static DistributedBinaryMetadataManager fromAvailableMetadata(ClassLoader classLoader)
-    {
-        return fromMetadata(ServiceLoader.load(DistributedBinaryMetadata.class, classLoader));
+        Set<String> visited = Sets.mutable.empty();
+        List<DistributedBinaryMetadata> metadatas = Lists.mutable.empty();
+        Deque<String> toLoad = Iterate.addAllTo(metadataNames, new ArrayDeque<>());
+        JsonMapper jsonMapper = JsonMapper.builder().build();
+        while (!toLoad.isEmpty())
+        {
+            String name = toLoad.removeLast();
+            if (!visited.add(name))
+            {
+                URL url = classLoader.getResource(DistributedMetadataHelper.getMetadataDefinitionFilePath(name));
+                if (url == null)
+                {
+                    throw new IllegalArgumentException("Cannot find metadata \"" + name + "\"");
+                }
+                DistributedBinaryMetadata metadata;
+                try
+                {
+                    metadata = jsonMapper.readValue(url, DistributedBinaryMetadata.class);
+                }
+                catch (IOException e)
+                {
+                    throw new RuntimeException("Error reading definition of metadata \"" + name + "\"");
+                }
+                metadatas.add(metadata);
+                toLoad.addAll(metadata.getDependencies());
+            }
+        }
+        return fromMetadata(metadatas);
     }
 
     public static DistributedBinaryMetadataManager fromMetadata(DistributedBinaryMetadata... metadata)
@@ -112,7 +121,7 @@ public class DistributedBinaryMetadataManager
         Map<String, DistributedBinaryMetadata> index = Maps.mutable.empty();
         metadatas.forEach(metadata ->
         {
-            String name = DistributedMetadataHelper.validateMetadataName(metadata.getName());
+            String name = metadata.getName();
             DistributedBinaryMetadata old = index.put(name, metadata);
             if (old != null)
             {

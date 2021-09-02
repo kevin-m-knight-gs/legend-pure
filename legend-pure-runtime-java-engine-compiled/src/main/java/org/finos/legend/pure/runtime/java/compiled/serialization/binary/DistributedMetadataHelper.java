@@ -1,12 +1,16 @@
 package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 
-import org.eclipse.collections.impl.utility.StringIterate;
-
 class DistributedMetadataHelper
 {
     private static final String META_DATA_DIRNAME = "metadata/";
+    private static final String DEFINITIONS_DIRNAME = META_DATA_DIRNAME + "definitions/";
+    private static final String CLASSIFIERS_DIRNAME = META_DATA_DIRNAME + "classifiers/";
+    private static final String STRINGS_DIRNAME = META_DATA_DIRNAME + "strings/";
+    private static final String BINARIES_DIRNAME = META_DATA_DIRNAME + "bin/";
+
     private static final String BIN_FILE_EXTENSION = ".bin";
     private static final String INDEX_FILE_EXTENSION = ".idx";
+    private static final String METADATA_DEFINITION_FILE_EXTENSION = ".json";
 
     // Metadata name
 
@@ -35,7 +39,7 @@ class DistributedMetadataHelper
     {
         return (string != null) &&
                 !string.isEmpty() &&
-                StringIterate.allSatisfyCodePoint(string, DistributedMetadataHelper::isValidMetadataNameCodePoint);
+                string.codePoints().allMatch(DistributedMetadataHelper::isValidMetadataNameCodePoint);
     }
 
     /**
@@ -54,20 +58,32 @@ class DistributedMetadataHelper
         return (metadataName == null) ? null : ('$' + metadataName + '$');
     }
 
+    // Metadata definition path
+
+    static String getMetadataDefinitionsDirectory()
+    {
+        return DEFINITIONS_DIRNAME;
+    }
+
+    static String getMetadataDefinitionFilePath(String metadataName)
+    {
+        return DEFINITIONS_DIRNAME + metadataName + METADATA_DEFINITION_FILE_EXTENSION;
+    }
+
     // Metadata file paths
 
     static String getMetadataClassifierIndexFilePath(String metadataName, String classifierName)
     {
         return (metadataName == null) ?
-                (META_DATA_DIRNAME + "classifiers/" + classifierName.replace("::", "/") + INDEX_FILE_EXTENSION) :
-                (META_DATA_DIRNAME + metadataName + "/classifiers/" + classifierName.replace("::", "/") + INDEX_FILE_EXTENSION);
+                (CLASSIFIERS_DIRNAME + classifierName.replace("::", "/") + INDEX_FILE_EXTENSION) :
+                (CLASSIFIERS_DIRNAME + metadataName + "/" + classifierName.replace("::", "/") + INDEX_FILE_EXTENSION);
     }
 
     static String getMetadataPartitionBinFilePath(String metadataName, int partitionId)
     {
         return (metadataName == null) ?
-                (META_DATA_DIRNAME + partitionId + BIN_FILE_EXTENSION) :
-                (META_DATA_DIRNAME + metadataName + "/" + partitionId + BIN_FILE_EXTENSION);
+                (BINARIES_DIRNAME + partitionId + BIN_FILE_EXTENSION) :
+                (BINARIES_DIRNAME + metadataName + "/" + partitionId + BIN_FILE_EXTENSION);
     }
 
     // Strings
@@ -75,21 +91,21 @@ class DistributedMetadataHelper
     static String getClassifierIdStringsIndexFilePath(String metadataName)
     {
         return (metadataName == null) ?
-                (META_DATA_DIRNAME + "strings/classifiers" + INDEX_FILE_EXTENSION) :
-                (META_DATA_DIRNAME + metadataName + "/strings/classifiers" + INDEX_FILE_EXTENSION);
+                (STRINGS_DIRNAME + "classifiers" + INDEX_FILE_EXTENSION) :
+                (STRINGS_DIRNAME + metadataName + "/classifiers" + INDEX_FILE_EXTENSION);
     }
 
     static String getOtherStringsIndexFilePath(String metadataName)
     {
         return (metadataName == null) ?
-                (META_DATA_DIRNAME + "strings/other" + INDEX_FILE_EXTENSION) :
-                (META_DATA_DIRNAME + metadataName + "/strings/other" + INDEX_FILE_EXTENSION);
+                (STRINGS_DIRNAME + "other" + INDEX_FILE_EXTENSION) :
+                (STRINGS_DIRNAME + metadataName + "/other" + INDEX_FILE_EXTENSION);
     }
 
     static String getOtherStringsIndexPartitionFilePath(String metadataName, int partitionId)
     {
         return (metadataName == null) ?
-                (META_DATA_DIRNAME + "strings/other-" + partitionId + INDEX_FILE_EXTENSION) :
-                (META_DATA_DIRNAME + metadataName + "/strings/other-" + partitionId + INDEX_FILE_EXTENSION);
+                (STRINGS_DIRNAME + "other-" + partitionId + INDEX_FILE_EXTENSION) :
+                (STRINGS_DIRNAME + metadataName + "/other-" + partitionId + INDEX_FILE_EXTENSION);
     }
 }

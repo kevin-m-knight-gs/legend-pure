@@ -6,8 +6,6 @@ import org.eclipse.collections.api.list.MutableList;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 
 public class TestDistributedBinaryMetadataManager
@@ -129,15 +127,6 @@ public class TestDistributedBinaryMetadataManager
         assertInvalidManagerCreation("Metadata \"m2\" is missing dependency \"m4\"", newMetadata("m1", "m2", "m3"), newMetadata("m2", "m3", "m4"), newMetadata("m3"));
     }
 
-    @Test
-    public void testInvalidMetadataName()
-    {
-        assertInvalidManagerCreation("Invalid metadata name: null", newMetadata(null));
-        assertInvalidManagerCreation("Invalid metadata name: \"\"", newMetadata(""));
-        assertInvalidManagerCreation("Invalid metadata name: \"$$%\"", newMetadata("$$%"));
-        assertInvalidManagerCreation("Invalid metadata name: \"invalid name\"", newMetadata("valid_name"), newMetadata("invalid name"));
-    }
-
     private void assertInvalidManagerCreation(String expectedMessage, DistributedBinaryMetadata... metadata)
     {
         IllegalArgumentException e = Assert.assertThrows(IllegalArgumentException.class, () -> DistributedBinaryMetadataManager.fromMetadata(metadata));
@@ -161,29 +150,11 @@ public class TestDistributedBinaryMetadataManager
 
     private DistributedBinaryMetadata newMetadata(String name)
     {
-        return () -> name;
+        return DistributedBinaryMetadata.newMetadata(name);
     }
 
     private DistributedBinaryMetadata newMetadata(String name, String... dependencies)
     {
-        return newMetadata(name, Arrays.asList(dependencies));
-    }
-
-    private DistributedBinaryMetadata newMetadata(String name, Collection<String> dependencies)
-    {
-        return new DistributedBinaryMetadata()
-        {
-            @Override
-            public String getName()
-            {
-                return name;
-            }
-
-            @Override
-            public Collection<String> getDependencies()
-            {
-                return dependencies;
-            }
-        };
+        return DistributedBinaryMetadata.newMetadata(name, dependencies);
     }
 }
