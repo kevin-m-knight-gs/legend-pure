@@ -52,7 +52,7 @@ public class DistributedBinaryMetadataManager
                 DistributedBinaryMetadata metadata = this.index.get(nextName);
                 if (metadata == null)
                 {
-                    throw new IllegalStateException("Unknown metadata: \"" + nextName + "\"");
+                    throw new IllegalArgumentException("Unknown metadata: \"" + nextName + "\"");
                 }
                 searchDeque.addAll(metadata.getDependencies());
             }
@@ -82,17 +82,22 @@ public class DistributedBinaryMetadataManager
 
     public static DistributedBinaryMetadataManager fromAvailableMetadata()
     {
-        return fromMetadatas(ServiceLoader.load(DistributedBinaryMetadata.class));
+        return fromMetadata(ServiceLoader.load(DistributedBinaryMetadata.class));
     }
 
     public static DistributedBinaryMetadataManager fromAvailableMetadata(ClassLoader classLoader)
     {
-        return fromMetadatas(ServiceLoader.load(DistributedBinaryMetadata.class, classLoader));
+        return fromMetadata(ServiceLoader.load(DistributedBinaryMetadata.class, classLoader));
     }
 
-    private static DistributedBinaryMetadataManager fromMetadatas(Iterable<? extends DistributedBinaryMetadata> metadatas)
+    public static DistributedBinaryMetadataManager fromMetadata(DistributedBinaryMetadata... metadata)
     {
-        return new DistributedBinaryMetadataManager(indexAndValidateMetadata(metadatas));
+        return fromMetadata(Arrays.asList(metadata));
+    }
+
+    public static DistributedBinaryMetadataManager fromMetadata(Iterable<? extends DistributedBinaryMetadata> metadata)
+    {
+        return new DistributedBinaryMetadataManager(indexAndValidateMetadata(metadata));
     }
 
     private static Map<String, DistributedBinaryMetadata> indexAndValidateMetadata(Iterable<? extends DistributedBinaryMetadata> metadatas)
@@ -107,7 +112,7 @@ public class DistributedBinaryMetadataManager
         Map<String, DistributedBinaryMetadata> index = Maps.mutable.empty();
         metadatas.forEach(metadata ->
         {
-            String name = metadata.getName();
+            String name = DistributedMetadataHelper.validateMetadataName(metadata.getName());
             DistributedBinaryMetadata old = index.put(name, metadata);
             if (old != null)
             {
@@ -131,13 +136,13 @@ public class DistributedBinaryMetadataManager
             StringBuilder builder = new StringBuilder("Metadata \"").append(metadata.getName()).append("\" is missing ");
             if (missing.size() == 1)
             {
-                builder.append("dependency: \"").append(missing.get(0)).append('"');
+                builder.append("dependency \"").append(missing.get(0)).append('"');
             }
             else
             {
                 missing.sortThis().appendString(builder, "dependencies: \"", "\", \"", "\"");
             }
-            throw new RuntimeException(builder.toString());
+            throw new IllegalArgumentException(builder.toString());
         }
     }
 }
