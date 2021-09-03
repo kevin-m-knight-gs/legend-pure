@@ -1,5 +1,6 @@
 package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 
+import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
@@ -72,26 +73,13 @@ public class DistributedBinaryMetadataManager
         Set<String> visited = Sets.mutable.empty();
         List<DistributedBinaryMetadata> metadatas = Lists.mutable.empty();
         Deque<String> toLoad = Iterate.addAllTo(metadataNames, new ArrayDeque<>());
-        JsonMapper jsonMapper = JsonMapper.builder().build();
+        ObjectReader reader = getMetadataObjectReader();
         while (!toLoad.isEmpty())
         {
             String name = toLoad.removeLast();
             if (!visited.add(name))
             {
-                URL url = classLoader.getResource(DistributedMetadataHelper.getMetadataDefinitionFilePath(name));
-                if (url == null)
-                {
-                    throw new IllegalArgumentException("Cannot find metadata \"" + name + "\"");
-                }
-                DistributedBinaryMetadata metadata;
-                try
-                {
-                    metadata = jsonMapper.readValue(url, DistributedBinaryMetadata.class);
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException("Error reading definition of metadata \"" + name + "\"");
-                }
+                DistributedBinaryMetadata metadata = loadMetadataFromClassLoader(classLoader, name, reader);
                 metadatas.add(metadata);
                 toLoad.addAll(metadata.getDependencies());
             }
@@ -152,6 +140,34 @@ public class DistributedBinaryMetadataManager
                 missing.sortThis().appendString(builder, "dependencies: \"", "\", \"", "\"");
             }
             throw new IllegalArgumentException(builder.toString());
+        }
+    }
+
+    private static ObjectReader getMetadataObjectReader()
+    {
+        return JsonMapper.builder().build().readerFor(DistributedBinaryMetadata.class);
+    }
+
+    private static DistributedBinaryMetadata loadMetadataFromClassLoader(ClassLoader classLoader, String metadataName, ObjectReader reader)
+    {
+        String resourceName = DistributedMetadataHelper.getMetadataDefinitionFilePath(metadataName);
+        URL url = classLoader.getResource(resourceName);
+        if (url == null)
+        {
+            throw new IllegalArgumentException("Cannot find metadata \"" + metadataName + "\" (resource name \"" + resourceName + "\")");
+        }
+        return loadMetadataFromURL(url, metadataName, reader);
+    }
+
+    private static DistributedBinaryMetadata loadMetadataFromURL(URL url, String metadataName, ObjectReader reader)
+    {
+        try
+        {
+            return reader.readValue(url);
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException("Error reading definition of metadata \"" + metadataName + "\" from " + url, e);
         }
     }
 }
