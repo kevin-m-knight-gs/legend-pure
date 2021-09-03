@@ -70,6 +70,11 @@ class DistributedMetadataHelper
         return DEFINITIONS_DIRNAME + metadataName + METADATA_DEFINITION_FILE_EXTENSION;
     }
 
+    static String getMetadataDefinitionFileExtension()
+    {
+        return METADATA_DEFINITION_FILE_EXTENSION;
+    }
+
     // Metadata file paths
 
     static String getMetadataClassifierIndexFilePath(String metadataName, String classifierName)

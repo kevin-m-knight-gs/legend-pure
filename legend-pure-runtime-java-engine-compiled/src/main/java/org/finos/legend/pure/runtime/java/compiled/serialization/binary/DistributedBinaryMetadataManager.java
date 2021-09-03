@@ -6,18 +6,30 @@ import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.utility.Iterate;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystemAlreadyExistsException;
+import java.nio.file.FileSystemNotFoundException;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 
 public class DistributedBinaryMetadataManager
 {
@@ -63,6 +75,11 @@ public class DistributedBinaryMetadataManager
         return closure;
     }
 
+    public static DistributedBinaryMetadataManager fromClassLoader(ClassLoader classLoader)
+    {
+        return fromMetadata(getAllMetadataFromClassLoader(classLoader));
+    }
+
     public static DistributedBinaryMetadataManager fromClassLoader(ClassLoader classLoader, String... metadataNames)
     {
         return fromClassLoader(classLoader, Arrays.asList(metadataNames));
@@ -70,21 +87,7 @@ public class DistributedBinaryMetadataManager
 
     public static DistributedBinaryMetadataManager fromClassLoader(ClassLoader classLoader, Iterable<String> metadataNames)
     {
-        Set<String> visited = Sets.mutable.empty();
-        List<DistributedBinaryMetadata> metadatas = Lists.mutable.empty();
-        Deque<String> toLoad = Iterate.addAllTo(metadataNames, new ArrayDeque<>());
-        ObjectReader reader = getMetadataObjectReader();
-        while (!toLoad.isEmpty())
-        {
-            String name = toLoad.removeLast();
-            if (!visited.add(name))
-            {
-                DistributedBinaryMetadata metadata = loadMetadataFromClassLoader(classLoader, name, reader);
-                metadatas.add(metadata);
-                toLoad.addAll(metadata.getDependencies());
-            }
-        }
-        return fromMetadata(metadatas);
+        return fromMetadata(getMetadataFromClassLoader(classLoader, metadataNames));
     }
 
     public static DistributedBinaryMetadataManager fromMetadata(DistributedBinaryMetadata... metadata)
@@ -141,6 +144,116 @@ public class DistributedBinaryMetadataManager
             }
             throw new IllegalArgumentException(builder.toString());
         }
+    }
+
+    private static List<DistributedBinaryMetadata> getMetadataFromClassLoader(ClassLoader classLoader, Iterable<String> metadataNames)
+    {
+        Set<String> visited = Sets.mutable.empty();
+        List<DistributedBinaryMetadata> metadataList = Lists.mutable.empty();
+        Deque<String> toLoad = Iterate.addAllTo(metadataNames, new ArrayDeque<>());
+        ObjectReader reader = getMetadataObjectReader();
+        while (!toLoad.isEmpty())
+        {
+            String name = toLoad.removeLast();
+            if (!visited.add(name))
+            {
+                DistributedBinaryMetadata metadata = loadMetadataFromClassLoader(classLoader, name, reader);
+                metadataList.add(metadata);
+                toLoad.addAll(metadata.getDependencies());
+            }
+        }
+        return metadataList;
+    }
+
+    private static List<DistributedBinaryMetadata> getAllMetadataFromClassLoader(ClassLoader classLoader)
+    {
+        String directoryName = DistributedMetadataHelper.getMetadataDefinitionsDirectory();
+        Enumeration<URL> urls;
+        try
+        {
+            urls = classLoader.getResources(directoryName);
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException("Error loading " + directoryName, e);
+        }
+
+        MutableSet<String> metadataNames = Sets.mutable.empty();
+        while (urls.hasMoreElements())
+        {
+            forEachDirectoryEntry(urls.nextElement(), p -> getMetadataNameFromFileName(p).ifPresent(metadataNames::add));
+        }
+        ObjectReader reader = getMetadataObjectReader();
+        return metadataNames.collect(n -> loadMetadataFromClassLoader(classLoader, n, reader), Lists.mutable.ofInitialCapacity(metadataNames.size()));
+    }
+
+    private static void forEachDirectoryEntry(URL directoryUrl, Consumer<Path> consumer)
+    {
+        try
+        {
+            forEachDirectoryEntry(directoryUrl.toURI(), consumer);
+        }
+        catch (IOException | URISyntaxException e)
+        {
+            throw new RuntimeException("Error accessing " + directoryUrl, e);
+        }
+    }
+
+    private static void forEachDirectoryEntry(URI directoryUri, Consumer<Path> consumer) throws IOException
+    {
+        try
+        {
+            // Try to get the filesystem for the URI
+            FileSystem fileSystem = FileSystems.getFileSystem(directoryUri);
+            forEachDirectoryEntry(fileSystem, directoryUri, consumer);
+        }
+        catch (FileSystemNotFoundException ignore)
+        {
+            // If the filesystem does not already exist, try to create it (making sure to close it when done)
+            try (FileSystem fileSystem = FileSystems.newFileSystem(directoryUri, Collections.emptyMap()))
+            {
+                forEachDirectoryEntry(fileSystem, directoryUri, consumer);
+            }
+            catch (FileSystemAlreadyExistsException ignoreAlso)
+            {
+                // If the filesystem was created in the meantime, try to get it again
+                FileSystem fileSystem = FileSystems.getFileSystem(directoryUri);
+                forEachDirectoryEntry(fileSystem, directoryUri, consumer);
+            }
+        }
+    }
+
+    private static void forEachDirectoryEntry(FileSystem fileSystem, URI directoryUri, Consumer<Path> consumer) throws IOException
+    {
+        Path path = fileSystem.provider().getPath(directoryUri);
+        forEachDirectoryEntry(path, consumer);
+    }
+
+    private static void forEachDirectoryEntry(Path directory, Consumer<Path> consumer) throws IOException
+    {
+        if (Files.isDirectory(directory))
+        {
+            Files.list(directory).forEach(consumer);
+        }
+    }
+
+    private static Optional<String> getMetadataNameFromFileName(Path fileName)
+    {
+        return getMetadataNameFromFileName(fileName.getFileName().toString());
+    }
+
+    private static Optional<String> getMetadataNameFromFileName(String fileName)
+    {
+        String extension = DistributedMetadataHelper.getMetadataDefinitionFileExtension();
+        if (fileName.endsWith(extension))
+        {
+            String metadataName = fileName.substring(0, fileName.length() - extension.length());
+            if (DistributedMetadataHelper.isValidMetadataName(metadataName))
+            {
+                return Optional.of(metadataName);
+            }
+        }
+        return Optional.empty();
     }
 
     private static ObjectReader getMetadataObjectReader()
