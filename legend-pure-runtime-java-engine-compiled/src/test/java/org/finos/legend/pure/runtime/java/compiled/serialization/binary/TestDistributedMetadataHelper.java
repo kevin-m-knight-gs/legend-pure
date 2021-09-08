@@ -55,6 +55,23 @@ public class TestDistributedMetadataHelper
 
         String[] invalidNames = {null, "", "xyz+abc", ".", "\u0080", "\u1234", "\u00EA", "a_\u9975_b", "$#abc"};
         Assert.assertEquals("should be invalid", Collections.emptyList(), ArrayIterate.select(invalidNames, DistributedMetadataHelper::isValidMetadataName));
+
+        Assert.assertTrue(DistributedMetadataHelper.isValidMetadataName("xyz+abc", 0, 3));
+        Assert.assertTrue(DistributedMetadataHelper.isValidMetadataName("xyz+abc", 4, 7));
+        Assert.assertTrue(DistributedMetadataHelper.isValidMetadataName("=xyz+abc", 1, 4));
+        Assert.assertTrue(DistributedMetadataHelper.isValidMetadataName("=xyzabc=", 2, 6));
+        Assert.assertTrue(DistributedMetadataHelper.isValidMetadataName("=xyzabc=", 1, 7));
+
+        Assert.assertFalse(DistributedMetadataHelper.isValidMetadataName("xyz+abc", 0, 0));
+        Assert.assertFalse(DistributedMetadataHelper.isValidMetadataName("xyz+abc", 2, 4));
+        Assert.assertFalse(DistributedMetadataHelper.isValidMetadataName("=xyz+abc", 0, 4));
+        Assert.assertFalse(DistributedMetadataHelper.isValidMetadataName("=xyzabc=", 2, 8));
+        Assert.assertFalse(DistributedMetadataHelper.isValidMetadataName("=xyzabc=", 1, 80000));
+        Assert.assertFalse(DistributedMetadataHelper.isValidMetadataName("=xyzabc=", 19, 80000));
+
+        Assert.assertFalse(DistributedMetadataHelper.isValidMetadataName(null, 1, 80000));
+        Assert.assertFalse(DistributedMetadataHelper.isValidMetadataName("", 0, 80000));
+        Assert.assertFalse(DistributedMetadataHelper.isValidMetadataName("", 10, 80000));
     }
 
     @Test

@@ -14,43 +14,77 @@ class DistributedMetadataHelper
 
     // Metadata name
 
-    static String validateMetadataName(String string)
+    static <T extends CharSequence> T validateMetadataName(T charSequence)
     {
-        if (!isValidMetadataName(string))
+        if (!isValidMetadataName(charSequence))
         {
-            throw new IllegalArgumentException("Invalid metadata name: " + ((string == null) ? null : ('"' + string + '"')));
+            throw new IllegalArgumentException("Invalid metadata name: " + ((charSequence == null) ? null : ('"' + charSequence.toString() + '"')));
         }
-        return string;
+        return charSequence;
     }
 
-    static String validateMetadataNameIfPresent(String string)
+    static <T extends CharSequence> T validateMetadataNameIfPresent(T charSequence)
     {
-        return (string == null) ? null : validateMetadataName(string);
+        return (charSequence == null) ? null : validateMetadataName(charSequence);
     }
 
     /**
-     * Return whether string is a valid metadata name. This is true if it is a non-empty string consisting of ASCII
-     * letters, numbers, and underscore (_a-zA-Z0-9).
+     * Return whether charSequence is a valid metadata name. This is true if it consists of one or more ASCII letters,
+     * numbers, and underscore (_a-zA-Z0-9).
      *
-     * @param string string
-     * @return whether string is a valid metadata name
+     * @param charSequence character sequence
+     * @return whether charSequence is a valid metadata name
      */
-    static boolean isValidMetadataName(String string)
+    static boolean isValidMetadataName(CharSequence charSequence)
     {
-        return (string != null) &&
-                !string.isEmpty() &&
-                string.codePoints().allMatch(DistributedMetadataHelper::isValidMetadataNameCodePoint);
+        return (charSequence != null) && isValidMetadataName_internal(charSequence, 0, charSequence.length());
+    }
+
+    /**
+     * Return whether a region of charSequence is a valid metadata name. This is true if it consists of one or more
+     * ASCII letters, numbers, and underscore (_a-zA-Z0-9).
+     *
+     * @param charSequence character sequence
+     * @param start        start (inclusive)
+     * @param end          end (exclusive)
+     * @return whether the given region of charSequence is a valid metadata name
+     */
+    static boolean isValidMetadataName(CharSequence charSequence, int start, int end)
+    {
+        return (charSequence != null) &&
+                (start >= 0) &&
+                (end <= charSequence.length()) &&
+                isValidMetadataName_internal(charSequence, start, end);
+    }
+
+    private static boolean isValidMetadataName_internal(CharSequence charSequence, int start, int end)
+    {
+        if (end <= start)
+        {
+            return false;
+        }
+        for (int i = start; i < end; i++)
+        {
+            if (!isValidMetadataNameChar(charSequence.charAt(i)))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
      * Only ASCII letters, numbers, and underscore are valid (_a-zA-Z0-9).
      *
-     * @param codePoint code point
+     * @param c character
      * @return whether it is a valid metadata name code point
      */
-    private static boolean isValidMetadataNameCodePoint(int codePoint)
+    private static boolean isValidMetadataNameChar(char c)
     {
-        return (codePoint == '_') || ((codePoint < 128) && Character.isLetterOrDigit(codePoint));
+        return (c == '_') ||                  // underscore
+                (('0' <= c) && (c <= '9')) || // digit
+                (('A' <= c) && (c <= 'Z')) || // uppercase letter
+                (('a' <= c) && (c <= 'z'));   // lowercase letter
     }
 
     static String getMetadataIdPrefix(String metadataName)
@@ -70,9 +104,20 @@ class DistributedMetadataHelper
         return DEFINITIONS_DIRNAME + metadataName + METADATA_DEFINITION_FILE_EXTENSION;
     }
 
-    static String getMetadataDefinitionFileExtension()
+    static boolean isMetadataDefinitionFilePath(String path)
     {
-        return METADATA_DEFINITION_FILE_EXTENSION;
+        return (path != null) &&
+                (path.length() > (DEFINITIONS_DIRNAME.length() + METADATA_DEFINITION_FILE_EXTENSION.length())) &&
+                path.startsWith(DEFINITIONS_DIRNAME) &&
+                path.endsWith(METADATA_DEFINITION_FILE_EXTENSION) &&
+                isValidMetadataName(path, DEFINITIONS_DIRNAME.length(), path.length() - METADATA_DEFINITION_FILE_EXTENSION.length());
+    }
+
+    static boolean isMetadataDefinitionFileName(String fileName)
+    {
+        return (fileName != null) &&
+                fileName.endsWith(METADATA_DEFINITION_FILE_EXTENSION) &&
+                isValidMetadataName(fileName, 0, fileName.length() - METADATA_DEFINITION_FILE_EXTENSION.length());
     }
 
     // Metadata file paths
