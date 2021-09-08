@@ -96,6 +96,15 @@ public class TestDistributedBinaryMetadata
     }
 
     @Test
+    public void testLoadMetadata_CurrentClassLoader()
+    {
+        Assert.assertEquals(Collections.emptyList(), DistributedBinaryMetadata.loadAllMetadata(Thread.currentThread().getContextClassLoader()));
+
+        RuntimeException e = Assert.assertThrows(RuntimeException.class, () -> DistributedBinaryMetadata.loadMetadata(Thread.currentThread().getContextClassLoader(), "non_existent"));
+        Assert.assertEquals("Cannot find metadata \"non_existent\" (resource name \"metadata/definitions/non_existent.json\")", e.getMessage());
+    }
+
+    @Test
     public void testLoadMetadata_Directories() throws IOException
     {
         List<DistributedBinaryMetadata> dir1Metadata = Lists.fixedSize.with(DistributedBinaryMetadata.newMetadata("abc"), DistributedBinaryMetadata.newMetadata("def", "abc"));

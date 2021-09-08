@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -133,28 +134,20 @@ public class DistributedBinaryMetadata
     {
         List<Path> paths = Lists.mutable.empty();
         ObjectWriter writer = getMetadataObjectWriter();
+        String separator = directory.getFileSystem().getSeparator();
+        UnaryOperator<String> pathTransform = "/".equals(separator) ? UnaryOperator.identity() : s -> s.replace("/", separator);
         for (DistributedBinaryMetadata m : metadata)
         {
-            paths.add(writeMetadata(writer, directory, m));
+            String relativePathString = pathTransform.apply(DistributedMetadataHelper.getMetadataDefinitionFilePath(m.getName()));
+            Path filePath = directory.resolve(relativePathString);
+            Files.createDirectories(filePath.getParent());
+            try (BufferedWriter outputWriter = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8))
+            {
+                writer.writeValue(outputWriter, m);
+            }
+            paths.add(filePath);
         }
         return paths;
-    }
-
-    private static Path writeMetadata(ObjectWriter writer, Path directory, DistributedBinaryMetadata metadata) throws IOException
-    {
-        String relativePathString = DistributedMetadataHelper.getMetadataDefinitionFilePath(metadata.getName());
-        String separator = directory.getFileSystem().getSeparator();
-        if (!"/".equals(separator))
-        {
-            relativePathString = relativePathString.replace("/", separator);
-        }
-        Path path = directory.resolve(relativePathString);
-        Files.createDirectories(path.getParent());
-        try (BufferedWriter outputWriter = Files.newBufferedWriter(path, StandardCharsets.UTF_8))
-        {
-            writer.writeValue(outputWriter, metadata);
-        }
-        return path;
     }
 
     public static void writeMetadata(OutputStream stream, DistributedBinaryMetadata metadata) throws IOException
@@ -231,6 +224,11 @@ public class DistributedBinaryMetadata
         catch (IOException e)
         {
             throw new RuntimeException("Error loading " + directoryName, e);
+        }
+
+        if (!urls.hasMoreElements())
+        {
+            return Collections.emptyList();
         }
 
         ObjectReader reader = getMetadataObjectReader();
