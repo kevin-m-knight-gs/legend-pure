@@ -79,13 +79,8 @@ public class TestDistributedBinaryMetadata
         Set<DistributedBinaryMetadata> metadata = Sets.mutable.with(DistributedBinaryMetadata.newMetadata("abc"), DistributedBinaryMetadata.newMetadata("def", "abc"), DistributedBinaryMetadata.newMetadata("ghi", "abc", "def"));
 
         Path directory = TMP.newFolder().toPath();
-        List<Path> paths = DistributedBinaryMetadata.writeMetadataDefinitions(directory, metadata);
-        Assert.assertEquals(
-                Sets.mutable.with(
-                        directory.resolve(Paths.get("metadata", "definitions", "abc.json")),
-                        directory.resolve(Paths.get("metadata", "definitions", "def.json")),
-                        directory.resolve(Paths.get("metadata", "definitions", "ghi.json"))),
-                Sets.mutable.withAll(paths));
+        List<String> paths = DistributedBinaryMetadata.writeMetadataDefinitions(directory, metadata);
+        Assert.assertEquals(Sets.mutable.with("metadata/definitions/abc.json", "metadata/definitions/def.json", "metadata/definitions/ghi.json"), Sets.mutable.withAll(paths));
 
         for (DistributedBinaryMetadata m : metadata)
         {

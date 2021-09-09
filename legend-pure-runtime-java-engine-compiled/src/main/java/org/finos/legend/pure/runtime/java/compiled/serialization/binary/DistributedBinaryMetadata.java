@@ -2,6 +2,7 @@ package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.core.StreamWriteFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
@@ -13,14 +14,13 @@ import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.impl.utility.Iterate;
+import org.finos.legend.pure.m4.serialization.Writer;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.net.JarURLConnection;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -96,41 +96,49 @@ public class DistributedBinaryMetadata
         return getClass().getSimpleName() + "{name=\"" + this.name + "\", dependencies=" + this.dependencies + "}";
     }
 
-    public Path writeMetadataDefinition(Path baseDirectory) throws IOException
+    public String writeMetadataDefinition(Path baseDirectory)
     {
         return writeMetadataDefinition(baseDirectory, getMetadataObjectWriter());
     }
 
-    private Path writeMetadataDefinition(Path baseDirectory, ObjectWriter writer) throws IOException
+    private String writeMetadataDefinition(Path baseDirectory, ObjectWriter writer)
     {
-        String relativePathString = DistributedMetadataHelper.getMetadataDefinitionFilePath(getName());
-        String separator = baseDirectory.getFileSystem().getSeparator();
-        if (!"/".equals(separator))
-        {
-            relativePathString = relativePathString.replace("/", separator);
-        }
-        Path filePath = baseDirectory.resolve(relativePathString);
-        Files.createDirectories(filePath.getParent());
-        try (BufferedWriter outputWriter = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8))
-        {
-            writer.writeValue(outputWriter, this);
-        }
-        return filePath;
+        return writeMetadataDefinition(FileWriters.fromDirectory(baseDirectory), writer);
     }
 
-    public JarEntry writeMetadataDefinition(JarOutputStream jarOutputStream) throws IOException
+    public String writeMetadataDefinition(JarOutputStream jarOutputStream)
     {
         return writeMetadataDefinition(jarOutputStream, getMetadataObjectWriter());
     }
 
-    private JarEntry writeMetadataDefinition(JarOutputStream jarOutputStream, ObjectWriter writer) throws IOException
+    private String writeMetadataDefinition(JarOutputStream jarOutputStream, ObjectWriter writer)
     {
-        String entryName = DistributedMetadataHelper.getMetadataDefinitionFilePath(getName());
-        JarEntry entry = new JarEntry(entryName);
-        jarOutputStream.putNextEntry(entry);
-        writer.writeValue(jarOutputStream, this);
-        jarOutputStream.closeEntry();
-        return entry;
+        return writeMetadataDefinition(FileWriters.fromJarOutputStream(jarOutputStream), writer);
+    }
+
+    public String writeMetadataDefinition(FileWriter fileWriter)
+    {
+        return writeMetadataDefinition(fileWriter, getMetadataObjectWriter());
+    }
+
+    private String writeMetadataDefinition(FileWriter fileWriter, ObjectWriter objectWriter)
+    {
+        byte[] bytes;
+        try
+        {
+            bytes = objectWriter.writeValueAsBytes(this);
+        }
+        catch (JsonProcessingException e)
+        {
+            throw new RuntimeException("Error writing definition for " + this, e);
+        }
+
+        String filePath = DistributedMetadataHelper.getMetadataDefinitionFilePath(getName());
+        try (Writer binaryWriter = fileWriter.getWriter(filePath))
+        {
+            binaryWriter.writeBytes(bytes);
+        }
+        return filePath;
     }
 
     public static DistributedBinaryMetadata newMetadata(String name)
@@ -159,41 +167,55 @@ public class DistributedBinaryMetadata
         return new DistributedBinaryMetadata(DistributedMetadataHelper.validateMetadataName(name), dependencySet.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(dependencySet));
     }
 
-    public static Path writeMetadataDefinition(Path directory, DistributedBinaryMetadata metadata) throws IOException
+    public static String writeMetadataDefinition(Path directory, DistributedBinaryMetadata metadata)
     {
         return metadata.writeMetadataDefinition(directory);
     }
 
-    public static List<Path> writeMetadataDefinitions(Path directory, DistributedBinaryMetadata... metadata) throws IOException
+    public static List<String> writeMetadataDefinitions(Path directory, DistributedBinaryMetadata... metadata)
     {
         return writeMetadataDefinitions(directory, Arrays.asList(metadata));
     }
 
-    public static List<Path> writeMetadataDefinitions(Path directory, Iterable<? extends DistributedBinaryMetadata> metadata) throws IOException
+    public static List<String> writeMetadataDefinitions(Path directory, Iterable<? extends DistributedBinaryMetadata> metadata)
     {
-        List<Path> paths = Lists.mutable.empty();
-        ObjectWriter writer = getMetadataObjectWriter();
-        for (DistributedBinaryMetadata m : metadata)
-        {
-            paths.add(m.writeMetadataDefinition(directory, writer));
-        }
-        return paths;
+        return writeMetadataDefinitions(FileWriters.fromDirectory(directory), metadata);
     }
 
-    public static JarEntry writeMetadataDefinition(JarOutputStream jarOutputStream, DistributedBinaryMetadata metadata) throws IOException
+    public static String writeMetadataDefinition(JarOutputStream jarOutputStream, DistributedBinaryMetadata metadata)
     {
         return metadata.writeMetadataDefinition(jarOutputStream);
     }
 
-    public static List<JarEntry> writeMetadataDefinitions(JarOutputStream jarOutputStream, Iterable<? extends DistributedBinaryMetadata> metadata) throws IOException
+    public static List<String> writeMetadataDefinitions(JarOutputStream jarOutputStream, DistributedBinaryMetadata... metadata)
     {
-        List<JarEntry> entries = Lists.mutable.empty();
-        ObjectWriter writer = getMetadataObjectWriter();
+        return writeMetadataDefinitions(jarOutputStream, Arrays.asList(metadata));
+    }
+
+    public static List<String> writeMetadataDefinitions(JarOutputStream jarOutputStream, Iterable<? extends DistributedBinaryMetadata> metadata)
+    {
+        return writeMetadataDefinitions(FileWriters.fromJarOutputStream(jarOutputStream), metadata);
+    }
+
+    public static String writeMetadataDefinition(FileWriter fileWriter, DistributedBinaryMetadata metadata)
+    {
+        return metadata.writeMetadataDefinition(fileWriter);
+    }
+
+    public static List<String> writeMetadataDefinitions(FileWriter fileWriter, DistributedBinaryMetadata... metadata)
+    {
+        return writeMetadataDefinitions(fileWriter, Arrays.asList(metadata));
+    }
+
+    public static List<String> writeMetadataDefinitions(FileWriter fileWriter, Iterable<? extends DistributedBinaryMetadata> metadata)
+    {
+        List<String> paths = Lists.mutable.empty();
+        ObjectWriter objectWriter = getMetadataObjectWriter();
         for (DistributedBinaryMetadata m : metadata)
         {
-            entries.add(m.writeMetadataDefinition(jarOutputStream, writer));
+            paths.add(m.writeMetadataDefinition(fileWriter, objectWriter));
         }
-        return entries;
+        return paths;
     }
 
     public static DistributedBinaryMetadata readMetadata(Path file) throws IOException

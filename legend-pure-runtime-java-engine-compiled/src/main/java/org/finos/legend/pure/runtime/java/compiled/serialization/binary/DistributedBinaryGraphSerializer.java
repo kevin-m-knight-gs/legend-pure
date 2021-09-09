@@ -43,25 +43,26 @@ import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.jar.JarOutputStream;
 
 public class DistributedBinaryGraphSerializer
 {
     private static final int MAX_BIN_FILE_BYTES = 512 * 1024;
 
-    private final String metadataName;
+    private final DistributedBinaryMetadata metadataDefinition;
     private final PureRuntime runtime;
     private final ProcessorSupport processorSupport;
     private final IdBuilder idBuilder;
     private final GraphSerializer.ClassifierCaches classifierCaches;
     private final MultiDistributedBinaryGraphDeserializer alreadySerialized;
 
-    private DistributedBinaryGraphSerializer(String metadataName, PureRuntime runtime, MultiDistributedBinaryGraphDeserializer alreadySerialized)
+    private DistributedBinaryGraphSerializer(DistributedBinaryMetadata metadataDefinition, PureRuntime runtime, MultiDistributedBinaryGraphDeserializer alreadySerialized)
     {
-        this.metadataName = DistributedMetadataHelper.validateMetadataNameIfPresent(metadataName);
+        this.metadataDefinition = metadataDefinition;
         this.runtime = runtime;
         this.processorSupport = this.runtime.getProcessorSupport();
-        this.idBuilder = IdBuilder.newIdBuilder(DistributedMetadataHelper.getMetadataIdPrefix(this.metadataName), this.processorSupport);
+        this.idBuilder = IdBuilder.newIdBuilder(DistributedMetadataHelper.getMetadataIdPrefix(getMetadataName()), this.processorSupport);
         this.classifierCaches = new GraphSerializer.ClassifierCaches(this.processorSupport);
         this.alreadySerialized = alreadySerialized;
     }
@@ -90,7 +91,7 @@ public class DistributedBinaryGraphSerializer
         BinaryObjSerializer serializer = new BinaryObjSerializerWithStringCacheAndImplicitIdentifiers(stringCache);
 
         // Write string cache
-        stringCache.write(this.metadataName, fileWriter);
+        stringCache.write(getMetadataName(), fileWriter);
 
         // Write instances
         int partition = 0;
@@ -123,7 +124,7 @@ public class DistributedBinaryGraphSerializer
                             if (partitionTotalBytes + objByteCount > MAX_BIN_FILE_BYTES)
                             {
                                 // Write current partition
-                                try (Writer partitionWriter = fileWriter.getWriter(DistributedMetadataHelper.getMetadataPartitionBinFilePath(this.metadataName, partition)))
+                                try (Writer partitionWriter = fileWriter.getWriter(DistributedMetadataHelper.getMetadataPartitionBinFilePath(getMetadataName(), partition)))
                                 {
                                     partitionWriter.writeBytes(binByteStream.toByteArray());
                                     binByteStream.reset();
@@ -156,7 +157,7 @@ public class DistributedBinaryGraphSerializer
                     }
 
                     // Write classifier index
-                    try (Writer indexFileWriter = fileWriter.getWriter(DistributedMetadataHelper.getMetadataClassifierIndexFilePath(this.metadataName, classifierId)))
+                    try (Writer indexFileWriter = fileWriter.getWriter(DistributedMetadataHelper.getMetadataClassifierIndexFilePath(getMetadataName(), classifierId)))
                     {
                         indexFileWriter.writeBytes(indexByteStream.toByteArray());
                         indexByteStream.reset();
@@ -168,11 +169,22 @@ public class DistributedBinaryGraphSerializer
         // Write final partition
         if (binByteStream.size() > 0)
         {
-            try (Writer writer = fileWriter.getWriter(DistributedMetadataHelper.getMetadataPartitionBinFilePath(this.metadataName, partition)))
+            try (Writer writer = fileWriter.getWriter(DistributedMetadataHelper.getMetadataPartitionBinFilePath(getMetadataName(), partition)))
             {
                 writer.writeBytes(binByteStream.toByteArray());
             }
         }
+
+        // Possibly write metadata definition
+        if (this.metadataDefinition != null)
+        {
+            this.metadataDefinition.writeMetadataDefinition(fileWriter);
+        }
+    }
+
+    private String getMetadataName()
+    {
+        return (this.metadataDefinition == null) ? null : this.metadataDefinition.getName();
     }
 
     private String buildId(CoreInstance instance)
@@ -207,17 +219,36 @@ public class DistributedBinaryGraphSerializer
 
     public static DistributedBinaryGraphSerializer newSerializer(PureRuntime runtime)
     {
-        return newSerializer(null, runtime);
+        return new DistributedBinaryGraphSerializer(null, runtime, null);
+    }
+
+    public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, PureRuntime runtime)
+    {
+        Objects.requireNonNull(metadataDefinition, "metadataDefinition may not be null");
+        Set<String> dependencies = metadataDefinition.getDependencies();
+        if (!dependencies.isEmpty())
+        {
+            throw new IllegalArgumentException(Lists.mutable.withAll(dependencies).sortThis().makeString("Missing metadata dependencies: ", ", ", ""));
+        }
+        return new DistributedBinaryGraphSerializer(metadataDefinition, runtime, null);
+    }
+
+    public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, PureRuntime runtime, ClassLoader classLoader)
+    {
+        return newSerializer(metadataDefinition, runtime, FileReaders.fromClassLoader(classLoader));
+    }
+
+    public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, PureRuntime runtime, FileReader fileReader)
+    {
+        Objects.requireNonNull(metadataDefinition, "metadataDefinition may not be null");
+        Set<String> dependencies = metadataDefinition.getDependencies();
+        MultiDistributedBinaryGraphDeserializer alreadySerialized = dependencies.isEmpty() ? null : MultiDistributedBinaryGraphDeserializer.fromFileReader(fileReader, dependencies);
+        return new DistributedBinaryGraphSerializer(metadataDefinition, runtime, alreadySerialized);
     }
 
     public static DistributedBinaryGraphSerializer newSerializer(String metadataName, PureRuntime runtime)
     {
-        return new DistributedBinaryGraphSerializer(metadataName, runtime, null);
-    }
-
-    public static DistributedBinaryGraphSerializer newSerializer(String metadataName, PureRuntime runtime, MultiDistributedBinaryGraphDeserializer alreadySerialized)
-    {
-        return new DistributedBinaryGraphSerializer(metadataName, runtime, alreadySerialized);
+        return (metadataName == null) ? newSerializer(runtime) : newSerializer(DistributedBinaryMetadata.newMetadata(metadataName), runtime);
     }
 
     public static void serialize(PureRuntime runtime, Path directory)
