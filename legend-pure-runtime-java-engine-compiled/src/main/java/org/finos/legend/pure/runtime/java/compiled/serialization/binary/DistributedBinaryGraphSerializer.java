@@ -189,7 +189,7 @@ public class DistributedBinaryGraphSerializer
     {
         if (this.alreadySerialized != null)
         {
-            MapIterable<String, Obj> existingObjs = this.alreadySerialized.getInstancesIfPresent(classifierId, instances.asLazy().collect(this::buildId)).groupByUniqueKey(Obj::getIdentifier);
+            MapIterable<String, Obj> existingObjs = this.alreadySerialized.getInstancesIfPresent(classifierId, instances.collect(this::buildId, Sets.mutable.ofInitialCapacity(instances.size()))).groupByUniqueKey(Obj::getIdentifier);
             if (existingObjs.notEmpty())
             {
                 return instances.asLazy()
