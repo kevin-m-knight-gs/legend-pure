@@ -14,6 +14,7 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpda
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpdateConsumer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjUpdate;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -74,18 +75,29 @@ public abstract class MultiDistributedBinaryGraphDeserializer
         return newDeserializer(Lists.immutable.withAll(deserializers));
     }
 
-    public static MultiDistributedBinaryGraphDeserializer fromClassLoader(Iterable<String> metadataNames, ClassLoader classLoader)
+    public static MultiDistributedBinaryGraphDeserializer fromClassLoader(ClassLoader classLoader, Iterable<String> metadataNames)
     {
-        Objects.requireNonNull(metadataNames, "metadata names may not be null");
         Objects.requireNonNull(classLoader, "class loader may not be null");
-        return fromFileReader(metadataNames, FileReaders.fromClassLoader(classLoader));
+        Objects.requireNonNull(metadataNames, "metadata names may not be null");
+        return fromFileReader(FileReaders.fromClassLoader(classLoader), metadataNames);
     }
 
-    public static MultiDistributedBinaryGraphDeserializer fromFileReader(Iterable<String> metadataNames, FileReader fileReader)
+    public static MultiDistributedBinaryGraphDeserializer fromClassLoader(ClassLoader classLoader, String... metadataNames)
+    {
+        return fromClassLoader(classLoader, Arrays.asList(metadataNames));
+    }
+
+
+    public static MultiDistributedBinaryGraphDeserializer fromFileReader(FileReader fileReader, Iterable<String> metadataNames)
     {
         Objects.requireNonNull(metadataNames, "metadata names may not be null");
         Objects.requireNonNull(fileReader, "file reader may not be null");
         return fromDeserializers(Iterate.collect(metadataNames, mn -> DistributedBinaryGraphDeserializer.fromFileReader(mn, fileReader), Lists.mutable.empty()));
+    }
+
+    public static MultiDistributedBinaryGraphDeserializer fromFileReader(FileReader fileReader, String... metadataNames)
+    {
+        return fromFileReader(fileReader, Arrays.asList(metadataNames));
     }
 
     private static MultiDistributedBinaryGraphDeserializer newDeserializer(ImmutableList<DistributedBinaryGraphDeserializer> deserializers)

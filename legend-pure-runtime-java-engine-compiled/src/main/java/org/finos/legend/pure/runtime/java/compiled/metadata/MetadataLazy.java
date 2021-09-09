@@ -32,6 +32,7 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.JavaPackageAndImportBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.EnumProcessor;
 import org.finos.legend.pure.runtime.java.compiled.serialization.binary.DistributedBinaryGraphDeserializer;
+import org.finos.legend.pure.runtime.java.compiled.serialization.binary.DistributedBinaryMetadataManager;
 import org.finos.legend.pure.runtime.java.compiled.serialization.binary.MultiDistributedBinaryGraphDeserializer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Enum;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
@@ -48,6 +49,8 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueVis
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
@@ -421,24 +424,24 @@ public class MetadataLazy implements Metadata
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
         Objects.requireNonNull(metadataName, "metadata name may not be null");
-        MultiDistributedBinaryGraphDeserializer deserializer = MultiDistributedBinaryGraphDeserializer.fromClassLoader(Lists.immutable.with(metadataName), classLoader);
-        return new MetadataLazy(classLoader, deserializer);
+        return fromClassLoader(classLoader, Collections.singletonList(metadataName));
+    }
+
+    public static MetadataLazy fromClassLoader(ClassLoader classLoader, String... metadataNames)
+    {
+        return fromClassLoader(classLoader, Arrays.asList(metadataNames));
     }
 
     public static MetadataLazy fromClassLoader(ClassLoader classLoader, Iterable<String> metadataNames)
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
         Objects.requireNonNull(metadataNames, "metadata names may not be null");
-        Set<String> metadataNamesSet = (metadataNames instanceof Set) ? (Set<String>) metadataNames : Sets.mutable.withAll(metadataNames);
-        if (metadataNamesSet.isEmpty())
+        Set<String> allMetadataNames = DistributedBinaryMetadataManager.fromClassLoader(classLoader, metadataNames).getAllMetadataNames();
+        if (allMetadataNames.isEmpty())
         {
             throw new IllegalArgumentException("metadata names are required");
         }
-        if (metadataNamesSet.contains(null))
-        {
-            throw new NullPointerException("metadata name may not be null");
-        }
-        MultiDistributedBinaryGraphDeserializer deserializer = MultiDistributedBinaryGraphDeserializer.fromClassLoader(metadataNamesSet, classLoader);
+        MultiDistributedBinaryGraphDeserializer deserializer = MultiDistributedBinaryGraphDeserializer.fromClassLoader(classLoader, allMetadataNames);
         return new MetadataLazy(classLoader, deserializer);
     }
 }

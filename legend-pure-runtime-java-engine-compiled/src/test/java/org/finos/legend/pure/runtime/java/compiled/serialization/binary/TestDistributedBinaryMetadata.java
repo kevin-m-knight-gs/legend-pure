@@ -79,7 +79,7 @@ public class TestDistributedBinaryMetadata
         Set<DistributedBinaryMetadata> metadata = Sets.mutable.with(DistributedBinaryMetadata.newMetadata("abc"), DistributedBinaryMetadata.newMetadata("def", "abc"), DistributedBinaryMetadata.newMetadata("ghi", "abc", "def"));
 
         Path directory = TMP.newFolder().toPath();
-        List<Path> paths = DistributedBinaryMetadata.writeMetadata(directory, metadata);
+        List<Path> paths = DistributedBinaryMetadata.writeMetadataDefinitions(directory, metadata);
         Assert.assertEquals(
                 Sets.mutable.with(
                         directory.resolve(Paths.get("metadata", "definitions", "abc.json")),
@@ -111,10 +111,10 @@ public class TestDistributedBinaryMetadata
         List<DistributedBinaryMetadata> dir2Metadata = Lists.fixedSize.with(DistributedBinaryMetadata.newMetadata("ghi", "def"), DistributedBinaryMetadata.newMetadata("jkl", "xyz"));
 
         Path dir1 = TMP.newFolder().toPath();
-        DistributedBinaryMetadata.writeMetadata(dir1, dir1Metadata);
+        DistributedBinaryMetadata.writeMetadataDefinitions(dir1, dir1Metadata);
 
         Path dir2 = TMP.newFolder().toPath();
-        DistributedBinaryMetadata.writeMetadata(dir2, dir2Metadata);
+        DistributedBinaryMetadata.writeMetadataDefinitions(dir2, dir2Metadata);
 
         try (URLClassLoader classLoader = new URLClassLoader(new URL[]{dir1.toUri().toURL(), dir2.toUri().toURL()}))
         {
@@ -148,13 +148,7 @@ public class TestDistributedBinaryMetadata
             jarStream.closeEntry();
             jarStream.putNextEntry(new ZipEntry("metadata/definitions/"));
             jarStream.closeEntry();
-            for (DistributedBinaryMetadata m : jar1Metadata)
-            {
-                String entryName = DistributedMetadataHelper.getMetadataDefinitionFilePath(m.getName());
-                jarStream.putNextEntry(new ZipEntry(entryName));
-                DistributedBinaryMetadata.writeMetadata(jarStream, m);
-                jarStream.closeEntry();
-            }
+            DistributedBinaryMetadata.writeMetadataDefinitions(jarStream, jar1Metadata);
         }
 
         try (JarOutputStream jarStream = new JarOutputStream(new BufferedOutputStream(Files.newOutputStream(jar2))))
@@ -163,13 +157,7 @@ public class TestDistributedBinaryMetadata
             jarStream.closeEntry();
             jarStream.putNextEntry(new ZipEntry("metadata/definitions/"));
             jarStream.closeEntry();
-            for (DistributedBinaryMetadata m : jar2Metadata)
-            {
-                String entryName = DistributedMetadataHelper.getMetadataDefinitionFilePath(m.getName());
-                jarStream.putNextEntry(new ZipEntry(entryName));
-                DistributedBinaryMetadata.writeMetadata(jarStream, m);
-                jarStream.closeEntry();
-            }
+            DistributedBinaryMetadata.writeMetadataDefinitions(jarStream, jar2Metadata);
         }
 
         try (URLClassLoader classLoader = new URLClassLoader(new URL[]{jar1.toUri().toURL(), jar2.toUri().toURL()}))
