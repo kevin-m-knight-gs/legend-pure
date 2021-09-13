@@ -6,13 +6,16 @@ import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.map.primitive.MutableObjectIntMap;
 import org.eclipse.collections.api.set.ImmutableSet;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.set.SetIterable;
+import org.eclipse.collections.impl.factory.primitive.ObjectIntMaps;
 import org.finos.legend.pure.code.core.CoreCodeRepositoryProvider;
 import org.finos.legend.pure.m3.coreinstance.Package;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.PackageableElement;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.Function;
 import org.finos.legend.pure.m3.navigation.M3Paths;
-import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.serialization.filesystem.PureCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.PlatformCodeRepository;
@@ -58,11 +61,11 @@ public class TestCoreDistributedSerialization
     private static Path coreMetadataDir;
     private static URLClassLoader classLoaderWithMetadata;
 
-    private static SetIterable<String> platformClassifierIds;
-    private static SetIterable<String> coreClassifierIds;
+    private static SetIterable<String> platformClassifierIdsForSerialization;
+    private static SetIterable<String> coreClassifierIdsForSerialization;
 
-    private static SetIterable<String> platformPackageableElementPaths;
-    private static SetIterable<String> corePackageableElementPaths;
+    private static MetadataStats expectedPlatformStats;
+    private static MetadataStats expectedCoreStats;
 
     @BeforeClass
     public static void setUp() throws Exception
@@ -88,18 +91,8 @@ public class TestCoreDistributedSerialization
     {
         PureCodeStorage codeStorage = new PureCodeStorage(null, new ClassLoaderCodeStorage(classLoader, PlatformCodeRepository.newPlatformCodeRepository()));
         PureRuntime runtime = new PureRuntimeBuilder(codeStorage).setTransactionalByDefault(false).buildAndInitialize();
-
-        ImmutableSet<String> excludedClassifierIds = Sets.immutable.with(M3Paths.EnumStub, M3Paths.GrammarInfoStub, M3Paths.ImportStub, M3Paths.PropertyStub)
-                .newWithAll(PrimitiveUtilities.getPrimitiveTypeNames());
-        platformClassifierIds = GraphNodeIterable.fromModelRepository(runtime.getModelRepository())
-                .collect(CoreInstance::getClassifier)
-                .collect(PackageableElement::getUserPathForPackageableElement)
-                .reject(excludedClassifierIds::contains, Sets.mutable.empty())
-                .asUnmodifiable();
-        platformPackageableElementPaths = PackageTreeIterable.newRootPackageTreeIterable(runtime.getModelRepository())
-                .flatCollect(Package::_children)
-                .collect(PackageableElement::getUserPathForPackageableElement, Sets.mutable.empty())
-                .asUnmodifiable();
+        platformClassifierIdsForSerialization = computeClassifierIdsForSerialization(runtime);
+        expectedPlatformStats = computeMetadataStats(runtime);
 
         DistributedBinaryGraphSerializer.newSerializer(DistributedBinaryMetadata.newMetadata(platformMetadataName), runtime).serializeToDirectory(platformMetadataDir);
         DistributedBinaryMetadata.newMetadata(platformMetadataName).writeMetadataDefinition(platformMetadataDir);
@@ -109,18 +102,8 @@ public class TestCoreDistributedSerialization
     {
         PureCodeStorage codeStorage = new PureCodeStorage(null, new ClassLoaderCodeStorage(classLoader, PlatformCodeRepository.newPlatformCodeRepository(), new CoreCodeRepositoryProvider().repository()));
         PureRuntime runtime = new PureRuntimeBuilder(codeStorage).setTransactionalByDefault(false).buildAndInitialize();
-
-        ImmutableSet<String> excludedClassifierIds = Sets.immutable.with(M3Paths.EnumStub, M3Paths.GrammarInfoStub, M3Paths.ImportStub, M3Paths.PropertyStub)
-                .newWithAll(PrimitiveUtilities.getPrimitiveTypeNames());
-        coreClassifierIds = GraphNodeIterable.fromModelRepository(runtime.getModelRepository())
-                .collect(CoreInstance::getClassifier)
-                .collect(PackageableElement::getUserPathForPackageableElement)
-                .reject(excludedClassifierIds::contains, Sets.mutable.empty())
-                .asUnmodifiable();
-        corePackageableElementPaths = PackageTreeIterable.newRootPackageTreeIterable(runtime.getModelRepository())
-                .flatCollect(Package::_children)
-                .collect(PackageableElement::getUserPathForPackageableElement, Sets.mutable.empty())
-                .asUnmodifiable();
+        coreClassifierIdsForSerialization = computeClassifierIdsForSerialization(runtime);
+        expectedCoreStats = computeMetadataStats(runtime);
 
         DistributedBinaryGraphSerializer.newSerializer(DistributedBinaryMetadata.newMetadata(coreMetadataName, platformMetadataName), runtime, FileReaders.fromDirectory(platformMetadataDir)).serializeToDirectory(coreMetadataDir);
         DistributedBinaryMetadata.newMetadata(coreMetadataName, platformMetadataName).writeMetadataDefinition(coreMetadataDir);
@@ -152,54 +135,12 @@ public class TestCoreDistributedSerialization
     }
 
     @Test
-    public void testMetadataLazy()
-    {
-        MetadataLazy platformMetadata = MetadataLazy.fromClassLoader(classLoaderWithMetadata, platformMetadataName);
-        MetadataLazy coreMetadata = MetadataLazy.fromClassLoader(classLoaderWithMetadata, coreMetadataName);
-
-        Assert.assertEquals(Collections.emptySet(), platformClassifierIds.select(c -> platformMetadata.getMetadata(c).isEmpty()));
-        Assert.assertEquals(Collections.emptySet(), platformClassifierIds.select(c -> coreMetadata.getMetadata(c).isEmpty()));
-        Assert.assertEquals(Collections.emptySet(), coreClassifierIds.select(c -> coreMetadata.getMetadata(c).isEmpty()));
-
-        MutableSet<String> actualPlatformPackageableElementPaths = PackageTreeIterable.newPackageTreeIterable((Package) platformMetadata.getMetadata(M3Paths.Package, M3Paths.Root))
-                .flatCollect(Package::_children)
-                .collect(PackageableElement::getUserPathForPackageableElement, Sets.mutable.empty());
-        assertStringSetsEqual(platformPackageableElementPaths, actualPlatformPackageableElementPaths);
-        MutableSet<String> actualCorePackageableElementPaths = PackageTreeIterable.newPackageTreeIterable((Package) coreMetadata.getMetadata(M3Paths.Package, M3Paths.Root))
-                .flatCollect(Package::_children)
-                .collect(PackageableElement::getUserPathForPackageableElement, Sets.mutable.empty());
-        assertStringSetsEqual(corePackageableElementPaths, actualCorePackageableElementPaths);
-    }
-
-    private void assertStringSetsEqual(SetIterable<String> expected, SetIterable<String> actual)
-    {
-        MutableList<String> missing = expected.reject(actual::contains, Lists.mutable.empty());
-        if (missing.isEmpty() && (expected.size() == actual.size()))
-        {
-            // sets are equal
-            return;
-        }
-
-        MutableList<String> extra = actual.reject(expected::contains, Lists.mutable.empty());
-        StringBuilder builder = new StringBuilder();
-        if (missing.notEmpty())
-        {
-            missing.sortThis().appendString(builder, "Missing:\n\t", "\n\t", "\n");
-        }
-        if (extra.notEmpty())
-        {
-            extra.sortThis().appendString(builder, "Extra:\n\t", "\n\t", "\n");
-        }
-        Assert.fail(builder.toString());
-    }
-
-    @Test
     public void testPlatformDeserializer()
     {
         DistributedBinaryGraphDeserializer platformDeserializer = DistributedBinaryGraphDeserializer.fromClassLoader(platformMetadataName, classLoaderWithMetadata);
         MutableSet<String> classifiers = platformDeserializer.getClassifiers().toSet();
-        Assert.assertEquals(Collections.emptySet(), platformClassifierIds.reject(classifiers::contains));
-        Assert.assertEquals(Collections.emptySet(), classifiers.reject(platformClassifierIds::contains));
+        Assert.assertEquals(Collections.emptySet(), platformClassifierIdsForSerialization.reject(classifiers::contains));
+        Assert.assertEquals(Collections.emptySet(), classifiers.reject(platformClassifierIdsForSerialization::contains));
 
         MutableMap<String, ListIterable<String>> updatesByClassifier = Maps.mutable.empty();
         classifiers.forEach(classifier ->
@@ -220,14 +161,14 @@ public class TestCoreDistributedSerialization
         DistributedBinaryGraphDeserializer platformDeserializer = DistributedBinaryGraphDeserializer.fromClassLoader(platformMetadataName, classLoaderWithMetadata);
         DistributedBinaryGraphDeserializer coreDeserializer = DistributedBinaryGraphDeserializer.fromClassLoader(coreMetadataName, classLoaderWithMetadata);
         MutableSet<String> classifiers = coreDeserializer.getClassifiers().toSet();
-        Assert.assertEquals(Collections.emptySet(), coreClassifierIds.reject(classifiers::contains));
-        Assert.assertEquals(Collections.emptySet(), classifiers.reject(coreClassifierIds::contains));
-        Assert.assertEquals(Collections.emptySet(), platformClassifierIds.reject(classifiers::contains));
-        Assert.assertNotEquals(Collections.emptySet(), classifiers.reject(platformClassifierIds::contains));
+        Assert.assertEquals(Collections.emptySet(), coreClassifierIdsForSerialization.reject(classifiers::contains));
+        Assert.assertEquals(Collections.emptySet(), classifiers.reject(coreClassifierIdsForSerialization::contains));
+        Assert.assertEquals(Collections.emptySet(), platformClassifierIdsForSerialization.reject(classifiers::contains));
+        Assert.assertNotEquals(Collections.emptySet(), classifiers.reject(platformClassifierIdsForSerialization::contains));
 
         MutableList<Obj> shouldBeObjUpdate = Lists.mutable.empty();
         MutableList<ObjUpdate> shouldBeObj = Lists.mutable.empty();
-        coreClassifierIds.forEach(classifierId ->
+        coreClassifierIdsForSerialization.forEach(classifierId ->
         {
             Set<String> platformInstanceIds = platformDeserializer.hasClassifier(classifierId) ? Sets.mutable.withAll(platformDeserializer.getClassifierInstanceIds(classifierId)) : Collections.emptySet();
             coreDeserializer.getInstances(classifierId, coreDeserializer.getClassifierInstanceIds(classifierId))
@@ -271,6 +212,130 @@ public class TestCoreDistributedSerialization
                 builder.append("\n");
             }
             Assert.fail(builder.toString());
+        }
+    }
+
+    @Test
+    public void testPlatformMetadataLazy()
+    {
+        MetadataLazy platformMetadata = MetadataLazy.fromClassLoader(classLoaderWithMetadata, platformMetadataName);
+        MetadataStats actualPlatformStats = computeMetadataStats(platformMetadata);
+        assertMetadataStatsEqual(expectedPlatformStats, actualPlatformStats);
+    }
+
+    @Test
+    public void testCoreMetadataLazy()
+    {
+        MetadataLazy coreMetadata = MetadataLazy.fromClassLoader(classLoaderWithMetadata, coreMetadataName);
+        MetadataStats actualCoreStats = computeMetadataStats(coreMetadata);
+        assertMetadataStatsEqual(expectedCoreStats, actualCoreStats);
+    }
+
+    private static void assertMetadataStatsEqual(MetadataStats expected, MetadataStats actual)
+    {
+        MutableList<String> missingElements = expected.referenceUsageCounts.keysView().reject(actual.referenceUsageCounts::containsKey, Lists.mutable.empty()).sortThis();
+        Assert.assertEquals(Collections.emptyList(), missingElements);
+
+        MutableList<String> extraElements = actual.referenceUsageCounts.keysView().reject(expected.referenceUsageCounts::containsKey, Lists.mutable.empty()).sortThis();
+        Assert.assertEquals(Collections.emptyList(), extraElements);
+
+        MutableList<String> referenceUsageMismatches = Lists.mutable.empty();
+        expected.referenceUsageCounts.forEachKeyValue((path, expectedCount) ->
+        {
+            int actualCount = actual.referenceUsageCounts.getIfAbsent(path, -1);
+            if (expectedCount != actualCount)
+            {
+                referenceUsageMismatches.add(path + ": " + expectedCount + " != " + actualCount);
+            }
+        });
+        if (!referenceUsageMismatches.isEmpty())
+        {
+            Assert.fail(referenceUsageMismatches.sortThis().makeString("Reference usage mismatch for " + referenceUsageMismatches.size() + " elements:\n", "\n", ""));
+        }
+
+        MutableList<String> functionApplicationMismatches = Lists.mutable.empty();
+        expected.functionApplicationCounts.forEachKeyValue((path, expectedCount) ->
+        {
+            int actualCount = actual.functionApplicationCounts.getIfAbsent(path, -1);
+            if (expectedCount != actualCount)
+            {
+                functionApplicationMismatches.add(path + ": " + expectedCount + " != " + actualCount);
+            }
+        });
+        if (!functionApplicationMismatches.isEmpty())
+        {
+            Assert.fail(functionApplicationMismatches.sortThis().makeString("Function application mismatch for " + referenceUsageMismatches.size() + " elements:\n", "\n", ""));
+        }
+    }
+
+    private static SetIterable<String> computeClassifierIdsForSerialization(PureRuntime runtime)
+    {
+        ImmutableSet<String> excludedClassifierIds = Sets.immutable.with(M3Paths.EnumStub, M3Paths.GrammarInfoStub, M3Paths.ImportStub, M3Paths.PropertyStub)
+                .newWithAll(PrimitiveUtilities.getPrimitiveTypeNames());
+        return GraphNodeIterable.fromModelRepository(runtime.getModelRepository())
+                .collect(CoreInstance::getClassifier)
+                .collect(org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement::getUserPathForPackageableElement)
+                .reject(excludedClassifierIds::contains, Sets.mutable.empty())
+                .asUnmodifiable();
+    }
+
+    private static MetadataStats computeMetadataStats(PureRuntime runtime)
+    {
+        return computeMetadataStats(PackageTreeIterable.newRootPackageTreeIterable(runtime.getModelRepository()));
+    }
+
+    private static MetadataStats computeMetadataStats(MetadataLazy metadataLazy)
+    {
+        return computeMetadataStats(PackageTreeIterable.newPackageTreeIterable((Package) metadataLazy.getMetadata(M3Paths.Package, M3Paths.Root)));
+    }
+
+    private static MetadataStats computeMetadataStats(PackageTreeIterable packageTreeIterable)
+    {
+        MetadataStats stats = new MetadataStats();
+        packageTreeIterable.forEach(pkg ->
+        {
+            if (!isSystemImports(pkg))
+            {
+                stats.collectStats(pkg);
+                pkg._children().asLazy().reject(Package.class::isInstance).forEach(stats::collectStats);
+            }
+        });
+        return stats;
+    }
+
+    private static boolean isSystemImports(Package pkg)
+    {
+        if ("imports".equals(pkg._name()))
+        {
+            Package parent = pkg._package();
+            if ((parent != null) && "system".equals(parent._name()))
+            {
+                Package grandparent = parent._package();
+                return (grandparent != null) &&
+                        M3Paths.Root.equals(grandparent._name()) &&
+                        (grandparent._package() == null);
+            }
+        }
+        return false;
+    }
+
+    private static class MetadataStats
+    {
+        private final MutableObjectIntMap<String> referenceUsageCounts = ObjectIntMaps.mutable.empty();
+        private final MutableObjectIntMap<String> functionApplicationCounts = ObjectIntMaps.mutable.empty();
+
+        private void collectStats(PackageableElement element)
+        {
+            String path = org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement.getUserPathForPackageableElement(element);
+            if (this.referenceUsageCounts.containsKey(path))
+            {
+                throw new RuntimeException("Already collected stats for " + path);
+            }
+            this.referenceUsageCounts.put(path, element._referenceUsages().size());
+            if (element instanceof Function)
+            {
+                this.functionApplicationCounts.put(path, ((Function<?>) element)._applications().size());
+            }
         }
     }
 }
