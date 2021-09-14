@@ -279,7 +279,7 @@ public class ValueSpecificationProcessor
         String pureFunctionString = createFunctionForLambda(topLevelElement, function, processorSupport, processorContext);
         String lambdaFunctionString = (processorContext.isInLineAllLambda() ?
                 "(" + FullJavaPaths.LambdaFunction + ")localLambdas.get(" + System.identityHashCode(function) + ")" :
-                "((CompiledExecutionSupport)es).getMetadataAccessor().getLambdaFunction(\"" + PackageableElement.getSystemPathForPackageableElement(function, "::") + "\")");
+                "((CompiledExecutionSupport)es).getMetadataAccessor().getLambdaFunction(\"" + processorContext.getIdBuilder().buildId(function) + "\")");
 
         return "new PureCompiledLambda().lambdaFunction(\n" + lambdaFunctionString + "\n).pureFunction(\n" + pureFunctionString + "\n)\n";
     }
