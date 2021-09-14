@@ -256,7 +256,7 @@ public class ClassImplProcessor
         return "        @Override\n" +
                 "        public boolean supports(String classifierPath)\n" +
                 "        {\n" +
-                "             return tempFullId.equals(classifierPath);\n" +
+                "             return tempFullTypeId.equals(classifierPath);\n" +
                 "        }\n";
     }
 
