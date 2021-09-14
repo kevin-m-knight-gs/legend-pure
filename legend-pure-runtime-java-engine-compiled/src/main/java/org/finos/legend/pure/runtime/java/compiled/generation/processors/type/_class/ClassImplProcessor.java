@@ -256,7 +256,7 @@ public class ClassImplProcessor
         return "        @Override\n" +
                 "        public boolean supports(String classifierPath)\n" +
                 "        {\n" +
-                "             return tempFullTypeId.equals(classifierPath);\n" +
+                "            return tempFullTypeId.equals(classifierPath);\n" +
                 "        }\n";
     }
 
@@ -276,7 +276,7 @@ public class ClassImplProcessor
         String fullId = PackageableElement.getSystemPathForPackageableElement(_class, "::");
         return "    public static final String tempTypeName = \"" + Instance.getValueForMetaPropertyToOneResolved(_class, "name", processorSupport).getName() + "\";\n" +
                 "    private static final String tempFullTypeId = \"" + fullId + "\";\n" +
-                "    private" + (lazy ? " volatile" : "") + " CoreInstance classifier;\n";
+                (lazy ? "" : "    private CoreInstance classifier;\n");
     }
 
     public static String buildSimpleConstructor(CoreInstance _class, String className, ProcessorSupport processorSupport, boolean usesInheritance)
@@ -983,7 +983,8 @@ public class ClassImplProcessor
 
     public static String buildGetFullSystemPath()
     {
-        return "    public String getFullSystemPath()\n" +
+        return "    @Override\n" +
+                "    public String getFullSystemPath()\n" +
                 "    {\n" +
                 "         return tempFullTypeId;\n" +
                 "    }\n";

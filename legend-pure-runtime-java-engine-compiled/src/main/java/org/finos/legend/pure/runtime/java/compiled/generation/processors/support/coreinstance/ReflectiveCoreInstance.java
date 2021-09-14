@@ -582,6 +582,8 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
         throw new RuntimeException("TO CODE");
     }
 
+    public abstract String getFullSystemPath();
+
     private Method getGetMethodForKey(String key)
     {
         return getNoParameterMethod("_" + key);
