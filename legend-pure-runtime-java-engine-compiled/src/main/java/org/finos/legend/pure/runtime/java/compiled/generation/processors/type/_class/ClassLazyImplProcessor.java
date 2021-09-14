@@ -19,7 +19,6 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
-import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation._class._Class;
 import org.finos.legend.pure.m3.navigation.generictype.GenericType;
@@ -79,7 +78,6 @@ public class ClassLazyImplProcessor
         String classNamePlusTypeParams = className + typeParamsString;
         String interfaceNamePlusTypeParams = classInterfaceName + typeParamsString;
         boolean hasQualifiers = !_Class.getQualifiedProperties(_class, processorContext.getSupport()).isEmpty();
-        String systemPath = PackageableElement.getSystemPathForPackageableElement(_class, "::");
 
         boolean instanceOfGetterOverride = processorSupport.instance_instanceOf(_class, M3Paths.GetterOverride);
 
@@ -88,9 +86,9 @@ public class ClassLazyImplProcessor
                 "public class " + classNamePlusTypeParams + " extends PersistentReflectiveCoreInstance implements " + interfaceNamePlusTypeParams + "\n" +
                         "{\n" +
                         ClassImplProcessor.buildMetaInfo(classGenericType, processorSupport, true) +
-                        buildLazyConstructor(className, processorSupport) +
+                        buildLazyConstructor(className) +
+                        (ClassProcessor.isPlatformClass(_class) ? buildFactory(className) : "") +
                         lazyGetClassifier() +
-                        (ClassProcessor.isPlatformClass(_class) ? buildFactory(className, systemPath) : "") +
                         (instanceOfGetterOverride ? lazyGetterOverride(interfaceNamePlusTypeParams) : "") +
                         ClassImplProcessor.buildGetValueForMetaPropertyToOne(classGenericType, processorSupport) +
                         ClassImplProcessor.buildGetValueForMetaPropertyToMany(classGenericType, processorSupport) +
@@ -115,15 +113,14 @@ public class ClassLazyImplProcessor
                         "}");
     }
 
-    static String buildFactory(String className, String systemPath)
+    static String buildFactory(String className)
     {
-
-        return buildFactoryConstructor(className) +
+        return "\n" + buildFactoryConstructor(className) +
                 "    public static final CoreInstanceFactory FACTORY = new BaseJavaModelCoreInstanceFactory()\n" +
                 "    {\n" +
                 ClassImplProcessor.buildFactoryMethods(className) +
-                ClassImplProcessor.buildFactorySupports(systemPath) +
-                "   };\n" +
+                ClassImplProcessor.buildFactorySupports() +
+                "    };\n" +
                 "\n";
     }
 
@@ -131,37 +128,35 @@ public class ClassLazyImplProcessor
     {
         return "    public " + className + "(String name, SourceInformation sourceInformation, CoreInstance classifier)\n" +
                 "    {\n" +
-                "        super(name);\n" +
-                "        this.setSourceInformation(sourceInformation);\n" +
-                "        this.setClassifier(classifier);\n" +
+                "        super(name, sourceInformation);\n" +
+                "        this.classifier = classifier;\n" +
                 "        this.vals = Maps.immutable.empty();\n" +
-                "    }\n";
+                "        this.metadataLazy = null;\n" +
+                "    }\n" +
+                "\n";
     }
 
 
-    private static String buildLazyConstructor(String className, ProcessorSupport processorSupport)
+    private static String buildLazyConstructor(String className)
     {
-        return "    MetadataLazy metadataLazy;\n" +
+        return "    final MetadataLazy metadataLazy;\n" +
                 "    final ImmutableMap<String, Object> vals;\n" +
-                "    private String classifierId;\n" +
                 "\n" +
                 "    public " + className + "(Obj instance, MetadataLazy metadataLazy)\n" +
                 "    {\n" +
-                "        this(instance.getName(),instance.getSourceInformation(), metadataLazy.buildMap(instance), metadataLazy, instance.getClassifier());\n" +
+                "        this(instance.getName(),instance.getSourceInformation(), metadataLazy.buildMap(instance), metadataLazy);\n" +
                 "    }\n" +
                 "\n"+
-                "    public " + className + "(String id, org.finos.legend.pure.m4.coreinstance.SourceInformation sourceInformation, ImmutableMap<String, Object> vals, MetadataLazy metadataLazy, String classifierId)\n" +
+                "    public " + className + "(String id, org.finos.legend.pure.m4.coreinstance.SourceInformation sourceInformation, ImmutableMap<String, Object> vals, MetadataLazy metadataLazy)\n" +
                 "    {\n" +
-                "        super(id);\n" +
-                "        this.setSourceInformation(sourceInformation);\n" +
+                "        super(id, sourceInformation);\n" +
                 "        this.metadataLazy = metadataLazy;\n" +
                 "        this.vals = vals;\n" +
-                "        this.classifierId = classifierId;\n" +
                 "    }\n"+
                 "\n" +
-                "    public " + className + "(String id, org.finos.legend.pure.m4.coreinstance.SourceInformation sourceInformation, ImmutableMap<String, Object> vals, MetadataLazy metadataLazy, String classifierId, CoreInstance classifier)\n" +
+                "    public " + className + "(String id, org.finos.legend.pure.m4.coreinstance.SourceInformation sourceInformation, ImmutableMap<String, Object> vals, MetadataLazy metadataLazy, CoreInstance classifier)\n" +
                 "    {\n" +
-                "        this(id, sourceInformation, vals, metadataLazy, classifierId);\n" +
+                "        this(id, sourceInformation, vals, metadataLazy);\n" +
                 "        this.classifier = classifier;\n" +
                 "    }"+
                 "\n";
@@ -175,10 +170,11 @@ public class ClassLazyImplProcessor
                 "        CoreInstance result = this.classifier;\n" +
                 "        if (result == null)\n" +
                 "        {\n" +
-                "            this.classifier = result = this.metadataLazy.getMetadata(\"meta::pure::metamodel::type::Class\", \"Root::\"+this.classifierId);\n" +
+                "            this.classifier = result = this.metadataLazy.getMetadata(\"meta::pure::metamodel::type::Class\", getFullSystemPath());\n" +
                 "        }\n" +
                 "        return result;\n" +
-                "    }\n";
+                "    }\n" +
+                "\n";
     }
 
     private static String lazyGetterOverride(String classNamePlusTypeParams)
@@ -305,7 +301,6 @@ public class ClassLazyImplProcessor
             }
         }).makeString("");
 
-
         return  "    public " + classNamePlusTypeParams + " copy()\n" +
                 "    {\n" +
                 "        return new " + classImplName + "(this);\n" +
@@ -313,11 +308,8 @@ public class ClassLazyImplProcessor
 
                 "    public " + classImplName +"(" + classInterfaceName + (typeParams.isEmpty() ? "" : "<" + typeParams + ">") + " src)\n" +
                 "    {\n" +
-                "        this(((" + classImplName + ")src).getName(), src.getSourceInformation(), ((" + classImplName + ")src).vals, ((" + classImplName + ")src).metadataLazy, (("+ classImplName + ")src).classifierId, ((" + classImplName + ")src).classifier );\n" +
+                "        this(((" + classImplName + ")src).getName(), src.getSourceInformation(), ((" + classImplName + ")src).vals, ((" + classImplName + ")src).metadataLazy, ((" + classImplName + ")src).classifier);\n" +
                          propertyCopy +
                 "    }\n";
-
     }
-
-
 }

@@ -100,7 +100,6 @@ public class ClassImplProcessor
         String typeParamsString = typeParams.isEmpty() ? "" : "<" + typeParams + ">";
         String classNamePlusTypeParams = className + typeParamsString;
         String interfaceNamePlusTypeParams = TypeProcessor.javaInterfaceForType(_class) + typeParamsString;
-        String systemPath = PackageableElement.getSystemPathForPackageableElement(_class, "::");
 
         boolean isGetterOverride = M3Paths.GetterOverride.equals(PackageableElement.getUserPathForPackageableElement(_class)) ||
                 M3Paths.ConstraintsGetterOverride.equals(PackageableElement.getUserPathForPackageableElement(_class));
@@ -123,7 +122,7 @@ public class ClassImplProcessor
                 buildSimpleConstructor(_class, className, processorSupport, useJavaInheritance) +
                 (addJavaSerializationSupport ? buildSerializationMethods(_class, processorSupport, classGenericType, useJavaInheritance, associationClass, pureExternalPackage) : "") +
                 buildGetClassifier() +
-                (ClassProcessor.isPlatformClass(_class) ? buildFactory(className, systemPath) : "") +
+                (ClassProcessor.isPlatformClass(_class) ? buildFactory(className) : "") +
                 (isGetterOverride ? getterOverrides(interfaceNamePlusTypeParams) : "") +
                 buildGetValueForMetaPropertyToOne(classGenericType, processorSupport) +
                 buildGetValueForMetaPropertyToMany(classGenericType, processorSupport) +
@@ -241,27 +240,24 @@ public class ClassImplProcessor
         }
     }
 
-    static String buildFactory(String className, String systemPath)
+    static String buildFactory(String className)
     {
-
         return buildFactoryConstructor(className) +
                 "    public static final CoreInstanceFactory FACTORY = new org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.BaseJavaModelCoreInstanceFactory()\n" +
                 "    {\n" +
                 buildFactoryMethods(className) +
-                buildFactorySupports(systemPath) +
+                buildFactorySupports() +
                 "   };\n" +
                 "\n";
     }
 
-    static String buildFactorySupports(String systemPath)
+    static String buildFactorySupports()
     {
-        return "       @Override\n" +
-                "       public boolean supports(String classifierPath)\n" +
-                "       {\n" +
-                "            return \"" + systemPath + "\".equals(classifierPath);\n" +
-                "       }\n" +
-                "\n";
-
+        return "        @Override\n" +
+                "        public boolean supports(String classifierPath)\n" +
+                "        {\n" +
+                "             return tempFullId.equals(classifierPath);\n" +
+                "        }\n";
     }
 
     static String buildFactoryMethods(String className)

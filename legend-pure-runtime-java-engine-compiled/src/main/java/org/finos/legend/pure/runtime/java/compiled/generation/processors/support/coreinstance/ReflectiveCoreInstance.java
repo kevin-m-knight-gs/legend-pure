@@ -47,9 +47,15 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
     private final String __id;
     private SourceInformation sourceInformation;
 
-    public ReflectiveCoreInstance(String id)
+    protected ReflectiveCoreInstance(String id, SourceInformation sourceInformation)
     {
         this.__id = id;
+        this.sourceInformation = sourceInformation;
+    }
+
+    protected ReflectiveCoreInstance(String id)
+    {
+        this(id, null);
     }
 
     @Override
