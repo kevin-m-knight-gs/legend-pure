@@ -247,7 +247,7 @@ public class ClassImplProcessor
                 "    {\n" +
                 buildFactoryMethods(className) +
                 buildFactorySupports() +
-                "   };\n" +
+                "    };\n" +
                 "\n";
     }
 
