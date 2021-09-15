@@ -55,7 +55,7 @@ public abstract class AbstractLazyReflectiveCoreInstance extends ReflectiveCoreI
 
     protected AbstractLazyReflectiveCoreInstance(Obj obj, MetadataLazy metadataLazy)
     {
-        this(obj.getIdentifier(), obj.getSourceInformation(), metadataLazy, metadataLazy.buildMap(obj));
+        this(obj.getName(), obj.getSourceInformation(), metadataLazy, metadataLazy.buildMap(obj));
     }
 
     protected AbstractLazyReflectiveCoreInstance(AbstractLazyReflectiveCoreInstance source)
