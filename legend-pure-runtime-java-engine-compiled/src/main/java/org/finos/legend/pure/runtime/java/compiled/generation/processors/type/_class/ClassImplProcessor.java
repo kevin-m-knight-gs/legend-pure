@@ -293,9 +293,9 @@ public class ClassImplProcessor
     {
         return "    @Override\n" +
                 "    public CoreInstance getClassifier()\n" +
-                "     {\n" +
+                "    {\n" +
                 "        return this.classifier;\n" +
-                "     }\n";
+                "    }\n";
     }
 
     static String buildFactoryConstructor(String className)
