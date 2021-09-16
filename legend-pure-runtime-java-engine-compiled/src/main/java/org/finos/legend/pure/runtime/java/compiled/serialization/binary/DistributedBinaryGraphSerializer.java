@@ -29,7 +29,6 @@ import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
-import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.serialization.Writer;
 import org.finos.legend.pure.m4.serialization.binary.BinaryWriters;
@@ -41,6 +40,7 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjOrUpda
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -84,7 +84,7 @@ public class DistributedBinaryGraphSerializer
 
     public void serialize(FileWriter fileWriter)
     {
-        MutableMap<String, MutableList<CoreInstance>> nodesByClassifierId = getNodesByClassifierId(this.runtime.getModelRepository(), this.processorSupport);
+        MutableMap<String, MutableList<CoreInstance>> nodesByClassifierId = getNodesByClassifierId();
 
         // Build string cache
         DistributedStringCache stringCache = DistributedStringCache.fromNodes(nodesByClassifierId.valuesView().flatCollect(Functions.identity()), this.idBuilder, this.processorSupport);
@@ -187,11 +187,6 @@ public class DistributedBinaryGraphSerializer
         return (this.metadataDefinition == null) ? null : this.metadataDefinition.getName();
     }
 
-    private String buildId(CoreInstance instance)
-    {
-        return this.idBuilder.buildId(instance);
-    }
-
     private Obj buildObj(CoreInstance instance)
     {
         return GraphSerializer.buildObj(instance, this.idBuilder, this.classifierCaches, this.processorSupport);
@@ -199,22 +194,50 @@ public class DistributedBinaryGraphSerializer
 
     private MutableList<ObjOrUpdate> buildObjOrUpdates(String classifierId, MutableList<CoreInstance> instances)
     {
+        MutableList<ObjOrUpdate> result = instances.collect(this::buildObj);
         if (this.alreadySerialized != null)
         {
-            MapIterable<String, Obj> existingObjs = this.alreadySerialized.getInstancesIfPresent(classifierId, instances.collect(this::buildId, Sets.mutable.ofInitialCapacity(instances.size()))).groupByUniqueKey(Obj::getIdentifier);
+            MapIterable<String, Obj> existingObjs = this.alreadySerialized.getInstancesIfPresent(classifierId, result.collect(ObjOrUpdate::getIdentifier, Sets.mutable.ofInitialCapacity(result.size()))).groupByUniqueKey(Obj::getIdentifier);
             if (existingObjs.notEmpty())
             {
-                return instances.asLazy()
-                        .collect(instance ->
-                        {
-                            Obj obj = buildObj(instance);
-                            Obj existingObj = existingObjs.get(obj.getIdentifier());
-                            return (existingObj == null) ? obj : existingObj.computeUpdate(obj);
-                        })
-                        .select(Objects::nonNull, Lists.mutable.empty());
+                ListIterator<ObjOrUpdate> listIterator = result.listIterator();
+                while (listIterator.hasNext())
+                {
+                    ObjOrUpdate obj = listIterator.next();
+                    Obj existingObj = existingObjs.get(obj.getIdentifier());
+                    if (existingObj != null)
+                    {
+                        listIterator.set(existingObj.computeUpdate((Obj) obj));
+                    }
+                }
+                result.removeIf(Objects::isNull);
             }
         }
-        return instances.collect(this::buildObj);
+        return result;
+    }
+
+    private MutableMap<String, MutableList<CoreInstance>> getNodesByClassifierId()
+    {
+        MutableMap<String, MutableList<CoreInstance>> nodesByClassifierId = Maps.mutable.empty();
+
+        MutableMap<CoreInstance, String> classifierIds = Maps.mutable.empty();
+        MutableSet<CoreInstance> primitiveTypes = PrimitiveUtilities.getPrimitiveTypes(this.runtime.getModelRepository()).toSet();
+        MutableStack<CoreInstance> stack = Stacks.mutable.withAll(this.runtime.getModelRepository().getTopLevels());
+        MutableSet<CoreInstance> visited = Sets.mutable.empty();
+        while (stack.notEmpty())
+        {
+            CoreInstance node = stack.pop();
+            if (visited.add(node))
+            {
+                CoreInstance classifier = node.getClassifier();
+                String classifierId = classifierIds.getIfAbsentPutWithKey(classifier, c -> MetadataJavaPaths.buildMetadataKeyFromType(c).intern());
+                nodesByClassifierId.getIfAbsentPut(classifierId, Lists.mutable::empty).add(node);
+                LazyIterate.flatCollect(node.getKeys(), key -> Instance.getValueForMetaPropertyToManyResolved(node, key, this.processorSupport))
+                        .select(v -> !primitiveTypes.contains(v.getClassifier()))
+                        .forEach(stack::push);
+            }
+        }
+        return nodesByClassifierId;
     }
 
     public static DistributedBinaryGraphSerializer newSerializer(PureRuntime runtime)
@@ -254,30 +277,6 @@ public class DistributedBinaryGraphSerializer
     public static void serialize(PureRuntime runtime, Path directory)
     {
         newSerializer(runtime).serializeToDirectory(directory);
-    }
-
-    private static MutableMap<String, MutableList<CoreInstance>> getNodesByClassifierId(ModelRepository repository, ProcessorSupport processorSupport)
-    {
-        MutableMap<String, MutableList<CoreInstance>> nodesByClassifierId = Maps.mutable.empty();
-
-        MutableMap<CoreInstance, String> classifierIds = Maps.mutable.empty();
-        MutableSet<CoreInstance> primitiveTypes = PrimitiveUtilities.getPrimitiveTypes(repository).toSet();
-        MutableStack<CoreInstance> stack = Stacks.mutable.withAll(repository.getTopLevels());
-        MutableSet<CoreInstance> visited = Sets.mutable.empty();
-        while (stack.notEmpty())
-        {
-            CoreInstance node = stack.pop();
-            if (visited.add(node))
-            {
-                CoreInstance classifier = node.getClassifier();
-                String classifierId = classifierIds.getIfAbsentPutWithKey(classifier, c -> MetadataJavaPaths.buildMetadataKeyFromType(c).intern());
-                nodesByClassifierId.getIfAbsentPut(classifierId, Lists.mutable::empty).add(node);
-                LazyIterate.flatCollect(node.getKeys(), key -> Instance.getValueForMetaPropertyToManyResolved(node, key, processorSupport))
-                        .select(v -> !primitiveTypes.contains(v.getClassifier()))
-                        .forEach(stack::push);
-            }
-        }
-        return nodesByClassifierId;
     }
 
     private static class ObjIndexInfo
