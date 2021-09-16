@@ -36,4 +36,9 @@ public class ImportStubHelper
         }
         return importStub._resolvedNodeCoreInstance();
     }
+
+    public static boolean isUnresolved(ImportStub importStub)
+    {
+        return importStub._resolvedNode() == null;
+    }
 }

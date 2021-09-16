@@ -15,10 +15,13 @@
 package org.finos.legend.pure.m3.coreinstance.helper;
 
 import org.eclipse.collections.api.block.function.Function;
+import org.eclipse.collections.api.factory.Sets;
+import org.eclipse.collections.api.set.ImmutableSet;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel._import.EnumStub;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel._import.ImportStub;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel._import.PropertyStub;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.tools.GrammarInfoStub;
+import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 
 /**
@@ -26,7 +29,7 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
  */
 public class AnyStubHelper
 {
-
+    public static final ImmutableSet<String> STUB_CLASSES = Sets.immutable.with(M3Paths.EnumStub, M3Paths.GrammarInfoStub, M3Paths.ImportStub, M3Paths.PropertyStub);
     public static final Function<CoreInstance, CoreInstance> FROM_STUB_FN = AnyStubHelper::fromStub;
 
     private AnyStubHelper()
@@ -52,5 +55,31 @@ public class AnyStubHelper
             return GrammarInfoStubHelper.fromGrammarInfoStub((GrammarInfoStub) instance);
         }
         return instance;
+    }
+
+    public static boolean isUnresolvedStub(CoreInstance instance)
+    {
+        if (instance instanceof ImportStub)
+        {
+            return ImportStubHelper.isUnresolved((ImportStub) instance);
+        }
+        if (instance instanceof PropertyStub)
+        {
+            return PropertyStubHelper.isUnresolved((PropertyStub) instance);
+        }
+        if (instance instanceof EnumStub)
+        {
+            return EnumStubHelper.isUnresolved((EnumStub) instance);
+        }
+        if (instance instanceof GrammarInfoStub)
+        {
+            return GrammarInfoStubHelper.isUnresolved((GrammarInfoStub) instance);
+        }
+        return false;
+    }
+
+    public static ImmutableSet<String> getStubClasses()
+    {
+        return STUB_CLASSES;
     }
 }

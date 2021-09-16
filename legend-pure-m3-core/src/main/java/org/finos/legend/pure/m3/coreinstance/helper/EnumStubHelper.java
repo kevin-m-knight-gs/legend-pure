@@ -36,4 +36,9 @@ public class EnumStubHelper
         }
         return enumStub._resolvedEnumCoreInstance();
     }
+
+    public static boolean isUnresolved(EnumStub enumStub)
+    {
+        return enumStub._resolvedEnum() == null;
+    }
 }

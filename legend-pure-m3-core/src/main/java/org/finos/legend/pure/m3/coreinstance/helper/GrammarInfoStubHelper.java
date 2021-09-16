@@ -36,4 +36,9 @@ public class GrammarInfoStubHelper
         }
         return grammarInfoStub._valueCoreInstance();
     }
+
+    public static boolean isUnresolved(GrammarInfoStub grammarInfoStub)
+    {
+        return grammarInfoStub._value() == null;
+    }
 }

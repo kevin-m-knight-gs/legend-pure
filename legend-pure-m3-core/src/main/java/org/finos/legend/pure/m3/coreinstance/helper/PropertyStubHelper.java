@@ -36,4 +36,9 @@ public class PropertyStubHelper
         }
         return propertyStub._resolvedPropertyCoreInstance();
     }
+
+    public static boolean isUnresolved(PropertyStub propertyStub)
+    {
+        return propertyStub._resolvedProperty() == null;
+    }
 }
