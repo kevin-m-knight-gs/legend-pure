@@ -22,7 +22,6 @@ import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.ConcurrentMutableMap;
-import org.eclipse.collections.api.map.ImmutableMap;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
@@ -39,10 +38,6 @@ import org.finos.legend.pure.runtime.java.compiled.serialization.model.EnumRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Obj;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.ObjRef;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.Primitive;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValue;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueMany;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueOne;
-import org.finos.legend.pure.runtime.java.compiled.serialization.model.PropertyValueVisitor;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValue;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueConsumer;
 import org.finos.legend.pure.runtime.java.compiled.serialization.model.RValueVisitor;
@@ -56,21 +51,6 @@ import java.util.Set;
 
 public class MetadataLazy implements Metadata
 {
-    private static final PropertyValueVisitor<Object> VALUES_VISITOR = new PropertyValueVisitor<Object>()
-    {
-        @Override
-        public Object visit(PropertyValueMany many)
-        {
-            return many.getValues();
-        }
-
-        @Override
-        public Object visit(PropertyValueOne one)
-        {
-            return one.getValue();
-        }
-    };
-
     private final RValueVisitor<Object> valueToObjectVisitor = new RValueVisitor<Object>()
     {
         @Override
@@ -96,7 +76,6 @@ public class MetadataLazy implements Metadata
     private final MultiDistributedBinaryGraphDeserializer deserializer;
     private final ConcurrentMutableMap<String, Constructor<? extends CoreInstance>> constructors = ConcurrentHashMap.newMap();
     private final ConcurrentMutableMap<String, ConcurrentMutableMap<String, CoreInstance>> instanceCache = ConcurrentHashMap.newMap();
-    private final ConcurrentMutableMap<String, MapIterable<String, CoreInstance>> enumCache = ConcurrentHashMap.newMap();
 
     private volatile Constructor<? extends CoreInstance> enumConstructor = null; //NOSONAR we actually want to protect the pointer
 
@@ -133,50 +112,28 @@ public class MetadataLazy implements Metadata
     @Override
     public MapIterable<String, CoreInstance> getMetadata(String classifier)
     {
-        if (!hasClassifier(classifier))
-        {
-            return null;
-        }
-        loadAllClassifierInstances(classifier);
-        return getClassifierInstanceCache(classifier).asUnmodifiable();
+        return hasClassifier(classifier) ? loadAllClassifierInstances(classifier).asUnmodifiable() : null;
     }
 
     @Override
     public CoreInstance getEnum(String enumerationName, String enumName)
     {
-        MapIterable<String, CoreInstance> enumerationCache = this.enumCache.getIfAbsentPutWithKey(enumerationName, this::indexEnumerationValues);
-        if (enumerationCache == null)
+        if (!hasClassifier(enumerationName))
         {
             throw new RuntimeException("Cannot find enum '" + enumName + "' in enumeration '" + enumerationName + "': unknown enumeration");
         }
-        return enumerationCache.get(enumName);
-    }
 
-    private MapIterable<String, CoreInstance> indexEnumerationValues(String enumerationId)
-    {
-        MapIterable<String, CoreInstance> enums = getMetadata(enumerationId);
-        return (enums == null) ? null : enums.groupByUniqueKey(CoreInstance::getName, Maps.mutable.withInitialCapacity(enums.size()));
+        ConcurrentMutableMap<String, CoreInstance> cache = getClassifierInstanceCache(enumerationName);
+        if (cache.isEmpty())
+        {
+            loadAllClassifierInstances(enumerationName);
+        }
+        return cache.get(enumName);
     }
 
     public Object valueToObject(RValue value)
     {
         return (value == null) ? null : value.visit(this.valueToObjectVisitor);
-    }
-
-    @SuppressWarnings("unchecked")
-    public RichIterable<Object> valuesToObjects(Object value)
-    {
-        if (value == null)
-        {
-            return Lists.immutable.empty();
-        }
-
-        if (value instanceof RValue)
-        {
-            return Lists.mutable.with(valueToObject((RValue) value));
-        }
-
-        return valuesToObjects((ListIterable<RValue>) value);
     }
 
     public RichIterable<Object> valuesToObjects(ListIterable<RValue> values)
@@ -267,11 +224,6 @@ public class MetadataLazy implements Metadata
         });
     }
 
-    public ImmutableMap<String, Object> buildMap(Obj instance)
-    {
-        return instance.getPropertyValues().toMap(PropertyValue::getProperty, pv -> pv.visit(VALUES_VISITOR)).toImmutable();
-    }
-
     private boolean hasClassifier(String classifier)
     {
         return this.deserializer.hasClassifier(classifier);
@@ -292,17 +244,20 @@ public class MetadataLazy implements Metadata
         return this.deserializer.getInstances(classifier, instanceIds);
     }
 
-    private void loadAllClassifierInstances(String classifier)
+    private ConcurrentMutableMap<String, CoreInstance> loadAllClassifierInstances(String classifier)
     {
         RichIterable<String> instanceIds = getClassifierInstanceIds(classifier);
         ConcurrentMutableMap<String, CoreInstance> classifierCache = getClassifierInstanceCache(classifier);
-        int notLoadedCount = instanceIds.size() - classifierCache.size();
-        if (notLoadedCount > 0)
+        if (classifierCache.size() < instanceIds.size())
         {
-            MutableList<String> instanceIdsToLoad = instanceIds.reject(classifierCache::containsKey, Lists.mutable.withInitialCapacity(notLoadedCount));
-            ListIterable<Obj> objs = getInstances(classifier, instanceIdsToLoad);
-            objs.forEach(obj -> classifierCache.getIfAbsentPut(obj.getIdentifier(), () -> newInstance(classifier, obj)));
+            MutableList<String> notLoadedIds = instanceIds.reject(classifierCache::containsKey, Lists.mutable.empty());
+            if (notLoadedIds.isEmpty())
+            {
+                ListIterable<Obj> objs = getInstances(classifier, notLoadedIds);
+                objs.forEach(obj -> classifierCache.getIfAbsentPut(obj.getIdentifier(), () -> newInstance(classifier, obj)));
+            }
         }
+        return classifierCache;
     }
 
     private CoreInstance toJavaObject(String classifier, String id)
