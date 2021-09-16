@@ -15,19 +15,21 @@
 package org.finos.legend.pure.m4.tools;
 
 import org.eclipse.collections.api.block.procedure.Procedure;
+import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.set.MutableSet;
-import org.eclipse.collections.api.stack.MutableStack;
-import org.eclipse.collections.impl.factory.Lists;
-import org.eclipse.collections.impl.factory.Sets;
-import org.eclipse.collections.impl.factory.Stacks;
 import org.eclipse.collections.impl.lazy.AbstractLazyIterable;
-import org.eclipse.collections.impl.utility.internal.IteratorIterate;
-import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.m4.ModelRepository;
+import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 public class GraphNodeIterable extends AbstractLazyIterable<CoreInstance>
 {
@@ -47,16 +49,34 @@ public class GraphNodeIterable extends AbstractLazyIterable<CoreInstance>
     @Override
     public void each(Procedure<? super CoreInstance> procedure)
     {
-        IteratorIterate.forEach(iterator(), procedure);
+        for (CoreInstance node : this)
+        {
+            procedure.value(node);
+        }
+    }
+
+    @Override
+    public void forEach(Consumer<? super CoreInstance> consumer)
+    {
+        for (CoreInstance node : this)
+        {
+            consumer.accept(node);
+        }
+    }
+
+    public static GraphNodeIterable fromNode(CoreInstance startingNode)
+    {
+        return fromNodes(Lists.immutable.with(startingNode));
+    }
+
+    public static GraphNodeIterable fromNodes(CoreInstance... startingNodes)
+    {
+        return fromNodes(Lists.immutable.with(startingNodes));
     }
 
     public static GraphNodeIterable fromNodes(Iterable<? extends CoreInstance> startingNodes)
     {
-        if (startingNodes == null)
-        {
-            throw new IllegalArgumentException("Starting nodes may not be null");
-        }
-        return new GraphNodeIterable(startingNodes);
+        return new GraphNodeIterable(Objects.requireNonNull(startingNodes, "Starting nodes may not be null"));
     }
 
     public static GraphNodeIterable fromModelRepository(ModelRepository repository)
@@ -66,7 +86,12 @@ public class GraphNodeIterable extends AbstractLazyIterable<CoreInstance>
 
     public static MutableSet<CoreInstance> allInstancesFromRepository(ModelRepository repository)
     {
-        GraphNodeIterator iterator = new GraphNodeIterator(repository.getTopLevels());
+        return allConnectedInstances(repository.getTopLevels());
+    }
+
+    public static MutableSet<CoreInstance> allConnectedInstances(Iterable<? extends CoreInstance> startingNodes)
+    {
+        GraphNodeIterator iterator = new GraphNodeIterator(startingNodes);
         while (iterator.hasNext())
         {
             iterator.next();
@@ -76,14 +101,14 @@ public class GraphNodeIterable extends AbstractLazyIterable<CoreInstance>
 
     private static class GraphNodeIterator implements Iterator<CoreInstance>
     {
-        private final MutableStack<CoreInstance> stack;
+        private final Deque<CoreInstance> deque;
         private final MutableSet<CoreInstance> visited;
         private CoreInstance next = null;
 
         private GraphNodeIterator(Iterable<? extends CoreInstance> startingNodes)
         {
-            this.stack = Stacks.mutable.withAll(startingNodes);
-            this.visited = Sets.mutable.empty();
+            this.deque = Iterate.addAllTo(startingNodes, new ArrayDeque<>());
+            this.visited = Sets.mutable.ofInitialCapacity(this.deque.size());
             update();
         }
 
@@ -105,33 +130,21 @@ public class GraphNodeIterable extends AbstractLazyIterable<CoreInstance>
             return node;
         }
 
-        @Override
-        public void remove()
-        {
-            throw new UnsupportedOperationException();
-        }
-
         private void update()
         {
             CoreInstance node = getNextUnvisitedFromStack();
             if (node != null)
             {
-                for (String key : node.getKeys())
-                {
-                    for (CoreInstance value : node.getValueForMetaPropertyToMany(key))
-                    {
-                        this.stack.push(value);
-                    }
-                }
+                node.getKeys().forEach(key -> Iterate.addAllIterable(node.getValueForMetaPropertyToMany(key), this.deque));
             }
             this.next = node;
         }
 
         private CoreInstance getNextUnvisitedFromStack()
         {
-            while (this.stack.notEmpty())
+            while (!this.deque.isEmpty())
             {
-                CoreInstance node = this.stack.pop();
+                CoreInstance node = this.deque.pollFirst();
                 if (this.visited.add(node))
                 {
                     return node;
