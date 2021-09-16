@@ -15,10 +15,13 @@
 package org.finos.legend.pure.runtime.java.compiled.generation.processors;
 
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.PackageableElement;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.ReferenceUsage;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.property.AbstractProperty;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Any;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.PrimitiveType;
 import org.finos.legend.pure.m3.navigation.M3Paths;
+import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorageTools;
@@ -26,6 +29,7 @@ import org.finos.legend.pure.m3.serialization.runtime.Source;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.coreinstance.primitive.PrimitiveCoreInstance;
+import org.finos.legend.pure.m4.coreinstance.simple.SimpleCoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.ValCoreInstance;
 
 public class IdBuilder
@@ -45,28 +49,22 @@ public class IdBuilder
         {
             return buildIdForPrimitiveValue(instance);
         }
-        if (isNonPropertyPackageableElement(instance))
+        if (isEnumValue(instance))
         {
-            return buildIdForNonPropertyPackageableElement(instance);
+            return buildIdForEnumValue(instance);
+        }
+        if (isAbstractProperty(instance))
+        {
+            return buildIdForAbstractProperty(instance);
+        }
+        if (isPackageableElement(instance))
+        {
+            return buildIdForPackageableElement(instance);
         }
         return buildDefaultId(instance);
     }
 
-    private String buildIdForPrimitiveValue(CoreInstance instance)
-    {
-        return instance.getName();
-    }
-
-    private String buildIdForNonPropertyPackageableElement(CoreInstance instance)
-    {
-        return org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement.getSystemPathForPackageableElement(instance);
-    }
-
-    private String buildDefaultId(CoreInstance instance)
-    {
-        int syntheticId = instance.getSyntheticId();
-        return (this.defaultIdPrefix == null) ? Integer.toString(syntheticId) : (this.defaultIdPrefix + syntheticId);
-    }
+    // Primitive values
 
     private boolean isPrimitiveValue(CoreInstance instance)
     {
@@ -74,7 +72,7 @@ public class IdBuilder
         {
             return true;
         }
-        if (instance instanceof Any)
+        if (!(instance instanceof SimpleCoreInstance))
         {
             return false;
         }
@@ -83,19 +81,60 @@ public class IdBuilder
         return (classifier instanceof PrimitiveType) || this.processorSupport.instance_instanceOf(classifier, M3Paths.PrimitiveType);
     }
 
-    private boolean isNonPropertyPackageableElement(CoreInstance instance)
+    private String buildIdForPrimitiveValue(CoreInstance instance)
     {
-        if (instance instanceof PackageableElement)
-        {
-            return !(instance instanceof AbstractProperty);
-        }
-        if ((instance instanceof Any) || (instance instanceof PrimitiveCoreInstance) || (instance instanceof ValCoreInstance))
-        {
-            return false;
-        }
-
-        return this.processorSupport.instance_instanceOf(instance, M3Paths.PackageableElement) && !this.processorSupport.instance_instanceOf(instance, M3Paths.AbstractProperty);
+        return instance.getName();
     }
+
+    // Enum value
+
+    private boolean isEnumValue(CoreInstance instance)
+    {
+        return (instance instanceof Enum) ||
+                ((instance instanceof SimpleCoreInstance) && this.processorSupport.instance_instanceOf(instance, M3Paths.Enum));
+    }
+
+    private String buildIdForEnumValue(CoreInstance instance)
+    {
+        return instance.getName();
+    }
+
+    // AbstractProperty
+
+    private boolean isAbstractProperty(CoreInstance instance)
+    {
+        return (instance instanceof AbstractProperty) ||
+                ((instance instanceof SimpleCoreInstance) && this.processorSupport.instance_instanceOf(instance, M3Paths.AbstractProperty));
+    }
+
+    private String buildIdForAbstractProperty(CoreInstance property)
+    {
+        StringBuilder builder = new StringBuilder();
+        org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement.writeUserPathForPackageableElement(builder, property.getValueForMetaPropertyToOne(M3Properties.owner));
+        return builder.append('.').append(property.getName()).toString();
+    }
+
+    // PackageableElement
+
+    private boolean isPackageableElement(CoreInstance instance)
+    {
+        return (instance instanceof PackageableElement) ||
+                ((instance instanceof SimpleCoreInstance) && this.processorSupport.instance_instanceOf(instance, M3Paths.PackageableElement));
+    }
+
+    private String buildIdForPackageableElement(CoreInstance instance)
+    {
+        return org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement.getSystemPathForPackageableElement(instance);
+    }
+
+    // Default
+
+    private String buildDefaultId(CoreInstance instance)
+    {
+        int syntheticId = instance.getSyntheticId();
+        return (this.defaultIdPrefix == null) ? Integer.toString(syntheticId) : (this.defaultIdPrefix + syntheticId);
+    }
+
 
     public static IdBuilder newIdBuilder(String defaultIdPrefix, ProcessorSupport processorSupport)
     {
