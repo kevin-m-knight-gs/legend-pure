@@ -68,6 +68,8 @@ public class TestCoreDistributedSerialization
     private static Path coreMetadataDir;
     private static URLClassLoader classLoaderWithMetadata;
 
+    private static MutableSet<String> topLevelNames;
+
     private static ObjectIntMap<String> expectedPlatformCountsByClassifierId;
     private static ObjectIntMap<String> expectedCoreCountsByClassifierId;
 
@@ -98,6 +100,7 @@ public class TestCoreDistributedSerialization
     {
         PureCodeStorage codeStorage = new PureCodeStorage(null, new ClassLoaderCodeStorage(classLoader, PlatformCodeRepository.newPlatformCodeRepository()));
         PureRuntime runtime = new PureRuntimeBuilder(codeStorage).setTransactionalByDefault(false).buildAndInitialize();
+        topLevelNames = runtime.getModelRepository().getTopLevels().collect(CoreInstance::getName, Sets.mutable.empty()).asUnmodifiable();
         expectedPlatformCountsByClassifierId = countInstancesByClassifierId(runtime);
         expectedPlatformStats = computeMetadataStats(runtime);
 
@@ -146,8 +149,8 @@ public class TestCoreDistributedSerialization
     {
         DistributedBinaryGraphDeserializer platformDeserializer = DistributedBinaryGraphDeserializer.fromClassLoader(platformMetadataName, classLoaderWithMetadata);
         MutableSet<String> classifiers = platformDeserializer.getClassifiers().toSet();
-        Assert.assertEquals(Collections.emptySet(), expectedPlatformCountsByClassifierId.keysView().reject(classifiers::contains));
-        Assert.assertEquals(Collections.emptySet(), classifiers.reject(expectedPlatformCountsByClassifierId::containsKey));
+        Assert.assertEquals(Collections.emptyList(), expectedPlatformCountsByClassifierId.keysView().reject(classifiers::contains, Lists.mutable.empty()));
+        Assert.assertEquals(Collections.emptyList(), classifiers.reject(expectedPlatformCountsByClassifierId::containsKey, Lists.mutable.empty()));
 
         MutableMap<String, ListIterable<String>> updatesByClassifier = Maps.mutable.empty();
         classifiers.forEach(classifier ->
@@ -168,10 +171,10 @@ public class TestCoreDistributedSerialization
         DistributedBinaryGraphDeserializer platformDeserializer = DistributedBinaryGraphDeserializer.fromClassLoader(platformMetadataName, classLoaderWithMetadata);
         DistributedBinaryGraphDeserializer coreDeserializer = DistributedBinaryGraphDeserializer.fromClassLoader(coreMetadataName, classLoaderWithMetadata);
         MutableSet<String> classifiers = coreDeserializer.getClassifiers().toSet();
-        Assert.assertEquals(Collections.emptySet(), expectedCoreCountsByClassifierId.keysView().reject(classifiers::contains));
-        Assert.assertEquals(Collections.emptySet(), classifiers.reject(expectedCoreCountsByClassifierId::containsKey));
-        Assert.assertEquals(Collections.emptySet(), expectedPlatformCountsByClassifierId.keysView().reject(classifiers::contains));
-        Assert.assertNotEquals(Collections.emptySet(), classifiers.reject(expectedPlatformCountsByClassifierId::containsKey));
+        Assert.assertEquals(Collections.emptyList(), expectedCoreCountsByClassifierId.keysView().reject(classifiers::contains, Lists.mutable.empty()));
+        Assert.assertEquals(Collections.emptyList(), classifiers.reject(expectedCoreCountsByClassifierId::containsKey, Lists.mutable.empty()));
+        Assert.assertEquals(Collections.emptyList(), expectedPlatformCountsByClassifierId.keysView().reject(classifiers::contains, Lists.mutable.empty()));
+        Assert.assertNotEquals(Collections.emptyList(), classifiers.reject(expectedPlatformCountsByClassifierId::containsKey, Lists.mutable.empty()));
 
         MutableList<Obj> shouldBeObjUpdate = Lists.mutable.empty();
         MutableList<ObjUpdate> shouldBeObj = Lists.mutable.empty();
@@ -311,8 +314,7 @@ public class TestCoreDistributedSerialization
         MutableObjectIntMap<String> counts = ObjectIntMaps.mutable.empty();
         CompiledProcessorSupport processorSupport = new CompiledProcessorSupport(classLoaderWithMetadata, metadataLazy, Sets.immutable.empty());
         MutableSet<CoreInstance> visited = Sets.mutable.empty();
-        Deque<CoreInstance> deque = new ArrayDeque<>();
-        deque.add(processorSupport.repository_getTopLevel(M3Paths.Root));
+        Deque<CoreInstance> deque = new ArrayDeque<>(topLevelNames.collect(processorSupport::repository_getTopLevel));
         while (!deque.isEmpty())
         {
             CoreInstance node = deque.removeLast();
@@ -321,7 +323,17 @@ public class TestCoreDistributedSerialization
             if (!excludedClassifierIds.contains(classifierPath) && visited.add(node))
             {
                 counts.addToValue(classifierPath, 1);
-                processorSupport.class_getSimplePropertiesByName(classifier).forEachKey(key -> Iterate.addAllIterable(node.getValueForMetaPropertyToMany(key), deque));
+                processorSupport.class_getSimplePropertiesByName(classifier).forEachKey(key ->
+                {
+                    try
+                    {
+                        Iterate.addAllIterable(node.getValueForMetaPropertyToMany(key), deque);
+                    }
+                    catch (Exception e)
+                    {
+                        throw new RuntimeException("Error with values for property \"" + key + "\" from node " + node + " of type " + classifierPath, e);
+                    }
+                });
             }
         }
         return counts.asUnmodifiable();
@@ -344,8 +356,8 @@ public class TestCoreDistributedSerialization
         {
             if (!isSystemImports(pkg))
             {
-                stats.collectStats(pkg, processorSupport);
-                pkg._children().asLazy().reject(Package.class::isInstance).forEach(c -> stats.collectStats(c, processorSupport));
+                stats.collectStats(pkg);
+                pkg._children().asLazy().reject(Package.class::isInstance).forEach(stats::collectStats);
             }
         });
         return stats;
@@ -371,7 +383,7 @@ public class TestCoreDistributedSerialization
     {
         private final MutableMap<String, ObjectIntMap<String>> propertyValueCounts = Maps.mutable.empty();
 
-        private void collectStats(PackageableElement element, ProcessorSupport processorSupport)
+        private void collectStats(PackageableElement element)
         {
             String path = org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement.getUserPathForPackageableElement(element);
             if (this.propertyValueCounts.containsKey(path))
@@ -379,9 +391,8 @@ public class TestCoreDistributedSerialization
                 throw new RuntimeException("Already collected stats for " + path);
             }
 
-            RichIterable<String> properties = processorSupport.class_getSimplePropertiesByName(element.getClassifier()).keysView();
             MutableObjectIntMap<String> countsByProperty = ObjectIntMaps.mutable.empty();
-            properties.forEach(key -> countsByProperty.put(key, element.getValueForMetaPropertyToMany(key).size()));
+            element.getKeys().forEach(key -> countsByProperty.put(key, element.getValueForMetaPropertyToMany(key).size()));
             this.propertyValueCounts.put(path, countsByProperty.asUnmodifiable());
         }
 

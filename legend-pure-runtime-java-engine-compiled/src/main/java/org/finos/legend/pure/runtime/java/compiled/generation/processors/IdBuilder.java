@@ -15,13 +15,11 @@
 package org.finos.legend.pure.runtime.java.compiled.generation.processors;
 
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.PackageableElement;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.ReferenceUsage;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.property.AbstractProperty;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.PrimitiveType;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
-import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorageTools;

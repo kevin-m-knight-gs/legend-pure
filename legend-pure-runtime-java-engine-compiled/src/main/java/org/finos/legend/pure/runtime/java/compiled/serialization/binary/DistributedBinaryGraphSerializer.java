@@ -17,21 +17,19 @@ package org.finos.legend.pure.runtime.java.compiled.serialization.binary;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
-import org.eclipse.collections.api.factory.Stacks;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
-import org.eclipse.collections.api.stack.MutableStack;
 import org.eclipse.collections.impl.block.factory.Functions;
-import org.eclipse.collections.impl.utility.LazyIterate;
-import org.finos.legend.pure.m3.navigation.Instance;
+import org.finos.legend.pure.m3.coreinstance.helper.AnyStubHelper;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.serialization.Writer;
 import org.finos.legend.pure.m4.serialization.binary.BinaryWriters;
+import org.finos.legend.pure.m4.tools.GraphNodeIterable;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.MetadataJavaPaths;
 import org.finos.legend.pure.runtime.java.compiled.serialization.GraphSerializer;
@@ -51,17 +49,17 @@ public class DistributedBinaryGraphSerializer
     private static final int MAX_BIN_FILE_BYTES = 512 * 1024;
 
     private final DistributedBinaryMetadata metadataDefinition;
-    private final PureRuntime runtime;
+    private final Iterable<? extends CoreInstance> nodes;
     private final ProcessorSupport processorSupport;
     private final IdBuilder idBuilder;
     private final GraphSerializer.ClassifierCaches classifierCaches;
     private final MultiDistributedBinaryGraphDeserializer alreadySerialized;
 
-    private DistributedBinaryGraphSerializer(DistributedBinaryMetadata metadataDefinition, PureRuntime runtime, MultiDistributedBinaryGraphDeserializer alreadySerialized)
+    private DistributedBinaryGraphSerializer(DistributedBinaryMetadata metadataDefinition, Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport, MultiDistributedBinaryGraphDeserializer alreadySerialized)
     {
         this.metadataDefinition = metadataDefinition;
-        this.runtime = runtime;
-        this.processorSupport = this.runtime.getProcessorSupport();
+        this.nodes = nodes;
+        this.processorSupport = processorSupport;
         this.idBuilder = IdBuilder.newIdBuilder(DistributedMetadataHelper.getMetadataIdPrefix(getMetadataName()), this.processorSupport);
         this.classifierCaches = new GraphSerializer.ClassifierCaches(this.processorSupport);
         this.alreadySerialized = alreadySerialized;
@@ -219,54 +217,79 @@ public class DistributedBinaryGraphSerializer
     private MutableMap<String, MutableList<CoreInstance>> getNodesByClassifierId()
     {
         MutableMap<String, MutableList<CoreInstance>> nodesByClassifierId = Maps.mutable.empty();
-
-        MutableMap<CoreInstance, String> classifierIds = Maps.mutable.empty();
-        MutableSet<CoreInstance> primitiveTypes = PrimitiveUtilities.getPrimitiveTypes(this.runtime.getModelRepository()).toSet();
-        MutableStack<CoreInstance> stack = Stacks.mutable.withAll(this.runtime.getModelRepository().getTopLevels());
-        MutableSet<CoreInstance> visited = Sets.mutable.empty();
-        while (stack.notEmpty())
+        MutableMap<CoreInstance, String> classifierIdCache = Maps.mutable.empty();
+        MutableSet<CoreInstance> excludedTypes = PrimitiveUtilities.getPrimitiveTypes(this.processorSupport).toSet();
+        AnyStubHelper.getStubClasses().collect(this.processorSupport::package_getByUserPath, excludedTypes);
+        this.nodes.forEach(node ->
         {
-            CoreInstance node = stack.pop();
-            if (visited.add(node))
+            CoreInstance classifier = node.getClassifier();
+            if (!excludedTypes.contains(classifier))
             {
-                CoreInstance classifier = node.getClassifier();
-                String classifierId = classifierIds.getIfAbsentPutWithKey(classifier, c -> MetadataJavaPaths.buildMetadataKeyFromType(c).intern());
+                String classifierId = classifierIdCache.getIfAbsentPutWithKey(classifier, MetadataJavaPaths::buildMetadataKeyFromType);
                 nodesByClassifierId.getIfAbsentPut(classifierId, Lists.mutable::empty).add(node);
-                LazyIterate.flatCollect(node.getKeys(), key -> Instance.getValueForMetaPropertyToManyResolved(node, key, this.processorSupport))
-                        .select(v -> !primitiveTypes.contains(v.getClassifier()))
-                        .forEach(stack::push);
             }
-        }
+        });
         return nodesByClassifierId;
     }
 
-    public static DistributedBinaryGraphSerializer newSerializer(PureRuntime runtime)
+    public static DistributedBinaryGraphSerializer newSerializer(Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
     {
-        return new DistributedBinaryGraphSerializer(null, runtime, null);
+        Objects.requireNonNull(nodes, "nodes may not be null");
+        Objects.requireNonNull(processorSupport, "processorSupport may not be null");
+        return new DistributedBinaryGraphSerializer(null, nodes, processorSupport, null);
     }
 
-    public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, PureRuntime runtime)
+    public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport)
     {
         Objects.requireNonNull(metadataDefinition, "metadataDefinition may not be null");
+        Objects.requireNonNull(nodes, "nodes may not be null");
+        Objects.requireNonNull(processorSupport, "processorSupport may not be null");
         Set<String> dependencies = metadataDefinition.getDependencies();
         if (!dependencies.isEmpty())
         {
             throw new IllegalArgumentException(Lists.mutable.withAll(dependencies).sortThis().makeString("Missing metadata dependencies: ", ", ", ""));
         }
-        return new DistributedBinaryGraphSerializer(metadataDefinition, runtime, null);
+        return new DistributedBinaryGraphSerializer(metadataDefinition, nodes, processorSupport, null);
+    }
+
+    public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport, ClassLoader classLoader)
+    {
+        return newSerializer(metadataDefinition, nodes, processorSupport, FileReaders.fromClassLoader(classLoader));
+    }
+
+    public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, Iterable<? extends CoreInstance> nodes, ProcessorSupport processorSupport, FileReader fileReader)
+    {
+        Objects.requireNonNull(metadataDefinition, "metadataDefinition may not be null");
+        Objects.requireNonNull(nodes, "nodes may not be null");
+        Objects.requireNonNull(processorSupport, "processorSupport may not be null");
+        Objects.requireNonNull(fileReader, "fileReader may not be null");
+        Set<String> dependencies = metadataDefinition.getDependencies();
+        MultiDistributedBinaryGraphDeserializer alreadySerialized = dependencies.isEmpty() ? null : MultiDistributedBinaryGraphDeserializer.fromFileReader(fileReader, dependencies);
+        return new DistributedBinaryGraphSerializer(metadataDefinition, nodes, processorSupport, alreadySerialized);
+    }
+
+    public static DistributedBinaryGraphSerializer newSerializer(PureRuntime runtime)
+    {
+        Objects.requireNonNull(runtime, "runtime may not be null");
+        return newSerializer(getRuntimeAllNodesIterable(runtime), runtime.getProcessorSupport());
+    }
+
+    public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, PureRuntime runtime)
+    {
+        Objects.requireNonNull(runtime, "runtime may not be null");
+        return newSerializer(metadataDefinition, getRuntimeAllNodesIterable(runtime), runtime.getProcessorSupport());
     }
 
     public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, PureRuntime runtime, ClassLoader classLoader)
     {
-        return newSerializer(metadataDefinition, runtime, FileReaders.fromClassLoader(classLoader));
+        Objects.requireNonNull(runtime, "runtime may not be null");
+        return newSerializer(metadataDefinition, getRuntimeAllNodesIterable(runtime), runtime.getProcessorSupport(), classLoader);
     }
 
     public static DistributedBinaryGraphSerializer newSerializer(DistributedBinaryMetadata metadataDefinition, PureRuntime runtime, FileReader fileReader)
     {
-        Objects.requireNonNull(metadataDefinition, "metadataDefinition may not be null");
-        Set<String> dependencies = metadataDefinition.getDependencies();
-        MultiDistributedBinaryGraphDeserializer alreadySerialized = dependencies.isEmpty() ? null : MultiDistributedBinaryGraphDeserializer.fromFileReader(fileReader, dependencies);
-        return new DistributedBinaryGraphSerializer(metadataDefinition, runtime, alreadySerialized);
+        Objects.requireNonNull(runtime, "runtime may not be null");
+        return newSerializer(metadataDefinition, getRuntimeAllNodesIterable(runtime), runtime.getProcessorSupport(), fileReader);
     }
 
     public static DistributedBinaryGraphSerializer newSerializer(String metadataName, PureRuntime runtime)
@@ -277,6 +300,11 @@ public class DistributedBinaryGraphSerializer
     public static void serialize(PureRuntime runtime, Path directory)
     {
         newSerializer(runtime).serializeToDirectory(directory);
+    }
+
+    private static Iterable<CoreInstance> getRuntimeAllNodesIterable(PureRuntime runtime)
+    {
+        return GraphNodeIterable.fromModelRepository(runtime.getModelRepository());
     }
 
     private static class ObjIndexInfo

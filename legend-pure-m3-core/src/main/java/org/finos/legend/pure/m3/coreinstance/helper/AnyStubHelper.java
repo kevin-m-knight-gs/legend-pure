@@ -78,6 +78,14 @@ public class AnyStubHelper
         return false;
     }
 
+    public static boolean isStub(CoreInstance instance)
+    {
+        return (instance instanceof ImportStub) ||
+                (instance instanceof PropertyStub) ||
+                (instance instanceof EnumStub) ||
+                (instance instanceof GrammarInfoStub);
+    }
+
     public static ImmutableSet<String> getStubClasses()
     {
         return STUB_CLASSES;
