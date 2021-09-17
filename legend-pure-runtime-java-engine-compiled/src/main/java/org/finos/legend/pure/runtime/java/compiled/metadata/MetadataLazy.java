@@ -128,7 +128,21 @@ public class MetadataLazy implements Metadata
         {
             loadAllClassifierInstances(enumerationName);
         }
-        return cache.get(enumName);
+        CoreInstance result = cache.get(enumName);
+        if (result == null)
+        {
+            StringBuilder builder = new StringBuilder("Cannot find enum '").append(enumName).append("' in enumeration '").append(enumerationName).append("' unknown enum value");
+            if (cache.isEmpty())
+            {
+                builder.append(" (no known values)");
+            }
+            else
+            {
+                cache.keysView().appendString(builder, " (known values: '", "', '", "')");
+            }
+            throw new RuntimeException(builder.toString());
+        }
+        return result;
     }
 
     public Object valueToObject(RValue value)
@@ -251,7 +265,7 @@ public class MetadataLazy implements Metadata
         if (classifierCache.size() < instanceIds.size())
         {
             MutableList<String> notLoadedIds = instanceIds.reject(classifierCache::containsKey, Lists.mutable.empty());
-            if (notLoadedIds.isEmpty())
+            if (notLoadedIds.notEmpty())
             {
                 ListIterable<Obj> objs = getInstances(classifier, notLoadedIds);
                 objs.forEach(obj -> classifierCache.getIfAbsentPut(obj.getIdentifier(), () -> newInstance(classifier, obj)));
