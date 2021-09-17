@@ -20,6 +20,7 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.utility.ArrayIterate;
+import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.m3.coreinstance.helper.AnyHelper;
 import org.finos.legend.pure.m3.coreinstance.helper.AnyStubHelper;
 import org.finos.legend.pure.m3.execution.ExecutionSupport;
@@ -380,11 +381,11 @@ public abstract class ReflectiveCoreInstance extends AbstractCompiledCoreInstanc
         return null;
     }
 
-
     @Override
     public boolean isValueDefinedForKey(String keyName)
     {
-        throw new RuntimeException("TO CODE");
+        Object value = getRawValueForMetaProperty(keyName);
+        return (value != null) && !((value instanceof Iterable) && Iterate.isEmpty((Iterable<?>) value));
     }
 
     @Override

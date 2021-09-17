@@ -20,6 +20,7 @@ import org.eclipse.collections.api.block.predicate.Predicate2;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ListIterable;
+import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.set.SetIterable;
 import org.eclipse.collections.impl.Counter;
 import org.finos.legend.pure.m3.navigation.Instance;
@@ -122,6 +123,7 @@ public class ClassImplProcessor
                 buildSimpleConstructor(_class, className, processorSupport, useJavaInheritance) +
                 (addJavaSerializationSupport ? buildSerializationMethods(_class, processorSupport, classGenericType, useJavaInheritance, associationClass, pureExternalPackage) : "") +
                 buildGetClassifier() +
+                buildGetKeys(_class, processorSupport) +
                 (ClassProcessor.isPlatformClass(_class) ? buildFactory(className) : "") +
                 (isGetterOverride ? getterOverrides(interfaceNamePlusTypeParams) : "") +
                 buildGetValueForMetaPropertyToOne(classGenericType, processorSupport) +
@@ -296,6 +298,40 @@ public class ClassImplProcessor
                 "    {\n" +
                 "        return this.classifier;\n" +
                 "    }\n";
+    }
+
+    static String buildGetKeys(CoreInstance cls, ProcessorSupport processorSupport)
+    {
+        MapIterable<String, CoreInstance> simplePropertiesByName = processorSupport.class_getSimplePropertiesByName(cls);
+        return "    @Override\n" +
+                "    public RichIterable<String> getKeys()\n" +
+                "    {\n" +
+                "        return Lists.immutable." + (simplePropertiesByName.isEmpty() ? "empty()" : simplePropertiesByName.keysView().makeString("with(\"", "\", \"", "\")")) + ";\n" +
+                "    }\n" +
+                "\n" +
+                "    @Override\n" +
+                "    public ListIterable<String> getRealKeyByName(String name)\n" +
+                "    {\n" +
+                (simplePropertiesByName.isEmpty() ? "" :
+                ("        switch (name)\n" +
+                        "        {\n" + simplePropertiesByName.keyValuesView().collect((kv) ->
+                        "            case \"" + kv.getOne() + "\":\n" +
+                                "            {\n" +
+                                "                return " + getPropertyRealKeyString(kv.getTwo(), processorSupport) + ";\n" +
+                                "            }\n").makeString("") +
+                        "            default:\n" +
+                        "            {\n" +
+                        "                return null;\n" +
+                        "            }\n" +
+                        "        }\n")) +
+                "    }\n" +
+                "\n";
+    }
+
+    private static String getPropertyRealKeyString(CoreInstance property, ProcessorSupport processorSupport)
+    {
+        return PackageableElement.getUserObjectPathForPackageableElementAsList(Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.owner, processorSupport), true)
+                .makeString("Lists.immutable.with(\"", "\", \"children\", \"", "\", \"properties\", \"" + Property.getPropertyName(property) + "\")");
     }
 
     static String buildFactoryConstructor(String className)
