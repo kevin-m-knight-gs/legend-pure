@@ -165,6 +165,31 @@ abstract class AbstractTestObj<T extends Obj>
         Assert.assertEquals(
                 newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property2, 3), newPrimitivePropertyValue(property3, true)),
                 original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true))));
+
+        // new property values plus new property, with properties filter
+        Assert.assertNull(original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true)), "unknown_property"));
+        Assert.assertNull(original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true)), property1));
+
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property2, 3)),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true)), property2));
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property2, 3)),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true)), property1, property2));
+
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property3, true)),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true)), property3));
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property3, true)),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true)), property1, property3));
+
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property2, 3), newPrimitivePropertyValue(property3, true)),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true)), property2, property3));
+        Assert.assertEquals(
+                newObjUpdate(identifier, classifier, newPrimitivePropertyValue(property2, 3), newPrimitivePropertyValue(property3, true)),
+                original.computeUpdate(newObj(identifier, classifier, newPrimitivePropertyValue(property1, "b"), newPrimitivePropertyValue(property2, 2, 3), newPrimitivePropertyValue(property3, true)), property1, property2, property3));
     }
 
     @Test

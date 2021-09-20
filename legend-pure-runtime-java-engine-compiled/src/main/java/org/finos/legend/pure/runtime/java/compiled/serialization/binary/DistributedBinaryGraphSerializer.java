@@ -20,9 +20,11 @@ import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.set.ImmutableSet;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.block.factory.Functions;
 import org.finos.legend.pure.m3.coreinstance.helper.AnyStubHelper;
+import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
@@ -47,6 +49,8 @@ import java.util.jar.JarOutputStream;
 public class DistributedBinaryGraphSerializer
 {
     private static final int MAX_BIN_FILE_BYTES = 512 * 1024;
+
+    private static final ImmutableSet<String> UPDATE_PROPERTIES = Sets.immutable.with(M3Properties.applications, M3Properties.children, M3Properties.modelElements, M3Properties.referenceUsages, M3Properties.specializations);
 
     private final DistributedBinaryMetadata metadataDefinition;
     private final Iterable<? extends CoreInstance> nodes;
@@ -205,7 +209,7 @@ public class DistributedBinaryGraphSerializer
                     Obj existingObj = existingObjs.get(obj.getIdentifier());
                     if (existingObj != null)
                     {
-                        listIterator.set(existingObj.computeUpdate((Obj) obj));
+                        listIterator.set(existingObj.computeUpdate((Obj) obj, UPDATE_PROPERTIES::contains));
                     }
                 }
                 result.removeIf(Objects::isNull);

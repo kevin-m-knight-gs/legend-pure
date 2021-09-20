@@ -21,18 +21,16 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
-import org.eclipse.collections.api.set.ImmutableSet;
 import org.eclipse.collections.api.set.SetIterable;
-import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 public class Obj implements ObjOrUpdate
 {
-    private static final ImmutableSet<String> UPDATABLE_PROPERTIES = Sets.immutable.with(M3Properties.applications, M3Properties.children, M3Properties.modelElements, M3Properties.referenceUsages, M3Properties.specializations);
-
     private final SourceInformation sourceInformation;
     private final String identifier;
     private final String classifier;
@@ -220,15 +218,30 @@ public class Obj implements ObjOrUpdate
 
     public ObjUpdate computeUpdate(Obj other)
     {
+        return computeUpdate(other, p -> true);
+    }
+
+    public ObjUpdate computeUpdate(Obj other, String... properties)
+    {
+        return computeUpdate(other, Sets.immutable.with(properties)::contains);
+    }
+
+    public ObjUpdate computeUpdate(Obj other, Collection<String> properties)
+    {
+        return computeUpdate(other, properties::contains);
+    }
+
+    public ObjUpdate computeUpdate(Obj other, Predicate<? super String> propertyForUpdate)
+    {
         if (!this.identifier.equals(other.getIdentifier()) || !this.classifier.equals(other.getClassifier()))
         {
             throw new IllegalArgumentException("Cannot compute update for " + this.identifier + " (classifier: " + this.classifier + ") from " + other.getIdentifier() + " (classifier: " + other.getClassifier() + ")");
         }
-        MapIterable<String, PropertyValue> currentPropertyValues = this.properties.asLazy().select(pv -> UPDATABLE_PROPERTIES.contains(pv.getProperty())).groupByUniqueKey(PropertyValue::getProperty);
+        MapIterable<String, PropertyValue> currentPropertyValues = this.properties.asLazy().select(pv -> propertyForUpdate.test(pv.getProperty())).groupByUniqueKey(PropertyValue::getProperty);
         MutableList<PropertyValue> additionalPropertyValues = Lists.mutable.empty();
         other.getPropertyValues().forEach(value ->
         {
-            if (UPDATABLE_PROPERTIES.contains(value.getProperty()))
+            if (propertyForUpdate.test(value.getProperty()))
             {
                 PropertyValue additionalValues = computePropertyValueUpdate(currentPropertyValues.get(value.getProperty()), value);
                 if (additionalValues != null)
