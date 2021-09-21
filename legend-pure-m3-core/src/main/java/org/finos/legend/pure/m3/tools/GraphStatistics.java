@@ -190,7 +190,9 @@ public class GraphStatistics
     private static LazyIterable<GraphPath> allPathsBetween(Iterable<String> startNodePaths, Predicate<? super CoreInstance> isEndNode, int maxPathLength, ProcessorSupport processorSupport)
     {
         return GraphPathIterable.newGraphPathIterable(startNodePaths, isEndNode, maxPathLength, processorSupport)
-                .select(path -> isEndNode.test(path.resolve(processorSupport)));
+                .asResolvedGraphPathIterable()
+                .select(path -> isEndNode.test(path.getLastResolvedNode()))
+                .collect(GraphPathIterable.ResolvedGraphPath::getGraphPath);
     }
 
     public static LazyIterable<String> allTopLevelAndPackagedElementPaths(ProcessorSupport processorSupport)
