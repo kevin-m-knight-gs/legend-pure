@@ -106,21 +106,33 @@ public class Obj
     @Override
     public String toString()
     {
-        StringBuilder builder = new StringBuilder(getClass().getSimpleName());
+        return toString(false);
+    }
+
+    public String toString(boolean includePropertyValues)
+    {
+        return writeObj(new StringBuilder(128), includePropertyValues).toString();
+    }
+
+    public StringBuilder writeObj(StringBuilder builder, boolean writePropertyValues)
+    {
+        builder.append(getClass().getSimpleName());
         builder.append("{classifier='").append(this.classifier).append("'");
         builder.append(", identifier='").append(this.identifier).append("'");
         if (this.name != null)
         {
             builder.append(", name='").append(this.name).append("'");
         }
-        this.properties.appendString(builder, ", properties=[", ", ", "]");
+        if (writePropertyValues)
+        {
+            this.properties.appendString(builder, ", properties=[", ", ", "]");
+        }
         if (this.sourceInformation != null)
         {
             builder.append(", sourceInformation=");
             this.sourceInformation.writeMessage(builder);
         }
-        builder.append('}');
-        return builder.toString();
+        return builder.append('}');
     }
 
     public static Obj newObj(String classifier, String identifier, String name, ListIterable<PropertyValue> propertyValues, SourceInformation sourceInformation, boolean isEnum)
