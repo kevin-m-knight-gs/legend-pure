@@ -15,6 +15,7 @@
 package org.finos.legend.pure.runtime.java.compiled.generation.processors;
 
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.PackageableElement;
+import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.extension.Annotation;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.property.AbstractProperty;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.PrimitiveType;
@@ -58,6 +59,10 @@ public class IdBuilder
         if (isPackageableElement(instance))
         {
             return buildIdForPackageableElement(instance);
+        }
+        if (isAnnotation(instance))
+        {
+            return buildIdForAnnotation(instance);
         }
         return buildDefaultId(instance);
     }
@@ -120,6 +125,20 @@ public class IdBuilder
     private String buildIdForPackageableElement(CoreInstance instance)
     {
         return org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement.getSystemPathForPackageableElement(instance);
+    }
+
+    // Tag or Stereotype
+
+    private boolean isAnnotation(CoreInstance instance)
+    {
+        return (instance instanceof Annotation) || isSimpleCoreInstanceOfType(instance, M3Paths.Annotation);
+    }
+
+    private String buildIdForAnnotation(CoreInstance annotation)
+    {
+        StringBuilder builder = new StringBuilder();
+        org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement.writeUserPathForPackageableElement(builder, annotation.getValueForMetaPropertyToOne(M3Properties.profile));
+        return builder.append('.').append(annotation.getName()).toString();
     }
 
     // Default
