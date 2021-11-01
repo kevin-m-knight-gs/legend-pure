@@ -17,6 +17,9 @@ package org.finos.legend.pure.m3.serialization.runtime;
 import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.block.function.Function;
 import org.eclipse.collections.api.block.predicate.Predicate;
+import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Sets;
+import org.eclipse.collections.api.factory.Stacks;
 import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
@@ -26,15 +29,8 @@ import org.eclipse.collections.api.multimap.list.ListMultimap;
 import org.eclipse.collections.api.set.ImmutableSet;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.stack.MutableStack;
-import org.eclipse.collections.impl.factory.Lists;
 import org.eclipse.collections.impl.factory.Multimaps;
-import org.eclipse.collections.impl.factory.Stacks;
-import org.eclipse.collections.impl.set.mutable.UnifiedSet;
 import org.eclipse.collections.impl.utility.StringIterate;
-import org.finos.legend.pure.m3.navigation.M3Properties;
-import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
-import org.finos.legend.pure.m3.navigation.importstub.ImportStub;
-import org.finos.legend.pure.m3.navigation.type.Type;
 import org.finos.legend.pure.m3.coreinstance.Package;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.ConcreteFunctionDefinition;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.generics.GenericType;
@@ -42,129 +38,25 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecificat
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.InstanceValue;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.ValueSpecification;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.tools.GrammarInfoStub;
+import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.navigation.importstub.ImportStub;
+import org.finos.legend.pure.m3.navigation.type.Type;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.MutableCodeStorage;
 import org.finos.legend.pure.m3.serialization.grammar.Parser;
 import org.finos.legend.pure.m3.serialization.runtime.navigation.NavigationHandler;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
-import java.util.Comparator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Source
 {
-    public static final Function<Source, String> SOURCE_ID = new Function<Source, String>()
-    {
-        @Override
-        public String valueOf(Source source)
-        {
-            return source.getId();
-        }
-    };
-
-    public static final Function<Source, ListIterable<CoreInstance>> SOURCE_NEW_INSTANCES = new Function<Source, ListIterable<CoreInstance>>()
-    {
-        @Override
-        public ListIterable<CoreInstance> valueOf(Source source)
-        {
-            return source.getNewInstances();
-        }
-    };
-
-    public static final Predicate<Source> IS_COMPILED = new Predicate<Source>()
-    {
-        @Override
-        public boolean accept(Source source)
-        {
-            return source.isCompiled();
-        }
-    };
-
-    private static final Comparator<SourceInformation> SOURCE_INFO_COMPARATOR = new Comparator<SourceInformation>()
-    {
-        @Override
-        public int compare(SourceInformation s1, SourceInformation s2)
-        {
-            if (s1 == s2)
-            {
-                return 0;
-            }
-
-            int startLine1 = s1.getStartLine();
-            int startLine2 = s2.getStartLine();
-            if (startLine1 != startLine2)
-            {
-                return startLine2 - startLine1;
-            }
-
-            int startColumn1 = s1.getStartColumn();
-            int startColumn2 = s2.getStartColumn();
-            if (startColumn1 != startColumn2)
-            {
-                return startColumn2 - startColumn1;
-            }
-
-            int endLine1 = s1.getEndLine();
-            int endLine2 = s2.getEndLine();
-            if (endLine1 != endLine2)
-            {
-                return endLine1 - endLine2;
-            }
-
-            int endColumn1 = s1.getEndColumn();
-            int endColumn2 = s2.getEndColumn();
-            if (endColumn1 != endColumn2)
-            {
-                return endColumn1 - endColumn2;
-            }
-
-            int line1 = s1.getLine();
-            int line2 = s2.getLine();
-            if (line1 != line2)
-            {
-                return line1 - line2;
-            }
-
-            int column1 = s1.getColumn();
-            int column2 = s2.getColumn();
-            return column1 - column2;
-        }
-    };
-
-    // TODO find a better way to do this
-    private static final Comparator<CoreInstance> FOUND_ELEMENT_COMPARATOR = new Comparator<CoreInstance>()
-    {
-        @Override
-        public int compare(CoreInstance element1, CoreInstance element2)
-        {
-            if (element1 == element2)
-            {
-                return 0;
-            }
-
-            if (element1 instanceof ValueSpecification)
-            {
-                return (element2 instanceof ValueSpecification) ? 0 : -1;
-            }
-            if (element2 instanceof ValueSpecification)
-            {
-                return 1;
-            }
-
-            if (element1 instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel._import.ImportStub)
-            {
-                return (element2 instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel._import.ImportStub)? 0 : -1;
-            }
-            if (element2 instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel._import.ImportStub)
-            {
-                return 1;
-            }
-
-            return 0;
-        }
-    };
+    public static final Function<Source, String> SOURCE_ID = Source::getId;
+    public static final Function<Source, ListIterable<CoreInstance>> SOURCE_NEW_INSTANCES = Source::getNewInstances;
+    public static final Predicate<Source> IS_COMPILED = Source::isCompiled;
 
     private static final Pattern LINE_PATTERN = Pattern.compile("^.*$", Pattern.MULTILINE);
 
@@ -173,7 +65,7 @@ public class Source
     private SourceRegistry sourceRegistry;
 
     private final String id;
-    private String content = "";
+    private String content;
 
     private final boolean immutable;
     private final boolean inMemory;
@@ -369,7 +261,7 @@ public class Source
     @Override
     public boolean equals(Object o)
     {
-        return (this == o) || ((o instanceof Source) && this.id.equals(((Source)o).id));
+        return (this == o) || ((o instanceof Source) && this.id.equals(((Source) o).id));
     }
 
     @Override
@@ -439,7 +331,7 @@ public class Source
 
             else if (found instanceof GrammarInfoStub)
             {
-                found= found.getValueForMetaPropertyToOne(M3Properties.value);
+                found = found.getValueForMetaPropertyToOne(M3Properties.value);
             }
 
             else
@@ -470,17 +362,10 @@ public class Source
             }
             default:
             {
-                Multimap<SourceInformation, CoreInstance> elementsBySourceInfo = elements.groupBy(CoreInstance.GET_SOURCE_INFO);
-                SourceInformation minSourceInfo = elementsBySourceInfo.keysView().min(SOURCE_INFO_COMPARATOR);
+                Multimap<SourceInformation, CoreInstance> elementsBySourceInfo = elements.groupBy(CoreInstance::getSourceInformation);
+                SourceInformation minSourceInfo = elementsBySourceInfo.keysView().min(Source::compareSourceInfo);
                 RichIterable<CoreInstance> results = elementsBySourceInfo.get(minSourceInfo);
-                if (results.size() == 1)
-                {
-                    return results.getFirst();
-                }
-                else
-                {
-                    return results.min(FOUND_ELEMENT_COMPARATOR);
-                }
+                return (results.size() == 1) ? results.getAny() : results.min(Source::compareFoundElements);
             }
         }
     }
@@ -571,16 +456,16 @@ public class Source
         return elements;
     }
 
-    public ConcreteFunctionDefinition findConcreteFunctionDefinitionAt(int line, int column, ProcessorSupport processorSupport)
+    public ConcreteFunctionDefinition<?> findConcreteFunctionDefinitionAt(int line, int column, ProcessorSupport processorSupport)
     {
-        ConcreteFunctionDefinition found = null;
+        ConcreteFunctionDefinition<?> found = null;
         synchronized (this.lock)
         {
             for (CoreInstance element : this.newInstances)
             {
                 if (this.isElementAtPoint(element, line, column) && element instanceof ConcreteFunctionDefinition)
                 {
-                    found = (ConcreteFunctionDefinition)element;
+                    found = (ConcreteFunctionDefinition<?>) element;
                     break;
                 }
             }
@@ -617,8 +502,8 @@ public class Source
         {
             if (this.allInstances == null)
             {
-                MutableSet<CoreInstance> result = UnifiedSet.newSet(this.newInstances.size());
-                MutableSet<CoreInstance> visited = UnifiedSet.newSet(this.newInstances.size());
+                MutableSet<CoreInstance> result = Sets.mutable.withInitialCapacity(this.newInstances.size());
+                MutableSet<CoreInstance> visited = Sets.mutable.withInitialCapacity(this.newInstances.size());
                 MutableStack<CoreInstance> searchStack = Stacks.mutable.withAll(this.newInstances);
                 while (!searchStack.isEmpty())
                 {
@@ -703,5 +588,81 @@ public class Source
     public static Source createMutableInMemorySource(String id, String content)
     {
         return new Source(id, false, true, content);
+    }
+
+    private static int compareSourceInfo(SourceInformation s1, SourceInformation s2)
+    {
+        if (s1 == s2)
+        {
+            return 0;
+        }
+
+        int startLine1 = s1.getStartLine();
+        int startLine2 = s2.getStartLine();
+        if (startLine1 != startLine2)
+        {
+            return startLine2 - startLine1;
+        }
+
+        int startColumn1 = s1.getStartColumn();
+        int startColumn2 = s2.getStartColumn();
+        if (startColumn1 != startColumn2)
+        {
+            return startColumn2 - startColumn1;
+        }
+
+        int endLine1 = s1.getEndLine();
+        int endLine2 = s2.getEndLine();
+        if (endLine1 != endLine2)
+        {
+            return endLine1 - endLine2;
+        }
+
+        int endColumn1 = s1.getEndColumn();
+        int endColumn2 = s2.getEndColumn();
+        if (endColumn1 != endColumn2)
+        {
+            return endColumn1 - endColumn2;
+        }
+
+        int line1 = s1.getLine();
+        int line2 = s2.getLine();
+        if (line1 != line2)
+        {
+            return line1 - line2;
+        }
+
+        int column1 = s1.getColumn();
+        int column2 = s2.getColumn();
+        return column1 - column2;
+    }
+
+    // TODO find a better way to do this
+    private static int compareFoundElements(CoreInstance element1, CoreInstance element2)
+    {
+        if (element1 == element2)
+        {
+            return 0;
+        }
+
+        if (element1 instanceof ValueSpecification)
+        {
+            return (element2 instanceof ValueSpecification) ? 0 : -1;
+        }
+        if (element2 instanceof ValueSpecification)
+        {
+            return 1;
+        }
+
+        if (element1 instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel._import.ImportStub)
+        {
+            return (element2 instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel._import.ImportStub) ? 0 : -1;
+        }
+        if (element2 instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel._import.ImportStub)
+        {
+            return 1;
+        }
+
+        return 0;
     }
 }
