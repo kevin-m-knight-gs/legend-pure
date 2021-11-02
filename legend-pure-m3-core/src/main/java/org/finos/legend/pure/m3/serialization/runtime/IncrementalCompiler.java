@@ -379,7 +379,7 @@ public abstract class IncrementalCompiler implements SourceEventHandler
     {
         Package imports = (Package)this.processorSupport.package_getByUserPath("system::imports");
         ListIterable<? extends PackageableElement> importGroups = imports._children().toList();
-        ListIterable<? extends PackageableElement> newImportGroups = importGroups.rejectWith(Imports.IS_IMPORT_GROUP_FOR_SOURCE, sourceId);
+        ListIterable<? extends PackageableElement> newImportGroups = importGroups.rejectWith(Imports::isImportGroupForSource, sourceId);
         imports._children(newImportGroups);
     }
 

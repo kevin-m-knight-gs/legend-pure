@@ -20,10 +20,10 @@ import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.impl.tuple.Tuples;
+import org.finos.legend.pure.m3.serialization.filesystem.PureCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.PlatformCodeRepository;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.classpath.Version;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
-import org.finos.legend.pure.m3.serialization.runtime.Source;
 import org.finos.legend.pure.m4.serialization.Writer;
 import org.finos.legend.pure.m4.serialization.binary.BinaryWriters;
 
@@ -63,13 +63,16 @@ public class BinaryModelRepositorySerializer
         ByteArrayOutputStream stream = new ByteArrayOutputStream(1024);
         try (Writer writer = BinaryWriters.newBinaryWriter(stream))
         {
-            for (Source source : this.runtime.getSourceRegistry().getSources().selectWith(BinaryModelRepositorySerializer::isSourceInRepository, this.repositoryName))
+            this.runtime.getSourceRegistry().getSources().forEach(source ->
             {
-                stream.reset();
-                SourceSerializationResult result = BinaryModelSourceSerializer.serialize(writer, source, this.runtime);
-                this.serializationResults.add(result);
-                this.sourceSerializations.put(source.getId(), stream.toByteArray());
-            }
+                if (PureCodeStorage.isSourceInRepository(source.getId(), this.repositoryName))
+                {
+                    stream.reset();
+                    SourceSerializationResult result = BinaryModelSourceSerializer.serialize(writer, source, this.runtime);
+                    this.serializationResults.add(result);
+                    this.sourceSerializations.put(source.getId(), stream.toByteArray());
+                }
+            });
         }
     }
 
@@ -112,37 +115,6 @@ public class BinaryModelRepositorySerializer
         }
         int index = path.lastIndexOf('/');
         return Tuples.pair(path.substring(0, index), path.substring(index + 1));
-    }
-
-    private static boolean isSourceInRepository(Source source, String repository)
-    {
-        return isSourceInRepository(source.getId(), repository);
-    }
-
-    private static boolean isSourceInRepository(String sourceId, String repository)
-    {
-        if ((sourceId == null) || sourceId.isEmpty())
-        {
-            return false;
-        }
-
-        int start = (sourceId.charAt(0) == '/') ? 1 : 0;
-        int end = sourceId.indexOf('/', start);
-
-        if (repository == null)
-        {
-            return end == -1;
-        }
-
-        if (end == -1)
-        {
-            return (sourceId.length() == (repository.length() + start)) &&
-                    sourceId.startsWith(repository, start);
-        }
-
-        return (end == (repository.length() + start)) &&
-                (sourceId.charAt(end) == '/') &&
-                sourceId.startsWith(repository, start);
     }
 
     public static void serialize(OutputStream stream, String platformVersion, String modelVersion, String repositoryName, PureRuntime runtime) throws IOException

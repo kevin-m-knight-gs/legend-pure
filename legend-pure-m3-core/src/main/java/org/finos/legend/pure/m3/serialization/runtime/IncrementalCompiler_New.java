@@ -599,7 +599,7 @@ public class IncrementalCompiler_New extends IncrementalCompiler
     private MutableSet<? extends PackageableElement> collectImportGroups(String sourceId)
     {
         Package imports = (Package)this.processorSupport.package_getByUserPath("system::imports");
-        return imports._children().selectWith(Imports.IS_IMPORT_GROUP_FOR_SOURCE, sourceId).toSet();
+        return imports._children().selectWith(Imports::isImportGroupForSource, sourceId).toSet();
     }
 
     private void removeInstanceButNotPackage(CoreInstance instance)

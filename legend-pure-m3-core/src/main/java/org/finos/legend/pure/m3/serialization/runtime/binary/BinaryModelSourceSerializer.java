@@ -167,7 +167,7 @@ public class BinaryModelSourceSerializer
     private void prepareMainIndexes()
     {
         ListMultimap<Parser, CoreInstance> elements = this.source.getElementsByParser();
-        for (Parser parser : this.source.getElementsByParser().keysView().toSortedListBy(Parser.GET_NAME))
+        for (Parser parser : this.source.getElementsByParser().keysView().toSortedListBy(Parser::getName))
         {
             possiblyRegisterString(parser.getName());
             for (CoreInstance instance : elements.get(parser))
@@ -203,7 +203,7 @@ public class BinaryModelSourceSerializer
     {
         // Write instances by parser
         ListMultimap<Parser, CoreInstance> instancesByParser = this.source.getElementsByParser();
-        ListIterable<Parser> parsersSortedByName = instancesByParser.keysView().toSortedListBy(Parser.GET_NAME);
+        ListIterable<Parser> parsersSortedByName = instancesByParser.keysView().toSortedListBy(Parser::getName);
         writer.writeInt(parsersSortedByName.size());
         for (Parser parser : parsersSortedByName)
         {
@@ -309,10 +309,9 @@ public class BinaryModelSourceSerializer
         ListMultimap<Parser, CoreInstance> elementsByParser = this.source.getElementsByParser();
         if (elementsByParser != null)
         {
-            for (Parser parser : elementsByParser.keysView().toSortedListBy(Parser.GET_NAME))
-            {
-                Iterate.addAllIterable(elementsByParser.get(parser), this.serializationQueue);
-            }
+            elementsByParser.keyMultiValuePairsView()
+                    .toSortedListBy(pair -> pair.getOne().getName())
+                    .forEach(pair -> Iterate.addAllIterable(pair.getTwo(), this.serializationQueue));
         }
 
         // Add import groups
