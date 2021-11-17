@@ -34,6 +34,7 @@ import org.finos.legend.pure.m3.exception.PureExecutionException;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation._class._Class;
 import org.finos.legend.pure.m3.navigation._package._Package;
@@ -47,6 +48,7 @@ import org.finos.legend.pure.m4.coreinstance.primitive.PrimitiveCoreInstance;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate;
 import org.finos.legend.pure.runtime.java.compiled.generation.JavaPackageAndImportBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.CompiledSupport;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.AbstractLazyReflectiveCoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.ReflectiveCoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.ValCoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.FullJavaPaths;
@@ -243,9 +245,7 @@ public class CompiledProcessorSupport implements ProcessorSupport
     {
         try
         {
-            return (CoreInstance) this.globalClassLoader.loadClass(
-                            inferred ? FullJavaPaths.InferredGenericType_Impl :
-                                    FullJavaPaths.GenericType_Impl)
+            return (CoreInstance) this.globalClassLoader.loadClass(inferred ? FullJavaPaths.InferredGenericType_Impl : FullJavaPaths.GenericType_Impl)
                     .getConstructor(String.class).newInstance("id");
         }
         catch (ReflectiveOperationException e)
@@ -255,27 +255,24 @@ public class CompiledProcessorSupport implements ProcessorSupport
     }
 
     @Override
-    public CoreInstance package_getByUserPath(final String path)
+    public CoreInstance package_getByUserPath(String path)
     {
-        CoreInstance element = null;
+        if (PrimitiveUtilities.isPrimitiveTypeName(path))
+        {
+            return this.metadataAccessor.getPrimitiveType(path);
+        }
+        CoreInstance element;
         try
         {
-            if (ModelRepository.PRIMITIVE_TYPE_NAMES.contains(path) || M3Paths.Number.equals(path))
-            {
-                element = this.metadataAccessor.getPrimitiveType(path);
-            }
-            else
-            {
-                String fullSystemPath = M3Paths.Package.equals(path) ? path : "Root::" + path;
-                element = this.metadataAccessor.getClass(fullSystemPath);
-            }
-
+            String fullSystemPath = M3Paths.Package.equals(path) ? path : "Root::" + path;
+            element = this.metadataAccessor.getClass(fullSystemPath);
             //todo check for other enumerations and other packageable elements
         }
-        catch (Throwable t)
+        catch (Throwable ignore)
         {
             //todo - change metadata to not throw
             //Ignore
+            element = null;
         }
 
         if (element == null)
@@ -298,7 +295,7 @@ public class CompiledProcessorSupport implements ProcessorSupport
         {
             return this.metadataAccessor.getClass(M3Paths.Package);
         }
-        if (ModelRepository.PRIMITIVE_TYPE_NAMES.contains(root) || M3Paths.Number.equals(root))
+        if (PrimitiveUtilities.isPrimitiveTypeName(root))
         {
             return this.metadataAccessor.getPrimitiveType(root);
         }
@@ -308,17 +305,14 @@ public class CompiledProcessorSupport implements ProcessorSupport
     @Override
     public CoreInstance newEphemeralAnonymousCoreInstance(String type)
     {
+        if (ModelRepository.PRIMITIVE_TYPE_NAMES.contains(type))
+        {
+            return new ValCoreInstance(null, type);
+        }
         try
         {
-            if (ModelRepository.PRIMITIVE_TYPE_NAMES.contains(type))
-            {
-                return new ValCoreInstance(null, type);
-            }
-            else
-            {
-                String className = JavaPackageAndImportBuilder.buildPackageFromUserPath(type) + "." + "Root_" + type.replace("::", "_") + "_Impl";
-                return (CoreInstance) this.globalClassLoader.loadClass(className).getConstructor(String.class).newInstance("NO_ID");
-            }
+            String className = JavaPackageAndImportBuilder.buildPackageFromUserPath(type) + "." + "Root_" + type.replace("::", "_") + "_Impl";
+            return (CoreInstance) this.globalClassLoader.loadClass(className).getConstructor(String.class).newInstance("NO_ID");
         }
         catch (ReflectiveOperationException e)
         {
@@ -329,12 +323,12 @@ public class CompiledProcessorSupport implements ProcessorSupport
     @Override
     public CoreInstance newCoreInstance(String name, String typeName, SourceInformation sourceInformation)
     {
+        if (ModelRepository.PRIMITIVE_TYPE_NAMES.contains(typeName))
+        {
+            return new ValCoreInstance(name, typeName);
+        }
         try
         {
-            if (ModelRepository.PRIMITIVE_TYPE_NAMES.contains(typeName))
-            {
-                return new ValCoreInstance(name, typeName);
-            }
             //When invoked from newCoreInstance(name, classifier, sourceInformation, repository), typeName already begins with Root
             String className = (typeName.startsWith("Root") ? JavaPackageAndImportBuilder.buildPackageFromSystemPath(typeName) + "." + typeName + "_Impl" :
                     JavaPackageAndImportBuilder.buildPackageFromUserPath(typeName) + "." + "Root_" + typeName.replace("::", "_") + "_Impl");
@@ -350,12 +344,6 @@ public class CompiledProcessorSupport implements ProcessorSupport
     public CoreInstance newCoreInstance(String name, CoreInstance classifier, SourceInformation sourceInformation)
     {
         return newCoreInstance(name, fullName(classifier), sourceInformation);
-    }
-
-
-    private CoreInstance getPrimitiveType(String type)
-    {
-        return this.metadataAccessor.getPrimitiveType(type);
     }
 
     @Override
@@ -430,6 +418,11 @@ public class CompiledProcessorSupport implements ProcessorSupport
         if (instance instanceof ValCoreInstance)
         {
             return this.metadataAccessor.getPrimitiveType(((ValCoreInstance) instance).getType());
+        }
+
+        if (instance instanceof AbstractLazyReflectiveCoreInstance)
+        {
+            return instance.getClassifier();
         }
 
         //todo: clean this up, seem to have interpreted style core instances in compiled
