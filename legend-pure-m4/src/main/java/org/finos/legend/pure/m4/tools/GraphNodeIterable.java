@@ -201,7 +201,6 @@ public class GraphNodeIterable extends AbstractLazyIterable<CoreInstance>
      */
     public enum NodeFilterResult
     {
-
         /**
          * Accept the node for iteration, and continue on to connected nodes.
          */

@@ -232,7 +232,7 @@ public class Obj
         return mergeObjValue(currentValue, newValue, description, null);
     }
 
-    private static  <T> T mergeObjValue(T currentValue, T newValue, String description, BiConsumer<? super T, ? super StringBuilder> messageAppender)
+    private static <T> T mergeObjValue(T currentValue, T newValue, String description, BiConsumer<? super T, ? super StringBuilder> messageAppender)
     {
         if (currentValue == null)
         {

@@ -426,11 +426,6 @@ public abstract class DistributedBinaryGraphDeserializer
             this.validateObjs = validateObjs;
         }
 
-        private Single(FileReader fileReader, boolean validateObjs)
-        {
-            this(fileReader, null, validateObjs);
-        }
-
         @Override
         public boolean hasClassifier(String classifierId)
         {
@@ -497,12 +492,15 @@ public abstract class DistributedBinaryGraphDeserializer
             for (String instanceId : instanceIds)
             {
                 SourceCoordinates sourceCoordinates = classifierIndex.getSourceCoordinates(instanceId);
-                if (sourceCoordinates == null)
+                if (sourceCoordinates != null)
+                {
+                    sourceCoordinatesByFile.getIfAbsentPut(sourceCoordinates.getFilePath(), Lists.mutable::empty).add(sourceCoordinates);
+                    size++;
+                }
+                else if (throwIfNotFound)
                 {
                     throw new UnknownInstanceException(classifierId, instanceId);
                 }
-                sourceCoordinatesByFile.getIfAbsentPut(sourceCoordinates.getFilePath(), Lists.mutable::empty).add(sourceCoordinates);
-                size++;
             }
             if (size == 0)
             {
