@@ -14,13 +14,10 @@
 
 package org.finos.legend.pure.m3.navigation.graph;
 
-import org.eclipse.collections.api.RichIterable;
-import org.eclipse.collections.api.block.procedure.Procedure;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
-import org.eclipse.collections.impl.lazy.AbstractLazyIterable;
 import org.eclipse.collections.impl.utility.ArrayIterate;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Any;
 import org.finos.legend.pure.m3.navigation.M3Paths;
@@ -30,15 +27,15 @@ import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.tools.SafeAppendable;
 
-import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class GraphPath
 {
     private static final Pattern VALID_START_NODE_PATH = Pattern.compile("(::)|((\\w[\\w$]*+::)*+\\w[\\w$]*+(~[\\w$]++)?)");
+    private static final Pattern EDGE_PATTERN = Pattern.compile("(?<prop>\\w[\\w$]*+)(\\[((?<index>\\d+)|('(?<name>.*)')|((?<keyProp>\\w[\\w$]*)='(?<key>.*)'))])?");
 
     private final String startNodePath;
     private final ImmutableList<Edge> edges;
@@ -46,7 +43,17 @@ public class GraphPath
     private GraphPath(String startNodePath, ImmutableList<Edge> edges)
     {
         this.startNodePath = startNodePath;
-        this.edges = (edges == null) ? Lists.immutable.empty() : edges;
+        this.edges = edges;
+    }
+
+    private GraphPath(String startNodePath, Edge... edges)
+    {
+        this(startNodePath, Lists.immutable.with(edges));
+    }
+
+    private GraphPath(String startNodePath)
+    {
+        this(startNodePath, Lists.immutable.empty());
     }
 
     public int getNodeCount()
@@ -59,14 +66,30 @@ public class GraphPath
         return this.startNodePath;
     }
 
-    public RichIterable<CoreInstance> getNodes(ProcessorSupport processorSupport)
+    public void forEachNode(Consumer<? super CoreInstance> consumer, ProcessorSupport processorSupport)
     {
-        return new GraphPathNodeIterable(processorSupport);
+        CoreInstance node = getStartNode(processorSupport);
+        consumer.accept(node);
+        for (int i = 0, edgeCount = getEdgeCount(); i < edgeCount; i++)
+        {
+            node = applyPathElementAtIndex(node, i);
+            consumer.accept(node);
+        }
     }
 
     public int getEdgeCount()
     {
         return this.edges.size();
+    }
+
+    public Edge getEdge(int index)
+    {
+        return this.edges.get(index);
+    }
+
+    public void forEachEdge(Consumer<? super Edge> consumer)
+    {
+        this.edges.forEach(consumer);
     }
 
     public ListIterable<Edge> getEdges()
@@ -94,6 +117,13 @@ public class GraphPath
         return resolveUpTo(getEdgeCount(), processorSupport);
     }
 
+    public ResolvedGraphPath resolveFully(ProcessorSupport processorSupport)
+    {
+        MutableList<CoreInstance> nodes = Lists.mutable.ofInitialCapacity(getNodeCount());
+        forEachNode(nodes::add, processorSupport);
+        return new ResolvedGraphPath(this, nodes.toImmutable());
+    }
+
     public GraphPath subpath(int end)
     {
         if (end == this.edges.size())
@@ -104,7 +134,7 @@ public class GraphPath
         int resolvedEnd = (end < 0) ? (this.edges.size() + end) : end;
         if (resolvedEnd == 0)
         {
-            return new GraphPath(this.startNodePath, null);
+            return new GraphPath(this.startNodePath);
         }
 
         if ((resolvedEnd > this.edges.size()) || (resolvedEnd < 0))
@@ -118,7 +148,7 @@ public class GraphPath
     {
         if (this.edges.isEmpty())
         {
-            // No path elements: impossible to reduce
+            // No edges: impossible to reduce
             return this;
         }
 
@@ -144,10 +174,10 @@ public class GraphPath
         if (newStartIndex == pathElementCount)
         {
             // Reduced to a new start node with no path elements
-            return new GraphPath(newStartNodePath, null);
+            return new GraphPath(newStartNodePath);
         }
         // Reduced to a new start node with a reduced set of path elements
-        return new GraphPath(newStartNodePath, Lists.immutable.with(this.edges.subList(newStartIndex, pathElementCount).toArray(new Edge[pathElementCount - newStartIndex])));
+        return new GraphPath(newStartNodePath, this.edges.subList(newStartIndex, pathElementCount).toArray(new Edge[pathElementCount - newStartIndex]));
     }
 
     public String getDescription()
@@ -289,76 +319,6 @@ public class GraphPath
         return message;
     }
 
-    private class GraphPathNodeIterable extends AbstractLazyIterable<CoreInstance>
-    {
-        private final ProcessorSupport processorSupport;
-
-        private GraphPathNodeIterable(ProcessorSupport processorSupport)
-        {
-            this.processorSupport = processorSupport;
-        }
-
-        @Override
-        public int size()
-        {
-            return getNodeCount();
-        }
-
-        @Override
-        public boolean isEmpty()
-        {
-            return false;
-        }
-
-        @Override
-        public void each(Procedure<? super CoreInstance> procedure)
-        {
-            CoreInstance node = getStartNode(this.processorSupport);
-            procedure.value(node);
-            for (int i = 0, edgeCount = getEdgeCount(); i < edgeCount; i++)
-            {
-                node = applyPathElementAtIndex(node, i);
-                procedure.value(node);
-            }
-        }
-
-        @Override
-        public Iterator<CoreInstance> iterator()
-        {
-            return new GraphPathNodeIterator(this.processorSupport);
-        }
-    }
-
-    private class GraphPathNodeIterator implements Iterator<CoreInstance>
-    {
-        private final ProcessorSupport processorSupport;
-        private CoreInstance node = null;
-        private int currentEdge = -1;
-
-        private GraphPathNodeIterator(ProcessorSupport processorSupport)
-        {
-            this.processorSupport = processorSupport;
-        }
-
-        @Override
-        public boolean hasNext()
-        {
-            return this.currentEdge < getEdgeCount();
-        }
-
-        @Override
-        public CoreInstance next()
-        {
-            if (!hasNext())
-            {
-                throw new NoSuchElementException();
-            }
-            this.node = (this.node == null) ? getStartNode(this.processorSupport) : applyPathElementAtIndex(this.node, this.currentEdge);
-            this.currentEdge++;
-            return this.node;
-        }
-    }
-
     public static Builder newPathBuilder(String startNodePath)
     {
         if (startNodePath == null)
@@ -417,28 +377,35 @@ public class GraphPath
 
     private static Edge parseEdge(String description, int start, int end)
     {
-        Edge edge = ToOnePropertyEdge.tryParse(description, start, end);
-        if (edge == null)
+        Matcher matcher = EDGE_PATTERN.matcher(description).region(start, end);
+        if (!matcher.matches())
         {
-            edge = ToManyPropertyAtIndexEdge.tryParse(description, start, end);
-            if (edge == null)
+            throw new RuntimeException("Invalid GraphPath description (cannot parse region from " + start + " to " + end + "): " + description);
+        }
+        String property = matcher.group("prop");
+        String index = matcher.group("index");
+        if (index != null)
+        {
+            try
             {
-                edge = ToManyPropertyAtIndexEdge.tryParse(description, start, end);
-                if (edge == null)
-                {
-                    edge = ToManyPropertyWithNameEdge.tryParse(description, start, end);
-                    if (edge == null)
-                    {
-                        edge = ToManyPropertyWithStringKeyEdge.tryParse(description, start, end);
-                        if (edge == null)
-                        {
-                            throw new RuntimeException("Invalid GraphPath description (cannot parse region from " + start + " to " + end + ": " + description);
-                        }
-                    }
-                }
+                return new ToManyPropertyAtIndexEdge(property, Integer.parseInt(index));
+            }
+            catch (NumberFormatException e)
+            {
+                throw new RuntimeException("Invalid GraphPath description (cannot parse region from " + start + " to " + end + "): " + description, e);
             }
         }
-        return edge;
+        String name = matcher.group("name");
+        if (name != null)
+        {
+            return new ToManyPropertyWithNameEdge(property, name);
+        }
+        String keyProperty = matcher.group("keyProp");
+        if (keyProperty != null)
+        {
+            return new ToManyPropertyWithStringKeyEdge(property, keyProperty, matcher.group("key"));
+        }
+        return new ToOnePropertyEdge(property);
     }
 
     private static String getDescription(String startNodePath, ListIterable<? extends Edge> edges)
@@ -619,8 +586,6 @@ public class GraphPath
 
     private static class ToOnePropertyEdge extends Edge
     {
-        private static final Pattern PATTERN = Pattern.compile("[a-zA-Z_]\\w*+");
-
         private ToOnePropertyEdge(String property)
         {
             super(property);
@@ -635,25 +600,13 @@ public class GraphPath
         @Override
         public int hashCode()
         {
-            return getClass().hashCode() ^ this.property.hashCode();
+            return this.property.hashCode();
         }
 
         @Override
         CoreInstance apply(CoreInstance node)
         {
             return node.getValueForMetaPropertyToOne(this.property);
-        }
-
-        static ToOnePropertyEdge tryParse(String string, int start, int end)
-        {
-            Matcher matcher = PATTERN.matcher(string).region(start, end);
-            if (!matcher.matches())
-            {
-                return null;
-            }
-
-            String property = string.substring(start, end);
-            return new ToOnePropertyEdge(property);
         }
     }
 
@@ -683,8 +636,6 @@ public class GraphPath
 
     private static class ToManyPropertyAtIndexEdge extends ToManyPropertyEdge
     {
-        private static final Pattern PATTERN = Pattern.compile("([a-zA-Z_]\\w*+)\\[([0-9]++)]");
-
         private final int index;
 
         private ToManyPropertyAtIndexEdge(String property, int index)
@@ -711,7 +662,7 @@ public class GraphPath
         @Override
         public int hashCode()
         {
-            return getClass().hashCode() ^ this.property.hashCode() ^ this.index;
+            return (41 * this.property.hashCode()) + this.index;
         }
 
         @Override
@@ -732,25 +683,10 @@ public class GraphPath
         {
             return appendable.append("->at(").append(this.index).append(')');
         }
-
-        static ToManyPropertyAtIndexEdge tryParse(String string, int start, int end)
-        {
-            Matcher matcher = PATTERN.matcher(string).region(start, end);
-            if (!matcher.matches())
-            {
-                return null;
-            }
-
-            String property = matcher.group(1);
-            int index = Integer.parseInt(matcher.group(2));
-            return new ToManyPropertyAtIndexEdge(property, index);
-        }
     }
 
     private static class ToManyPropertyWithNameEdge extends ToManyPropertyEdge
     {
-        private static final Pattern PATTERN = Pattern.compile("([a-zA-Z_]\\w*+)\\['(.*)']");
-
         private final String valueName;
 
         private ToManyPropertyWithNameEdge(String property, String valueName)
@@ -777,7 +713,7 @@ public class GraphPath
         @Override
         public int hashCode()
         {
-            return getClass().hashCode() ^ this.property.hashCode() ^ this.valueName.hashCode();
+            return (37 * this.property.hashCode()) + this.valueName.hashCode();
         }
 
         @Override
@@ -797,25 +733,10 @@ public class GraphPath
         {
             return appendable.append("->get('").append(this.valueName).append("')->toOne()");
         }
-
-        static ToManyPropertyWithNameEdge tryParse(String string, int start, int end)
-        {
-            Matcher matcher = PATTERN.matcher(string).region(start, end);
-            if (!matcher.matches())
-            {
-                return null;
-            }
-
-            String property = matcher.group(1);
-            String valueName = matcher.group(2);
-            return new ToManyPropertyWithNameEdge(property, valueName);
-        }
     }
 
     private static class ToManyPropertyWithStringKeyEdge extends ToManyPropertyEdge
     {
-        private static final Pattern PATTERN = Pattern.compile("([a-zA-Z_]\\w*+)\\[([a-zA-Z_]\\w*+)='(.*)']");
-
         private final String keyProperty;
         private final String key;
 
@@ -844,7 +765,7 @@ public class GraphPath
         @Override
         public int hashCode()
         {
-            return getClass().hashCode() ^ this.property.hashCode() ^ this.keyProperty.hashCode() ^ this.key.hashCode();
+            return (13 * (13 * this.property.hashCode()) + this.keyProperty.hashCode()) + this.key.hashCode();
         }
 
         @Override
@@ -863,20 +784,6 @@ public class GraphPath
         SafeAppendable writePureSelectExpression(SafeAppendable appendable)
         {
             return appendable.append("->filter(x | $x.").append(this.keyProperty).append(" == '").append(this.key).append("')->toOne()");
-        }
-
-        static ToManyPropertyWithStringKeyEdge tryParse(String string, int start, int end)
-        {
-            Matcher matcher = PATTERN.matcher(string).region(start, end);
-            if (!matcher.matches())
-            {
-                return null;
-            }
-
-            String property = matcher.group(1);
-            String keyProperty = matcher.group(2);
-            String key = matcher.group(3);
-            return new ToManyPropertyWithStringKeyEdge(property, keyProperty, key);
         }
     }
 
