@@ -14,8 +14,8 @@
 
 package org.finos.legend.pure.m3.tools;
 
+import org.eclipse.collections.api.block.predicate.Predicate;
 import org.eclipse.collections.api.block.procedure.Procedure;
-import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.set.ImmutableSet;
 import org.eclipse.collections.impl.lazy.AbstractLazyIterable;
@@ -28,10 +28,12 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
-import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 public class PackageTreeIterable extends AbstractLazyIterable<Package>
 {
@@ -47,36 +49,88 @@ public class PackageTreeIterable extends AbstractLazyIterable<Package>
     @Override
     public Iterator<Package> iterator()
     {
-        return new PackageTreeIterator(this.startingPackages, this.depthFirst);
+        return Spliterators.iterator(spliterator());
     }
 
     @Override
     public Spliterator<Package> spliterator()
     {
-        return Spliterators.spliteratorUnknownSize(iterator(), Spliterator.DISTINCT | Spliterator.NONNULL);
+        return new PackageTreeSpliterator(this.startingPackages, this.depthFirst);
     }
 
     @Override
     public void each(Procedure<? super Package> procedure)
     {
-        for (Package pkg : this)
-        {
-            procedure.value(pkg);
-        }
+        forEach((Consumer<? super Package>) procedure);
     }
 
     @Override
     public void forEach(Consumer<? super Package> consumer)
     {
-        for (Package pkg : this)
-        {
-            consumer.accept(pkg);
-        }
+        spliterator().forEachRemaining(consumer);
+    }
+
+    @Override
+    public boolean isEmpty()
+    {
+        return this.startingPackages.isEmpty();
+    }
+
+    @Override
+    public Package getAny()
+    {
+        return this.startingPackages.getAny();
+    }
+
+    @Override
+    public Package getFirst()
+    {
+        return this.startingPackages.getFirst();
+    }
+
+    @Override
+    public Package detect(Predicate<? super Package> predicate)
+    {
+        return detectOptional(predicate).orElse(null);
+    }
+
+    @Override
+    public Optional<Package> detectOptional(Predicate<? super Package> predicate)
+    {
+        return stream().filter(predicate).findFirst();
+    }
+
+    @Override
+    public boolean anySatisfy(Predicate<? super Package> predicate)
+    {
+        return stream().anyMatch(predicate);
+    }
+
+    @Override
+    public boolean allSatisfy(Predicate<? super Package> predicate)
+    {
+        return stream().anyMatch(predicate);
+    }
+
+    @Override
+    public boolean noneSatisfy(Predicate<? super Package> predicate)
+    {
+        return stream().noneMatch(predicate);
     }
 
     public boolean isDepthFirst()
     {
         return this.depthFirst;
+    }
+
+    public Stream<Package> stream()
+    {
+        return StreamSupport.stream(spliterator(), false);
+    }
+
+    public Stream<Package> parallelStream()
+    {
+        return StreamSupport.stream(spliterator(), true);
     }
 
     public static PackageTreeIterable newPackageTreeIterable(Iterable<? extends Package> startingPackages, boolean depthFirst)
@@ -91,7 +145,7 @@ public class PackageTreeIterable extends AbstractLazyIterable<Package>
 
     public static PackageTreeIterable newPackageTreeIterable(Package startingPackage, boolean depthFirst)
     {
-        return newPackageTreeIterable(Lists.immutable.with(startingPackage), depthFirst);
+        return newPackageTreeIterable(Sets.immutable.with(startingPackage), depthFirst);
     }
 
     public static PackageTreeIterable newPackageTreeIterable(Package startingPackage)
@@ -119,33 +173,80 @@ public class PackageTreeIterable extends AbstractLazyIterable<Package>
         return newRootPackageTreeIterable(processorSupport, true);
     }
 
-    private static class PackageTreeIterator implements Iterator<Package>
+    private static class PackageTreeSpliterator implements Spliterator<Package>
     {
         private final Deque<Package> deque;
         private final boolean depthFirst;
 
-        private PackageTreeIterator(ImmutableSet<Package> startingNodes, boolean depthFirst)
+        private PackageTreeSpliterator(Deque<Package> deque, boolean depthFirst)
         {
-            this.deque = new ArrayDeque<>(startingNodes.castToSet());
+            this.deque = deque;
             this.depthFirst = depthFirst;
         }
 
-        @Override
-        public boolean hasNext()
+        private PackageTreeSpliterator(ImmutableSet<Package> startingNodes, boolean depthFirst)
         {
-            return !this.deque.isEmpty();
+            this(new ArrayDeque<>(startingNodes.castToSet()), depthFirst);
         }
 
         @Override
-        public Package next()
+        public boolean tryAdvance(Consumer<? super Package> action)
         {
             Package pkg = this.deque.pollFirst();
             if (pkg == null)
             {
-                throw new NoSuchElementException();
+                return false;
             }
+
             pkg._children().forEach(this::possiblyAddChild);
-            return pkg;
+            action.accept(pkg);
+            return true;
+        }
+
+        @Override
+        public void forEachRemaining(Consumer<? super Package> action)
+        {
+            Package pkg;
+            while ((pkg = this.deque.pollFirst()) != null)
+            {
+                pkg._children().forEach(this::possiblyAddChild);
+                action.accept(pkg);
+            }
+        }
+
+        @Override
+        public Spliterator<Package> trySplit()
+        {
+            if (this.deque.size() < 2)
+            {
+                return null;
+            }
+
+            int splitSize = this.deque.size() / 2;
+            Deque<Package> newDeque = new ArrayDeque<>(splitSize);
+            for (int i = 0; i < splitSize; i++)
+            {
+                newDeque.addFirst(this.deque.pollLast());
+            }
+            return new PackageTreeSpliterator(newDeque, this.depthFirst);
+        }
+
+        @Override
+        public long estimateSize()
+        {
+            return this.deque.isEmpty() ? 0L : Long.MAX_VALUE;
+        }
+
+        @Override
+        public long getExactSizeIfKnown()
+        {
+            return this.deque.isEmpty() ? 0L : -1L;
+        }
+
+        @Override
+        public int characteristics()
+        {
+            return NONNULL | DISTINCT;
         }
 
         private void possiblyAddChild(CoreInstance child)
