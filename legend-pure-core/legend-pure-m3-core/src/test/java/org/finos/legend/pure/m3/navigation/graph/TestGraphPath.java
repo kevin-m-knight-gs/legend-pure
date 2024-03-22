@@ -86,6 +86,9 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
         Assert.assertEquals(
                 "test::domain::ClassA.properties[name='prop2'].genericType.rawType",
                 GraphPath.newPathBuilder("test::domain::ClassA").addToManyPropertyValueWithKey("properties", "name", "prop2").addToOneProperties("genericType", "rawType").build().getDescription());
+        Assert.assertEquals(
+                "test::domain::ClassA.properties[name='name with escaped text, \\'\\n\\b\\\\, and other unusual characters, \"#$%^.'].genericType.rawType",
+                GraphPath.newPathBuilder("test::domain::ClassA").addToManyPropertyValueWithKey("properties", "name", "name with escaped text, '\n\b\\, and other unusual characters, \"#$%^.").addToOneProperties("genericType", "rawType").build().getDescription());
 
         Assert.assertEquals(
                 "::",
@@ -735,6 +738,12 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                         .addToOneProperties("genericType", "rawType")
                         .build(),
                 GraphPath.parseDescription("test::domain::ClassA.properties[name='prop2'].genericType.rawType"));
+        Assert.assertEquals(
+                GraphPath.newPathBuilder("test::domain::ClassA")
+                        .addToManyPropertyValueWithKey("properties", "name", "name with escaped text, '\n\b\\, and other unusual characters, \"#$%^.")
+                        .addToOneProperties("genericType", "rawType")
+                        .build(),
+                GraphPath.parseDescription("test::domain::ClassA.properties[name='name with escaped text, \\'\\n\\b\\\\, and other unusual characters, \"#$%^.'].genericType.rawType"));
 
         ArrayAdapter.adapt(
                         "test::domain::ClassA",
@@ -742,6 +751,7 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                         "test::domain::ClassA.properties[0].genericType.rawType",
                         "test::domain::ClassA.properties['prop2'].genericType.rawType",
                         "test::domain::ClassA.properties[name='prop2'].genericType.rawType",
+                        "test::domain::ClassA.properties[name='name with escaped text, \\'\\n\\b\\\\, and other unusual characters, \"#$%^.'].genericType.rawType",
                         "::",
                         "::.children['test']",
                         "::.children['test'].children['domain']",

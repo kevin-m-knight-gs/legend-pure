@@ -14,6 +14,11 @@
 
 package org.finos.legend.pure.m3.navigation.graph;
 
+import org.antlr.v4.runtime.BailErrorStrategy;
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.atn.PredictionMode;
+import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.ListIterable;
@@ -24,19 +29,17 @@ import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.serialization.grammar.m3parser.antlr.M3Lexer;
+import org.finos.legend.pure.m3.serialization.grammar.m3parser.antlr.M3Parser;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.finos.legend.pure.m4.serialization.grammar.StringEscape;
 import org.finos.legend.pure.m4.tools.SafeAppendable;
 
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class GraphPath
 {
-    private static final Pattern VALID_START_NODE_PATH = Pattern.compile("(::)|((\\w[\\w$]*+::)*+\\w[\\w$]*+(~[\\w$]++)?)");
-    private static final Pattern EDGE_PATTERN = Pattern.compile("(?<prop>\\w[\\w$]*+)(\\[((?<index>\\d+)|('(?<name>.*)')|((?<keyProp>\\w[\\w$]*)='(?<key>.*)'))])?");
-
     private final String startNodePath;
     private final ImmutableList<Edge> edges;
 
@@ -319,17 +322,14 @@ public class GraphPath
         return message;
     }
 
+    public static Builder newPathBuilder()
+    {
+        return new Builder();
+    }
+
     public static Builder newPathBuilder(String startNodePath)
     {
-        if (startNodePath == null)
-        {
-            throw new IllegalArgumentException("Start node path may not be null");
-        }
-        if (!VALID_START_NODE_PATH.matcher(startNodePath).matches())
-        {
-            throw new IllegalArgumentException("Invalid start node path: " + startNodePath);
-        }
-        return new Builder(startNodePath);
+        return newPathBuilder().withStartNodePath(startNodePath);
     }
 
     public static Builder newPathBuilder(GraphPath path)
@@ -343,69 +343,17 @@ public class GraphPath
 
     public static GraphPath buildPath(String startNodePath)
     {
-        return newPathBuilder(startNodePath).build();
+        return newPathBuilder().withStartNodePath(startNodePath).build();
     }
 
     public static GraphPath buildPath(String startNodePath, String... toOneProperties)
     {
-        return newPathBuilder(startNodePath).addToOneProperties(toOneProperties).build();
+        return newPathBuilder().withStartNodePath(startNodePath).addToOneProperties(toOneProperties).build();
     }
 
     public static GraphPath parseDescription(String description)
     {
-        if (description == null)
-        {
-            throw new IllegalArgumentException("GraphPath description may not be null");
-        }
-        int end = description.indexOf('.');
-        if (end == -1)
-        {
-            return buildPath(description);
-        }
-        Builder builder = newPathBuilder(description.substring(0, end));
-        int start = end + 1;
-        end = description.indexOf('.', start);
-        while (end != -1)
-        {
-            builder.addEdge(parseEdge(description, start, end));
-            start = end + 1;
-            end = description.indexOf('.', start);
-        }
-        builder.addEdge(parseEdge(description, start, description.length()));
-        return builder.build();
-    }
-
-    private static Edge parseEdge(String description, int start, int end)
-    {
-        Matcher matcher = EDGE_PATTERN.matcher(description).region(start, end);
-        if (!matcher.matches())
-        {
-            throw new RuntimeException("Invalid GraphPath description (cannot parse region from " + start + " to " + end + "): " + description);
-        }
-        String property = matcher.group("prop");
-        String index = matcher.group("index");
-        if (index != null)
-        {
-            try
-            {
-                return new ToManyPropertyAtIndexEdge(property, Integer.parseInt(index));
-            }
-            catch (NumberFormatException e)
-            {
-                throw new RuntimeException("Invalid GraphPath description (cannot parse region from " + start + " to " + end + "): " + description, e);
-            }
-        }
-        String name = matcher.group("name");
-        if (name != null)
-        {
-            return new ToManyPropertyWithNameEdge(property, name);
-        }
-        String keyProperty = matcher.group("keyProp");
-        if (keyProperty != null)
-        {
-            return new ToManyPropertyWithStringKeyEdge(property, keyProperty, matcher.group("key"));
-        }
-        return new ToOnePropertyEdge(property);
+        return newPathBuilder().fromDescription(description).build();
     }
 
     private static String getDescription(String startNodePath, ListIterable<? extends Edge> edges)
@@ -434,24 +382,45 @@ public class GraphPath
 
     public static class Builder
     {
-        private final String startNodePath;
-        private final MutableList<Edge> pathElements;
+        private M3Lexer lexer;
+        private M3Parser parser;
+        private String startNodePath;
+        private final MutableList<Edge> pathElements = Lists.mutable.empty();
 
-        private Builder(String startNodePath)
+        private Builder()
         {
-            this.startNodePath = startNodePath;
-            this.pathElements = Lists.mutable.empty();
         }
 
         private Builder(GraphPath path)
         {
             this.startNodePath = path.startNodePath;
-            this.pathElements = Lists.mutable.withAll(path.edges);
+            this.pathElements.addAll(path.edges.castToList());
         }
 
         public String getStartNodePath()
         {
             return this.startNodePath;
+        }
+
+        public void setStartNodePath(String path)
+        {
+            initParser(path);
+            M3Parser.GraphPathStartNodeContext context;
+            try
+            {
+                context = this.parser.graphPathStartNode();
+            }
+            catch (Exception e)
+            {
+                throw new IllegalArgumentException("Invalid GraphPath start node path '" + StringEscape.escape(path) + "'", (e instanceof ParseCancellationException) ? e.getCause() : e);
+            }
+            this.startNodePath = context.getText();
+        }
+
+        public Builder withStartNodePath(String path)
+        {
+            setStartNodePath(path);
+            return this;
         }
 
         public ListIterable<Edge> getEdges()
@@ -462,6 +431,66 @@ public class GraphPath
         public String getDescription()
         {
             return GraphPath.getDescription(this.startNodePath, this.pathElements);
+        }
+
+        public Builder fromDescription(String description)
+        {
+            initParser(description);
+            M3Parser.GraphPathContext context;
+            try
+            {
+                context = this.parser.graphPath();
+            }
+            catch (Exception e)
+            {
+                throw new IllegalArgumentException("Invalid GraphPath description '" + StringEscape.escape(description) + "'", (e instanceof ParseCancellationException) ? e.getCause() : e);
+            }
+            MutableList<Edge> edges = Lists.mutable.empty();
+            List<M3Parser.GraphPathEdgeContext> edgeContexts = context.graphPathEdge();
+            if (edgeContexts != null)
+            {
+                edgeContexts.forEach(edgeContext ->
+                {
+                    List<M3Parser.PropertyNameContext> propertyNameContexts = edgeContext.propertyName();
+                    String property = propertyNameContexts.get(0).getText();
+                    if (edgeContext.INTEGER() != null)
+                    {
+                        int index;
+                        try
+                        {
+                            index = Integer.parseInt(edgeContext.INTEGER().getText());
+                        }
+                        catch (NumberFormatException e)
+                        {
+                            throw new IllegalArgumentException("Invalid GraphPath description '" + StringEscape.escape(description) + "': index at " + edgeContext.INTEGER().getSymbol().getStartIndex() + " invalid", e);
+                        }
+                        edges.add(new ToManyPropertyAtIndexEdge(property, validateIndex(index)));
+                    }
+                    else if (edgeContext.STRING() != null)
+                    {
+                        String withQuote = StringEscape.unescape(edgeContext.STRING().getText());
+                        String key = withQuote.substring(1, withQuote.length() - 1);
+                        if (propertyNameContexts.size() == 1)
+                        {
+                            edges.add(new ToManyPropertyWithNameEdge(property, key));
+                        }
+                        else
+                        {
+                            String keyProperty = propertyNameContexts.get(1).getText();
+                            edges.add(new ToManyPropertyWithStringKeyEdge(property, keyProperty, key));
+                        }
+                    }
+                    else
+                    {
+                        edges.add(new ToOnePropertyEdge(property));
+                    }
+                });
+            }
+
+            this.startNodePath = context.graphPathStartNode().getText();
+            this.pathElements.clear();
+            this.pathElements.addAll(edges);
+            return this;
         }
 
         public String getPureExpression()
@@ -476,11 +505,7 @@ public class GraphPath
 
         public Builder addToOneProperty(String property)
         {
-            if (property == null)
-            {
-                throw new IllegalArgumentException("Property may not be null");
-            }
-            return addEdge(new ToOnePropertyEdge(property));
+            return addEdge(new ToOnePropertyEdge(validateProperty(property)));
         }
 
         public Builder addToOneProperties(String... properties)
@@ -497,51 +522,109 @@ public class GraphPath
 
         public Builder addToManyPropertyValueAtIndex(String property, int index)
         {
-            if (property == null)
-            {
-                throw new IllegalArgumentException("Property may not be null");
-            }
-            if (index < 0)
-            {
-                throw new IllegalArgumentException("Index must be non-negative: " + index);
-            }
-            return addEdge(new ToManyPropertyAtIndexEdge(property, index));
+            return addEdge(new ToManyPropertyAtIndexEdge(validateProperty(property), validateIndex(index)));
         }
 
         public Builder addToManyPropertyValueWithName(String property, String valueName)
         {
-            if (property == null)
-            {
-                throw new IllegalArgumentException("Property may not be null");
-            }
-            if (valueName == null)
-            {
-                throw new IllegalArgumentException("Value name may not be null");
-            }
-            return addEdge(new ToManyPropertyWithNameEdge(property, valueName));
+            return addEdge(new ToManyPropertyWithNameEdge(validateProperty(property), validateValueName(valueName)));
         }
 
         public Builder addToManyPropertyValueWithKey(String property, String keyProperty, String key)
         {
-            if (property == null)
-            {
-                throw new IllegalArgumentException("Property may not be null");
-            }
-            if (keyProperty == null)
-            {
-                throw new IllegalArgumentException("Key property may not be null");
-            }
-            if (key == null)
-            {
-                throw new IllegalArgumentException("Key name may not be null");
-            }
-            return addEdge(new ToManyPropertyWithStringKeyEdge(property, keyProperty, key));
+            return addEdge(new ToManyPropertyWithStringKeyEdge(validateProperty(property), validateKeyProperty(keyProperty), validateKey(key)));
         }
 
         private Builder addEdge(Edge pathElement)
         {
             this.pathElements.add(pathElement);
             return this;
+        }
+
+        private String validateProperty(String property)
+        {
+            if (property == null)
+            {
+                throw new IllegalArgumentException("Property may not be null");
+            }
+            initParser(property);
+            try
+            {
+                return this.parser.propertyName().getText();
+            }
+            catch (Exception e)
+            {
+                throw new IllegalArgumentException("Invalid property name '" + StringEscape.escape(property) + "'", (e instanceof ParseCancellationException) ? e.getCause() : e);
+            }
+        }
+
+        private int validateIndex(int index)
+        {
+            if (index < 0)
+            {
+                throw new IllegalArgumentException("Index must be non-negative: " + index);
+            }
+            return index;
+        }
+
+        private String validateValueName(String valueName)
+        {
+            if (valueName == null)
+            {
+                throw new IllegalArgumentException("Value name may not be null");
+            }
+            return valueName;
+        }
+
+        private String validateKeyProperty(String keyProperty)
+        {
+            if (keyProperty == null)
+            {
+                throw new IllegalArgumentException("Key property may not be null");
+            }
+            initParser(keyProperty);
+            try
+            {
+                return this.parser.propertyName().getText();
+            }
+            catch (Exception e)
+            {
+                throw new IllegalArgumentException("Invalid key property name '" + StringEscape.escape(keyProperty) + "\"", (e instanceof ParseCancellationException) ? e.getCause() : e);
+            }
+        }
+
+        private String validateKey(String key)
+        {
+            if (key == null)
+            {
+                throw new IllegalArgumentException("Key name may not be null");
+            }
+            return key;
+        }
+
+        private void initParser(String text)
+        {
+            if (this.lexer == null)
+            {
+                this.lexer = new M3Lexer(CharStreams.fromString(text));
+                this.lexer.removeErrorListeners();
+            }
+            else
+            {
+                this.lexer.setInputStream(CharStreams.fromString(text));
+            }
+
+            if (this.parser == null)
+            {
+                this.parser = new M3Parser(new CommonTokenStream(this.lexer));
+                this.parser.removeErrorListeners();
+                this.parser.setErrorHandler(new BailErrorStrategy());
+                this.parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
+            }
+            else
+            {
+                this.parser.setTokenStream(new CommonTokenStream(this.lexer));
+            }
         }
     }
 
@@ -725,13 +808,13 @@ public class GraphPath
         @Override
         SafeAppendable writeToManySelectMessage(SafeAppendable appendable)
         {
-            return appendable.append('\'').append(this.valueName).append('\'');
+            return StringEscape.escape(appendable.append('\''), this.valueName).append('\'');
         }
 
         @Override
         SafeAppendable writePureSelectExpression(SafeAppendable appendable)
         {
-            return appendable.append("->get('").append(this.valueName).append("')->toOne()");
+            return StringEscape.escape(appendable.append("->get('"), this.valueName).append("')->toOne()");
         }
     }
 
@@ -777,13 +860,13 @@ public class GraphPath
         @Override
         SafeAppendable writeToManySelectMessage(SafeAppendable appendable)
         {
-            return appendable.append(this.keyProperty).append("='").append(this.key).append('\'');
+            return StringEscape.escape(appendable.append(this.keyProperty).append("='"), this.key).append('\'');
         }
 
         @Override
         SafeAppendable writePureSelectExpression(SafeAppendable appendable)
         {
-            return appendable.append("->filter(x | $x.").append(this.keyProperty).append(" == '").append(this.key).append("')->toOne()");
+            return StringEscape.escape(appendable.append("->filter(x | $x.").append(this.keyProperty).append(" == '"), this.key).append("')->toOne()");
         }
     }
 
