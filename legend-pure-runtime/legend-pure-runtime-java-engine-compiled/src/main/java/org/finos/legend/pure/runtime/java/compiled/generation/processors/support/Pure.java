@@ -55,7 +55,6 @@ import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation.generictype.GenericType;
-import org.finos.legend.pure.m3.tools.ListHelper;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.DateFunctions;
@@ -1103,7 +1102,7 @@ public class Pure
                 child = packageBuilder.apply(path.get(0))._name(path.get(0))._package(pack);
                 pack._childrenAdd(child);
             }
-            return buildPackageIfNonExistent(child, ListHelper.subList(path, 1, path.size()), si, packageBuilder);
+            return buildPackageIfNonExistent(child, path.subList(1, path.size()), si, packageBuilder);
         }
         return pack;
     }

@@ -14,33 +14,32 @@
 
 package org.finos.legend.pure.runtime.java.extension.functions.interpreted.natives.meta;
 
-import java.util.Stack;
-
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.impl.factory.Lists;
+import org.finos.legend.pure.m3.compiler.Context;
+import org.finos.legend.pure.m3.compiler.postprocessing.PostProcessor;
+import org.finos.legend.pure.m3.exception.PureExecutionException;
+import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
-import org.finos.legend.pure.m3.exception.PureExecutionException;
-import org.finos.legend.pure.m3.compiler.Context;
-import org.finos.legend.pure.m3.navigation.Instance;
-import org.finos.legend.pure.m3.navigation.ValueSpecificationBootstrap;
-import org.finos.legend.pure.m3.compiler.postprocessing.PostProcessor;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
-import org.finos.legend.pure.m3.navigation._package._Package;
+import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.navigation.ValueSpecificationBootstrap;
+import org.finos.legend.pure.m3.navigation._package._Package;
 import org.finos.legend.pure.m3.serialization.grammar.ParserLibrary;
 import org.finos.legend.pure.m3.serialization.grammar.m3parser.inlinedsl.InlineDSLLibrary;
-import org.finos.legend.pure.m3.tools.ListHelper;
-import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
-import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.ModelRepository;
+import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.interpreted.ExecutionSupport;
 import org.finos.legend.pure.runtime.java.interpreted.FunctionExecutionInterpreted;
 import org.finos.legend.pure.runtime.java.interpreted.VariableContext;
 import org.finos.legend.pure.runtime.java.interpreted.natives.InstantiationContext;
 import org.finos.legend.pure.runtime.java.interpreted.natives.NativeFunction;
 import org.finos.legend.pure.runtime.java.interpreted.profiler.Profiler;
+
+import java.util.Stack;
 
 public class NewAssociation extends NativeFunction
 {
@@ -61,7 +60,7 @@ public class NewAssociation extends NativeFunction
             throw new PureExecutionException(functionExpressionToUseInStack.getSourceInformation(), "Cannot create a new Association: '" + fullPathString + "'");
         }
         String name = fullPath.getLast();
-        CoreInstance pack = _Package.findOrCreatePackageFromUserPath(ListHelper.subList(fullPath, 0, fullPath.size() - 1), this.repository, processorSupport);
+        CoreInstance pack = _Package.findOrCreatePackageFromUserPath(fullPath.subList(0, fullPath.size() - 1), this.repository, processorSupport);
 
         CoreInstance newAssociation = this.repository.newCoreInstance(name, processorSupport.package_getByUserPath(M3Paths.Association), null);
         Instance.addValueToProperty(newAssociation, M3Properties.name, this.repository.newCoreInstance(name, this.repository.getTopLevel(M3Paths.String), null), processorSupport);
