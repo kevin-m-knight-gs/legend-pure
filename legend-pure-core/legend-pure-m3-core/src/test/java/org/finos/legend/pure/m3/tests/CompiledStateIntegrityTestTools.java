@@ -30,7 +30,6 @@ import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation._class._Class;
 import org.finos.legend.pure.m3.navigation.generictype.GenericType;
 import org.finos.legend.pure.m3.navigation.graph.GraphPath;
-import org.finos.legend.pure.m3.navigation.graph.GraphPathFilterResult;
 import org.finos.legend.pure.m3.navigation.graph.GraphPathIterable;
 import org.finos.legend.pure.m3.navigation.graph.ResolvedGraphPath;
 import org.finos.legend.pure.m3.navigation.multiplicity.Multiplicity;
@@ -38,6 +37,7 @@ import org.finos.legend.pure.m3.navigation.property.Property;
 import org.finos.legend.pure.m3.tools.GraphStatistics;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
+import org.finos.legend.pure.m4.tools.GraphWalkFilterResult;
 import org.junit.Assert;
 
 import java.util.Formatter;
@@ -188,18 +188,18 @@ public class CompiledStateIntegrityTestTools
             {
                 MutableMap<T, GraphPath> graphPaths = Maps.mutable.withInitialCapacity(noSourceInfo.size());
                 BiPredicate<ResolvedGraphPath, String> propertyFilter = (resolvedGraphPath, prop) -> !M3Properties.applications.equals(prop) && !M3Properties.referenceUsages.equals(prop) && !M3Properties._package.equals(prop);
-                Function<? super ResolvedGraphPath, ? extends GraphPathFilterResult> pathFilter = resolvedGraphPath ->
+                Function<? super ResolvedGraphPath, ? extends GraphWalkFilterResult> pathFilter = resolvedGraphPath ->
                 {
                     CoreInstance endNode = resolvedGraphPath.getLastResolvedNode();
                     if ((noSourceInfo.size() == 1) && noSourceInfo.contains(endNode))
                     {
-                        return GraphPathFilterResult.ACCEPT_AND_STOP;
+                        return GraphWalkFilterResult.ACCEPT_AND_STOP;
                     }
                     if ((endNode instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.PackageableElement) && (((org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.PackageableElement) endNode)._package() != null))
                     {
-                        return GraphPathFilterResult.ACCEPT_AND_STOP;
+                        return GraphWalkFilterResult.ACCEPT_AND_STOP;
                     }
-                    return GraphPathFilterResult.ACCEPT_AND_CONTINUE;
+                    return GraphWalkFilterResult.ACCEPT_AND_CONTINUE;
                 };
                 // We resolve the set of starts to a list up front to conserve memory during the graph path searches
                 for (String start : GraphStatistics.allTopLevelAndPackagedElementPaths(processorSupport).toList())

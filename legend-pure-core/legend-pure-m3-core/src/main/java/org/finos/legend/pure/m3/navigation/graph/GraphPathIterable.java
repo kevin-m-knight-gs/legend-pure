@@ -29,6 +29,7 @@ import org.eclipse.collections.impl.lazy.AbstractLazyIterable;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.finos.legend.pure.m4.tools.GraphWalkFilterResult;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -48,14 +49,14 @@ public class GraphPathIterable extends AbstractLazyIterable<ResolvedGraphPath>
 {
     private final MapIterable<String, CoreInstance> startNodesByPath;
     private final SetIterable<CoreInstance> startNodes;
-    private final Function<? super ResolvedGraphPath, ? extends GraphPathFilterResult> pathFilter;
+    private final Function<? super ResolvedGraphPath, ? extends GraphWalkFilterResult> pathFilter;
     private final BiPredicate<? super ResolvedGraphPath, ? super String> propertyFilter;
 
-    private GraphPathIterable(MapIterable<String, CoreInstance> startNodesByPath, Function<? super ResolvedGraphPath, ? extends GraphPathFilterResult> pathFilter, BiPredicate<? super ResolvedGraphPath, ? super String> propertyFilter)
+    private GraphPathIterable(MapIterable<String, CoreInstance> startNodesByPath, Function<? super ResolvedGraphPath, ? extends GraphWalkFilterResult> pathFilter, BiPredicate<? super ResolvedGraphPath, ? super String> propertyFilter)
     {
         this.startNodesByPath = startNodesByPath;
         this.startNodes = Sets.immutable.withAll(this.startNodesByPath.valuesView());
-        this.pathFilter = (pathFilter == null) ? rgp -> GraphPathFilterResult.ACCEPT_AND_CONTINUE : pathFilter;
+        this.pathFilter = (pathFilter == null) ? rgp -> GraphWalkFilterResult.ACCEPT_AND_CONTINUE : pathFilter;
         this.propertyFilter = (propertyFilter == null) ? (rgp, p) -> true : propertyFilter;
     }
 
@@ -147,7 +148,7 @@ public class GraphPathIterable extends AbstractLazyIterable<ResolvedGraphPath>
         return this.startNodes.contains(node);
     }
 
-    private GraphPathFilterResult filterPath(ResolvedGraphPath resolvedGraphPath)
+    private GraphWalkFilterResult filterPath(ResolvedGraphPath resolvedGraphPath)
     {
         return this.pathFilter.apply(resolvedGraphPath);
     }
@@ -261,7 +262,7 @@ public class GraphPathIterable extends AbstractLazyIterable<ResolvedGraphPath>
         private void possiblyEnqueue(GraphPath path, ImmutableList<CoreInstance> resolvedNodes)
         {
             ResolvedGraphPath resolvedGraphPath = new ResolvedGraphPath(path, resolvedNodes);
-            GraphPathFilterResult filterResult = filterPath(resolvedGraphPath);
+            GraphWalkFilterResult filterResult = filterPath(resolvedGraphPath);
             if (filterResult.shouldAccept())
             {
                 enqueue(resolvedGraphPath, filterResult.shouldContinue());
@@ -286,12 +287,12 @@ public class GraphPathIterable extends AbstractLazyIterable<ResolvedGraphPath>
         }
     }
 
-    public static GraphPathIterable build(String startNodePath, Function<? super ResolvedGraphPath, ? extends GraphPathFilterResult> pathFilter, BiPredicate<? super ResolvedGraphPath, ? super String> propertyFilter, ProcessorSupport processorSupport)
+    public static GraphPathIterable build(String startNodePath, Function<? super ResolvedGraphPath, ? extends GraphWalkFilterResult> pathFilter, BiPredicate<? super ResolvedGraphPath, ? super String> propertyFilter, ProcessorSupport processorSupport)
     {
         return new GraphPathIterable(Maps.immutable.with(startNodePath, getByUserPath(startNodePath, processorSupport)), pathFilter, propertyFilter);
     }
 
-    public static GraphPathIterable build(CoreInstance startNode, Function<? super ResolvedGraphPath, ? extends GraphPathFilterResult> pathFilter, BiPredicate<? super ResolvedGraphPath, ? super String> propertyFilter, ProcessorSupport processorSupport)
+    public static GraphPathIterable build(CoreInstance startNode, Function<? super ResolvedGraphPath, ? extends GraphWalkFilterResult> pathFilter, BiPredicate<? super ResolvedGraphPath, ? super String> propertyFilter, ProcessorSupport processorSupport)
     {
         if (!GraphPath.isPackagedOrTopLevel(startNode, processorSupport))
         {
@@ -318,7 +319,7 @@ public class GraphPathIterable extends AbstractLazyIterable<ResolvedGraphPath>
     public static class Builder
     {
         private final MutableMap<String, CoreInstance> startNodesByPath = Maps.mutable.empty();
-        private Function<? super ResolvedGraphPath, ? extends GraphPathFilterResult> pathFilter = null;
+        private Function<? super ResolvedGraphPath, ? extends GraphWalkFilterResult> pathFilter = null;
         private BiPredicate<? super ResolvedGraphPath, ? super String> propertyFilter = null;
         private final ProcessorSupport processorSupport;
 
@@ -366,7 +367,7 @@ public class GraphPathIterable extends AbstractLazyIterable<ResolvedGraphPath>
             return this;
         }
 
-        public Builder withPathFilter(Function<? super ResolvedGraphPath, ? extends GraphPathFilterResult> pathFilter)
+        public Builder withPathFilter(Function<? super ResolvedGraphPath, ? extends GraphWalkFilterResult> pathFilter)
         {
             this.pathFilter = pathFilter;
             return this;

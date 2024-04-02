@@ -33,12 +33,12 @@ import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation._package._Package;
 import org.finos.legend.pure.m3.navigation.graph.GraphPath;
-import org.finos.legend.pure.m3.navigation.graph.GraphPathFilterResult;
 import org.finos.legend.pure.m3.navigation.graph.GraphPathIterable;
 import org.finos.legend.pure.m3.navigation.graph.ResolvedGraphPath;
 import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.tools.GraphNodeIterable;
+import org.finos.legend.pure.m4.tools.GraphWalkFilterResult;
 
 import java.util.Formatter;
 import java.util.Set;
@@ -200,13 +200,13 @@ public class GraphStatistics
                     int len = rgp.getGraphPath().getEdgeCount();
                     if (len > maxPathLength)
                     {
-                        return GraphPathFilterResult.REJECT;
+                        return GraphWalkFilterResult.REJECT_AND_STOP;
                     }
                     if ((len == maxPathLength) || isEndNode.test(rgp.getLastResolvedNode()))
                     {
-                        return GraphPathFilterResult.ACCEPT_AND_STOP;
+                        return GraphWalkFilterResult.ACCEPT_AND_STOP;
                     }
-                    return GraphPathFilterResult.ACCEPT_AND_CONTINUE;
+                    return GraphWalkFilterResult.ACCEPT_AND_CONTINUE;
                 })
                 .build()
                 .select(path -> isEndNode.test(path.getLastResolvedNode()))
