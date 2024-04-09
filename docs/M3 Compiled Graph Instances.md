@@ -33,18 +33,23 @@ Nonetheless, both the property and the generic type are component instances of t
 While each component instance is owned by exactly one entity, many instances (both internal and external to the entity)
 may have references to it. For example, a property of a class may appear in expressions in many different functions.
 
-Component instances that are referenced externally to their containing entities must have source information; otherwise,
-it is optional. If a component instance does have source information, it must be subsumed by the source information of
-its containing entity. Distinct component instances may have overlapping source information, but in that case one must
-subsume the other.
+Component instances may or may not have source information. If a component instance is referenced externally to its
+containing entity, it must have source information. If the component instance has a well defined location in source
+code, it should have source information which reflects this. Otherwise, source information is optional. If a component
+instance does have source information, it must be subsumed by the source information of its containing entity. Distinct
+component instances may have overlapping source information, but in that case one must subsume the other.
 
 Examples of component instances are properties, stereotypes, enum values, function expressions, and generic types.
 
 ## Packages
 
-Some packages are entities in their own right (such as Root), but most are not. Non-entity packages exist only when some
-entity is a child (directly or indirectly) of the package. Like entities, non-entity packages must have a non-empty name
-which is unique among all the children of the package's package. Non-entity packages do not have source information.
+Some packages are entities in their own right (such as Root), but most are not.
+
+Entity packages exist in their own right, whether they have children or not. They are subject to all the requirements of
+entities in general.
+
+Non-entity packages exist only when some entity is a child (directly or indirectly) of the package. They do not have
+source information. However, they are subject to the same name requirements as entities.
 
 ## Primitive Values
 
