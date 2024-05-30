@@ -46,6 +46,8 @@ public class M3PropertyPaths
     public static final ImmutableList<String> _package = makePropertyPath(M3Paths.PackageableElement, M3Properties._package);
     public static final ImmutableList<String> properties = makePropertyPath(M3Paths.Class, M3Properties.properties);
     public static final ImmutableList<String> originalMilestonedProperties = makePropertyPath(M3Paths.Class, M3Properties.originalMilestonedProperties);
+    public static final ImmutableList<String> p_stereotypes = makePropertyPath(M3Paths.Profile, M3Properties.p_stereotypes);
+    public static final ImmutableList<String> p_tags = makePropertyPath(M3Paths.Profile, M3Properties.p_tags);
     public static final ImmutableList<String> propertiesFromAssociations = makePropertyPath(M3Paths.Class, M3Properties.propertiesFromAssociations);
     public static final ImmutableList<String> propertyName_ReferenceUsage = makePropertyPath(M3Paths.ReferenceUsage, M3Properties.propertyName);
     public static final ImmutableList<String> qualifiedProperties = makePropertyPath(M3Paths.Class, M3Properties.qualifiedProperties);
