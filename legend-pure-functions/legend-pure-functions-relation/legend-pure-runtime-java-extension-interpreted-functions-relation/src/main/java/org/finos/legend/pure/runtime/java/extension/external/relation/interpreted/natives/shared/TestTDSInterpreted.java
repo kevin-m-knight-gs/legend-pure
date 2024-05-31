@@ -16,9 +16,9 @@ package org.finos.legend.pure.runtime.java.extension.external.relation.interpret
 
 import io.deephaven.csv.parsers.DataType;
 import io.deephaven.csv.reading.CsvReader;
+import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
-import org.eclipse.collections.impl.factory.Lists;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation.ValueSpecificationBootstrap;
@@ -30,12 +30,10 @@ import org.finos.legend.pure.runtime.java.extension.external.relation.shared.Tes
 
 import java.math.BigDecimal;
 
-import static org.finos.legend.pure.m3.navigation.ValueSpecificationBootstrap.*;
-
 public class TestTDSInterpreted extends TestTDS
 {
-    private ModelRepository modelRepository;
-    private ProcessorSupport processorSupport;
+    private final ModelRepository modelRepository;
+    private final ProcessorSupport processorSupport;
 
     public TestTDSInterpreted(String csv, ModelRepository repository, ProcessorSupport processorSupport)
     {
@@ -56,7 +54,6 @@ public class TestTDSInterpreted extends TestTDS
         super(columnOrdered, columnType, rows);
         this.modelRepository = repository;
         this.processorSupport = processorSupport;
-
     }
 
     public TestTDSInterpreted(ModelRepository repository, ProcessorSupport processorSupport)
@@ -79,43 +76,45 @@ public class TestTDSInterpreted extends TestTDS
 
     public CoreInstance getValueAsCoreInstance(String columnName, int rowNum)
     {
-        Object dataAsObject = dataByColumnName.get(columnName);
+        Object dataAsObject = this.dataByColumnName.get(columnName);
         if (dataAsObject == null)
         {
             throw new RuntimeException("The column " + columnName + " can't be found in the TDS");
         }
-        boolean[] isNull = (boolean[]) isNullByColumn.get(columnName);
+        boolean[] isNull = (boolean[]) this.isNullByColumn.get(columnName);
         CoreInstance result;
-        switch (columnType.get(columnName))
+        switch (this.columnType.get(columnName))
         {
             case INT:
             {
                 int[] data = (int[]) dataAsObject;
                 int value = data[rowNum];
-                result = !isNull[rowNum] ? newIntegerLiteral(modelRepository, value, processorSupport) : ValueSpecificationBootstrap.wrapValueSpecification_ResultGenericTypeIsKnown(Lists.mutable.empty(), Type.wrapGenericType(_Package.getByUserPath(M3Paths.Integer, processorSupport), processorSupport), true, processorSupport);
+                result = !isNull[rowNum] ? ValueSpecificationBootstrap.newIntegerLiteral(this.modelRepository, value, this.processorSupport) : ValueSpecificationBootstrap.wrapValueSpecification_ResultGenericTypeIsKnown(Lists.mutable.empty(), Type.wrapGenericType(_Package.getByUserPath(M3Paths.Integer, this.processorSupport), this.processorSupport), true, this.processorSupport);
                 break;
             }
             case CHAR:
             {
                 char[] data = (char[]) dataAsObject;
-                result = !isNull[rowNum] ? newStringLiteral(modelRepository, "" + data[rowNum], processorSupport) : ValueSpecificationBootstrap.wrapValueSpecification_ResultGenericTypeIsKnown(Lists.mutable.empty(), Type.wrapGenericType(_Package.getByUserPath(M3Paths.String, processorSupport), processorSupport), true, processorSupport);
+                result = !isNull[rowNum] ? ValueSpecificationBootstrap.newStringLiteral(this.modelRepository, "" + data[rowNum], this.processorSupport) : ValueSpecificationBootstrap.wrapValueSpecification_ResultGenericTypeIsKnown(Lists.mutable.empty(), Type.wrapGenericType(_Package.getByUserPath(M3Paths.String, this.processorSupport), this.processorSupport), true, this.processorSupport);
                 break;
             }
             case STRING:
             {
                 String[] data = (String[]) dataAsObject;
                 String value = data[rowNum];
-                result = value != null ? newStringLiteral(modelRepository, value, processorSupport) : ValueSpecificationBootstrap.wrapValueSpecification_ResultGenericTypeIsKnown(Lists.mutable.empty(), Type.wrapGenericType(_Package.getByUserPath(M3Paths.String, processorSupport), processorSupport), true, processorSupport);
+                result = value != null ? ValueSpecificationBootstrap.newStringLiteral(this.modelRepository, value, this.processorSupport) : ValueSpecificationBootstrap.wrapValueSpecification_ResultGenericTypeIsKnown(Lists.mutable.empty(), Type.wrapGenericType(_Package.getByUserPath(M3Paths.String, this.processorSupport), this.processorSupport), true, this.processorSupport);
                 break;
             }
             case DOUBLE:
             {
                 double[] data = (double[]) dataAsObject;
-                result = !isNull[rowNum] ? newFloatLiteral(modelRepository, BigDecimal.valueOf(data[rowNum]), processorSupport) : ValueSpecificationBootstrap.wrapValueSpecification_ResultGenericTypeIsKnown(Lists.mutable.empty(), Type.wrapGenericType(_Package.getByUserPath(M3Paths.Float, processorSupport), processorSupport), true, processorSupport);
+                result = !isNull[rowNum] ? ValueSpecificationBootstrap.newFloatLiteral(this.modelRepository, BigDecimal.valueOf(data[rowNum]), this.processorSupport) : ValueSpecificationBootstrap.wrapValueSpecification_ResultGenericTypeIsKnown(Lists.mutable.empty(), Type.wrapGenericType(_Package.getByUserPath(M3Paths.Float, this.processorSupport), this.processorSupport), true, this.processorSupport);
                 break;
             }
             default:
-                throw new RuntimeException("ERROR " + columnType.get(columnName) + " not supported in getValue");
+            {
+                throw new RuntimeException("ERROR " + this.columnType.get(columnName) + " not supported in getValue");
+            }
         }
         return result;
     }

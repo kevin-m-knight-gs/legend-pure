@@ -17,6 +17,7 @@ package org.finos.legend.pure.runtime.java.extension.external.relation.interpret
 import io.deephaven.csv.CsvSpecs;
 import io.deephaven.csv.reading.CsvReader;
 import io.deephaven.csv.sinks.SinkFactory;
+import io.deephaven.csv.util.CsvReaderException;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.relation.RelationType;
@@ -51,7 +52,7 @@ public abstract class Shared extends NativeFunction
     {
         return value instanceof TDSCoreInstance ?
                 ((TDSCoreInstance) value).getTDS() :
-                new TestTDSInterpreted(readCsv((value.getValueForMetaPropertyToOne("csv")).getName()), repository, processorSupport);
+                new TestTDSInterpreted(readCsv((value.getValueForMetaPropertyToOne("csv")).getName()), this.repository, processorSupport);
     }
 
     public RelationType<?> getRelationType(ListIterable<? extends CoreInstance> params, int i)
@@ -71,7 +72,7 @@ public abstract class Shared extends NativeFunction
         {
             return CsvReader.read(CsvSpecs.csv(), new ByteArrayInputStream(csv.getBytes()), SinkFactory.arrays());
         }
-        catch (Exception e)
+        catch (CsvReaderException e)
         {
             throw new RuntimeException(e);
         }
