@@ -18,8 +18,9 @@ import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.block.function.Function;
 import org.eclipse.collections.api.block.predicate.Predicate;
 import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.MutableList;
-import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.impl.block.factory.Predicates;
@@ -733,14 +734,13 @@ public class TestCollection
         );
     }
 
-    public static void validateExclusions(TestCollection collection, MutableMap<String, String> exclusions)
+    public static void validateExclusions(TestCollection collection, MapIterable<String, String> exclusions)
     {
-        MutableSet<String> exList = exclusions.keysView().toSet();
-        MutableSet<String> allTests = collection.getAllTestFunctions().collect(c -> PackageableElement.getUserPathForPackageableElement(c, "::")).toSet();
-        exList.removeAll(allTests);
-        if (!exList.isEmpty())
+        MutableSet<String> allTests = collection.getAllTestFunctions().collect(PackageableElement::getUserPathForPackageableElement, Sets.mutable.empty());
+        MutableList<String> nonCoveredExclusions = exclusions.keysView().reject(allTests::contains, Lists.mutable.empty());
+        if (nonCoveredExclusions.notEmpty())
         {
-            throw new RuntimeException("\n The excluded tests:\n" + exList.collect(x -> "     " + x).makeString("\n") + "\n are not covered by this test suite");
+            throw new RuntimeException(nonCoveredExclusions.sortThis().makeString("\n The excluded tests:\n     ", "\n     ", "\n\n are not covered by this test suite"));
         }
     }
 }

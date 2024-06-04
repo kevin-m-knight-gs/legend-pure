@@ -22,6 +22,7 @@ import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.utility.ArrayIterate;
@@ -29,14 +30,14 @@ import org.finos.legend.pure.m3.exception.PureAssertFailException;
 import org.finos.legend.pure.m3.execution.ExecutionSupport;
 import org.finos.legend.pure.m3.execution.test.PureTestBuilder;
 import org.finos.legend.pure.m3.execution.test.TestCollection;
-import org.finos.legend.pure.m3.pct.reports.model.Adapter;
-import org.finos.legend.pure.m3.pct.shared.PCTTools;
-import org.finos.legend.pure.m3.pct.reports.config.PCTReportConfiguration;
-import org.finos.legend.pure.m3.pct.reports.config.exclusion.ExclusionSpecification;
-import org.finos.legend.pure.m3.pct.shared.model.ReportScope;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation._package._Package;
+import org.finos.legend.pure.m3.pct.reports.config.PCTReportConfiguration;
+import org.finos.legend.pure.m3.pct.reports.config.exclusion.ExclusionSpecification;
+import org.finos.legend.pure.m3.pct.reports.model.Adapter;
+import org.finos.legend.pure.m3.pct.shared.PCTTools;
+import org.finos.legend.pure.m3.pct.shared.model.ReportScope;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepository;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositoryProviderHelper;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.classpath.ClassLoaderCodeStorage;
@@ -58,9 +59,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Objects;
-
-import static org.finos.legend.pure.m3.pct.shared.PCTTools.isPCTTest;
-import static org.junit.Assert.fail;
 
 public class PureTestBuilderCompiled extends TestSuite
 {
@@ -84,7 +82,7 @@ public class PureTestBuilderCompiled extends TestSuite
                 {
                     TestCollection col = TestCollection.collectTests(path, executionSupport.getProcessorSupport(),
                             limitToPCT ?
-                                    node -> isPCTTest(node, executionSupport.getProcessorSupport()) :
+                                    node -> PCTTools.isPCTTest(node, executionSupport.getProcessorSupport()) :
                                     ci -> PureTestBuilder.satisfiesConditionsModular(ci, executionSupport.getProcessorSupport())
                     );
                     suite.addTest(PureTestBuilder.buildSuite(col, p, executionSupport));
@@ -93,7 +91,7 @@ public class PureTestBuilderCompiled extends TestSuite
         return suite;
     }
 
-    public static TestSuite buildPCTTestSuite(TestCollection collection, MutableMap<String, String> exclusions, String executor, CompiledExecutionSupport executionSupport)
+    public static TestSuite buildPCTTestSuite(TestCollection collection, MapIterable<String, String> exclusions, String executor, CompiledExecutionSupport executionSupport)
     {
         TestCollection.validateExclusions(collection, exclusions);
         PureTestBuilder.F2<CoreInstance, MutableList<Object>, Object> testExecutor = (a, b) -> executeFn(a, executor, exclusions, executionSupport, b);
@@ -102,7 +100,7 @@ public class PureTestBuilderCompiled extends TestSuite
         return suite;
     }
 
-    public static TestSuite buildPCTTestSuite(ReportScope reportScope, MutableList<ExclusionSpecification> expectedFailures, Adapter adapter)
+    public static TestSuite buildPCTTestSuite(ReportScope reportScope, Iterable<? extends ExclusionSpecification> expectedFailures, Adapter adapter)
     {
         CompiledExecutionSupport executionSupport = getClassLoaderExecutionSupport();
         MutableMap<String, String> explodedExpectedFailures = PCTReportConfiguration.explodeExpectedFailures(expectedFailures, executionSupport.getProcessorSupport());
@@ -116,10 +114,10 @@ public class PureTestBuilderCompiled extends TestSuite
     }
 
 
-    public static Object executeFn(CoreInstance coreInstance, String PCTExecutor, MutableMap<String, String> exclusions, ExecutionSupport executionSupport, MutableList<Object> paramList) throws Throwable
+    public static Object executeFn(CoreInstance coreInstance, String PCTExecutor, MapIterable<String, String> exclusions, ExecutionSupport executionSupport, MutableList<Object> paramList) throws Throwable
     {
         Class<?> _class = Class.forName("org.finos.legend.pure.generated." + IdBuilder.sourceToId(coreInstance.getSourceInformation()));
-        if (isPCTTest(coreInstance, ((CompiledExecutionSupport) executionSupport).getProcessorSupport()))
+        if (PCTTools.isPCTTest(coreInstance, ((CompiledExecutionSupport) executionSupport).getProcessorSupport()))
         {
             CoreInstance executor = _Package.getByUserPath(PCTExecutor, ((CompiledExecutionSupport) executionSupport).getProcessorSupport());
             if (executor == null)
@@ -142,7 +140,7 @@ public class PureTestBuilderCompiled extends TestSuite
         {
             Object res = method.invoke(null, params);
             // Ensure we didn't expect an error
-            String message = exclusions.get(PackageableElement.getUserPathForPackageableElement(coreInstance, "::"));
+            String message = exclusions.get(PackageableElement.getUserPathForPackageableElement(coreInstance));
             if (message != null)
             {
                 PCTTools.displayExpectedErrorFailMessage(message, coreInstance, PCTExecutor);
@@ -162,7 +160,7 @@ public class PureTestBuilderCompiled extends TestSuite
                 PCTTools.displayErrorMessage(message, coreInstance, PCTExecutor, ((CompiledExecutionSupport) executionSupport).getProcessorSupport(), e.getCause());
                 if (e.getCause() instanceof PureAssertFailException)
                 {
-                    fail(e.getCause().getMessage());
+                    Assert.fail(e.getCause().getMessage());
                 }
                 throw e.getCause();
             }

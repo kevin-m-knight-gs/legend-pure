@@ -19,19 +19,20 @@ import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.impl.utility.ArrayIterate;
 import org.finos.legend.pure.m3.exception.PureAssertFailException;
 import org.finos.legend.pure.m3.execution.test.PureTestBuilder;
 import org.finos.legend.pure.m3.execution.test.TestCollection;
-import org.finos.legend.pure.m3.pct.reports.model.Adapter;
-import org.finos.legend.pure.m3.pct.shared.PCTTools;
-import org.finos.legend.pure.m3.pct.reports.config.PCTReportConfiguration;
-import org.finos.legend.pure.m3.pct.reports.config.exclusion.ExclusionSpecification;
-import org.finos.legend.pure.m3.pct.shared.model.ReportScope;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.ValueSpecificationBootstrap;
 import org.finos.legend.pure.m3.navigation._package._Package;
+import org.finos.legend.pure.m3.pct.reports.config.PCTReportConfiguration;
+import org.finos.legend.pure.m3.pct.reports.config.exclusion.ExclusionSpecification;
+import org.finos.legend.pure.m3.pct.reports.model.Adapter;
+import org.finos.legend.pure.m3.pct.shared.PCTTools;
+import org.finos.legend.pure.m3.pct.shared.model.ReportScope;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepository;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositoryProviderHelper;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositorySet;
@@ -47,7 +48,6 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.interpreted.ExecutionSupport;
 import org.finos.legend.pure.runtime.java.interpreted.FunctionExecutionInterpreted;
 
-import static org.finos.legend.pure.m3.pct.shared.PCTTools.isPCTTest;
 import static org.junit.Assert.fail;
 
 public class PureTestBuilderInterpreted
@@ -68,7 +68,7 @@ public class PureTestBuilderInterpreted
         return suite;
     }
 
-    public static TestSuite buildPCTTestSuite(ReportScope reportScope, MutableList<ExclusionSpecification> expectedFailures, Adapter adapter)
+    public static TestSuite buildPCTTestSuite(ReportScope reportScope, Iterable<? extends ExclusionSpecification> expectedFailures, Adapter adapter)
     {
         FunctionExecutionInterpreted functionExecutionInterpreted = PureTestBuilderInterpreted.getFunctionExecutionInterpreted();
         MutableMap<String, String> explodedExpectedFailures = PCTReportConfiguration.explodeExpectedFailures(expectedFailures, functionExecutionInterpreted.getProcessorSupport());
@@ -80,7 +80,7 @@ public class PureTestBuilderInterpreted
         );
     }
 
-    public static TestSuite buildPCTTestSuite(TestCollection testCollection, MutableMap<String, String> expectedFailures, String adapter, FunctionExecutionInterpreted functionExecution)
+    public static TestSuite buildPCTTestSuite(TestCollection testCollection, MapIterable<String, String> expectedFailures, String adapter, FunctionExecutionInterpreted functionExecution)
     {
         TestCollection.validateExclusions(testCollection, expectedFailures);
         PureTestBuilder.F2<CoreInstance, MutableList<Object>, Object> testExecutor = getTestExecutor(functionExecution, expectedFailures, adapter);
@@ -89,12 +89,12 @@ public class PureTestBuilderInterpreted
         return suite;
     }
 
-    private static PureTestBuilder.F2<CoreInstance, MutableList<Object>, Object> getTestExecutor(FunctionExecutionInterpreted functionExecution, MutableMap<String, String> expectedFailures, String PCTExecutor)
+    private static PureTestBuilder.F2<CoreInstance, MutableList<Object>, Object> getTestExecutor(FunctionExecutionInterpreted functionExecution, MapIterable<String, String> expectedFailures, String PCTExecutor)
     {
         PureTestBuilder.F2<CoreInstance, MutableList<Object>, Object> testExecutor = (a, b) ->
         {
             MutableList<CoreInstance> params = Lists.mutable.empty();
-            if (isPCTTest(a, functionExecution.getProcessorSupport()))
+            if (PCTTools.isPCTTest(a, functionExecution.getProcessorSupport()))
             {
                 CoreInstance adapter = _Package.getByUserPath(PCTExecutor, functionExecution.getProcessorSupport());
                 if (adapter == null)
@@ -105,7 +105,7 @@ public class PureTestBuilderInterpreted
             }
             try
             {
-                String message = expectedFailures.get(PackageableElement.getUserPathForPackageableElement(a, "::"));
+                String message = expectedFailures.get(PackageableElement.getUserPathForPackageableElement(a));
                 if (message != null)
                 {
                     PCTTools.displayExpectedErrorFailMessage(message, a, PCTExecutor);
@@ -116,7 +116,7 @@ public class PureTestBuilderInterpreted
             catch (Exception e)
             {
                 // Check if the error was expected
-                String message = expectedFailures.get(PackageableElement.getUserPathForPackageableElement(a, "::"));
+                String message = expectedFailures.get(PackageableElement.getUserPathForPackageableElement(a));
                 if (message != null && e.getCause().getMessage().contains(message))
                 {
                     return null;
@@ -150,5 +150,4 @@ public class PureTestBuilderInterpreted
         loader.loadAll(message);
         return functionExecution;
     }
-
 }

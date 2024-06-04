@@ -16,7 +16,7 @@ package org.finos.legend.pure.runtime.java.compiled.pure;
 
 import junit.framework.Test;
 import org.eclipse.collections.api.factory.Lists;
-import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.list.ImmutableList;
 import org.finos.legend.pure.m3.PlatformCodeRepositoryProvider;
 import org.finos.legend.pure.m3.pct.reports.config.PCTReportConfiguration;
 import org.finos.legend.pure.m3.pct.reports.config.exclusion.ExclusionSpecification;
@@ -24,14 +24,12 @@ import org.finos.legend.pure.m3.pct.reports.model.Adapter;
 import org.finos.legend.pure.m3.pct.shared.model.ReportScope;
 import org.finos.legend.pure.runtime.java.compiled.testHelper.PureTestBuilderCompiled;
 
-import static org.finos.legend.pure.runtime.java.compiled.testHelper.PureTestBuilderCompiled.getClassLoaderExecutionSupport;
-
 public class Test_Compiled_GrammarFunctions_PCT extends PCTReportConfiguration
 {
     private static final ReportScope reportScope = PlatformCodeRepositoryProvider.grammarFunctions;
     private static final Adapter adapter = PlatformCodeRepositoryProvider.nativeAdapter;
     private static final String platform = "compiled";
-    private static final MutableList<ExclusionSpecification> expectedFailures = Lists.mutable.with(
+    private static final ImmutableList<ExclusionSpecification> expectedFailures = Lists.immutable.with(
             one("meta::pure::functions::math::tests::minus::testLargeMinus_Function_1__Boolean_1_", "Assert failure"),
             one("meta::pure::functions::math::tests::plus::testLargePlus_Function_1__Boolean_1_", "Assert failure"),
             one("meta::pure::functions::math::tests::times::testLargeTimes_Function_1__Boolean_1_", "Assert failure")
@@ -49,7 +47,7 @@ public class Test_Compiled_GrammarFunctions_PCT extends PCTReportConfiguration
     }
 
     @Override
-    public MutableList<ExclusionSpecification> expectedFailures()
+    public Iterable<? extends ExclusionSpecification> expectedFailures()
     {
         return expectedFailures;
     }

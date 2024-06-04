@@ -21,10 +21,12 @@ import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.pct.shared.PCTTools;
 
+import java.util.Map;
+
 public class ExclusionPackageTests implements ExclusionSpecification
 {
-    public String testPackage;
-    public String expectedMessage;
+    private final String testPackage;
+    private final String expectedMessage;
 
     public ExclusionPackageTests(String testPackage, String expectedMessage)
     {
@@ -33,15 +35,20 @@ public class ExclusionPackageTests implements ExclusionSpecification
     }
 
     @Override
-    public MutableMap<String, String> resolveExclusion(ProcessorSupport processorSupport)
+    public Map<String, String> resolveExclusion(ProcessorSupport processorSupport)
     {
+        Package pack = (Package) processorSupport.package_getByUserPath(this.testPackage);
+        if (pack == null)
+        {
+            return Maps.fixedSize.empty();
+        }
+
         MutableMap<String, String> result = Maps.mutable.empty();
-        Package pack = (Package) processorSupport.package_getByUserPath(testPackage);
         pack._children().forEach(c ->
         {
             if (PCTTools.isPCTTest(c, processorSupport))
             {
-                result.put(PackageableElement.getUserPathForPackageableElement(c), expectedMessage);
+                result.put(PackageableElement.getUserPathForPackageableElement(c), this.expectedMessage);
             }
         });
         return result;

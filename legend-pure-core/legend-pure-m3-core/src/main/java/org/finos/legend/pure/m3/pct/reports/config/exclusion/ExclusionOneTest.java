@@ -14,24 +14,23 @@
 
 package org.finos.legend.pure.m3.pct.reports.config.exclusion;
 
-import org.eclipse.collections.api.factory.Maps;
-import org.eclipse.collections.api.map.MutableMap;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+
+import java.util.Collections;
+import java.util.Map;
 
 public class ExclusionOneTest implements ExclusionSpecification
 {
-    public String testFullPath;
-    public String expectedMessage;
+    private final Map<String, String> exclusion;
 
     public ExclusionOneTest(String testFullPath, String expectedMessage)
     {
-        this.testFullPath = testFullPath;
-        this.expectedMessage = expectedMessage;
+        this.exclusion = Collections.singletonMap(testFullPath, expectedMessage);
     }
 
     @Override
-    public MutableMap<String, String> resolveExclusion(ProcessorSupport processorSupport)
+    public Map<String, String> resolveExclusion(ProcessorSupport processorSupport)
     {
-        return Maps.mutable.with(testFullPath, expectedMessage);
+        return this.exclusion;
     }
 }

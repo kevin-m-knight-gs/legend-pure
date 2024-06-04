@@ -15,16 +15,14 @@
 package org.finos.legend.pure.runtime.java.compiled.pure;
 
 import junit.framework.Test;
+import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.MutableList;
-import org.eclipse.collections.impl.factory.Lists;
 import org.finos.legend.pure.m3.PlatformCodeRepositoryProvider;
 import org.finos.legend.pure.m3.pct.reports.config.PCTReportConfiguration;
 import org.finos.legend.pure.m3.pct.reports.config.exclusion.ExclusionSpecification;
 import org.finos.legend.pure.m3.pct.reports.model.Adapter;
 import org.finos.legend.pure.m3.pct.shared.model.ReportScope;
 import org.finos.legend.pure.runtime.java.compiled.testHelper.PureTestBuilderCompiled;
-
-import static org.finos.legend.pure.runtime.java.compiled.testHelper.PureTestBuilderCompiled.getClassLoaderExecutionSupport;
 
 public class Test_Compiled_BasicFunctions_PCT extends PCTReportConfiguration
 {

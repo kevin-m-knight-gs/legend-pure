@@ -15,8 +15,8 @@
 package org.finos.legend.pure.runtime.java.interpreted.function.pure;
 
 import junit.framework.Test;
-import org.eclipse.collections.api.list.MutableList;
-import org.eclipse.collections.impl.factory.Lists;
+import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.list.ImmutableList;
 import org.finos.legend.pure.code.core.FunctionsCodeRepositoryProvider;
 import org.finos.legend.pure.m3.PlatformCodeRepositoryProvider;
 import org.finos.legend.pure.m3.pct.reports.config.PCTReportConfiguration;
@@ -30,7 +30,7 @@ public class Test_Interpreted_BaseFunctions_PCT extends PCTReportConfiguration
     private static final ReportScope reportScope = FunctionsCodeRepositoryProvider.baseFunctions;
     private static final Adapter adapter = PlatformCodeRepositoryProvider.nativeAdapter;
     private static final String platform = "interpreted";
-    private static final MutableList<ExclusionSpecification> expectedFailures = Lists.mutable.empty();
+    private static final ImmutableList<ExclusionSpecification> expectedFailures = Lists.immutable.empty();
 
     public static Test suite()
     {
@@ -44,7 +44,7 @@ public class Test_Interpreted_BaseFunctions_PCT extends PCTReportConfiguration
     }
 
     @Override
-    public MutableList<ExclusionSpecification> expectedFailures()
+    public Iterable<? extends ExclusionSpecification> expectedFailures()
     {
         return expectedFailures;
     }

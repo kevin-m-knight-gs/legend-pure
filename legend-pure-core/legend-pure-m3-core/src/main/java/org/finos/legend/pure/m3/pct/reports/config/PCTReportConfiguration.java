@@ -14,7 +14,7 @@
 
 package org.finos.legend.pure.m3.pct.reports.config;
 
-import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.map.MutableMap;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.pct.reports.config.exclusion.ExclusionOneTest;
@@ -27,7 +27,7 @@ public abstract class PCTReportConfiguration
 {
     public abstract ReportScope getReportScope();
 
-    public abstract MutableList<ExclusionSpecification> expectedFailures();
+    public abstract Iterable<? extends ExclusionSpecification> expectedFailures();
 
     public abstract Adapter getAdapter();
 
@@ -43,9 +43,9 @@ public abstract class PCTReportConfiguration
         return new ExclusionPackageTests(_package, message);
     }
 
-    public static MutableMap<String, String> explodeExpectedFailures(MutableList<ExclusionSpecification> expectedFailures, ProcessorSupport processorSupport)
+    public static MutableMap<String, String> explodeExpectedFailures(Iterable<? extends ExclusionSpecification> expectedFailures, ProcessorSupport processorSupport)
     {
-        MutableMap<String, String> result = org.eclipse.collections.impl.factory.Maps.mutable.empty();
+        MutableMap<String, String> result = Maps.mutable.empty();
         expectedFailures.forEach(x -> result.putAll(x.resolveExclusion(processorSupport)));
         return result;
     }

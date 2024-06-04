@@ -14,10 +14,11 @@
 
 package org.finos.legend.pure.m3.pct.reports.config.exclusion;
 
-import org.eclipse.collections.api.map.MutableMap;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+
+import java.util.Map;
 
 public interface ExclusionSpecification
 {
-    MutableMap<String, String> resolveExclusion(ProcessorSupport processorSupport);
+    Map<String, String> resolveExclusion(ProcessorSupport processorSupport);
 }
