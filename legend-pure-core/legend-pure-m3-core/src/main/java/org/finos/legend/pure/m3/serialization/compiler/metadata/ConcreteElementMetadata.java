@@ -169,28 +169,23 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
             if (this.externalReferences.size() > 1)
             {
                 this.externalReferences.sortThis(ConcreteElementMetadata::compareExternalReferences);
-                ExternalReference previous = this.externalReferences.get(0);
-                int index = 1;
-                while (index < this.externalReferences.size())
+                ExternalReference[] prev = new ExternalReference[1];
+                this.externalReferences.removeIf(current ->
                 {
-                    ExternalReference current = this.externalReferences.get(index);
-                    if (!previous.getPath().equals(current.getPath()))
+                    ExternalReference previous = prev[0];
+                    if ((previous == null) || !previous.getPath().equals(current.getPath()))
                     {
-                        index++;
-                        previous = current;
+                        prev[0] = current;
+                        return false;
                     }
-                    else if (previous.equals(current))
+                    if (!previous.equals(current))
                     {
-                        this.externalReferences.remove(index);
-                    }
-                    else
-                    {
-                        StringBuilder builder = new StringBuilder("External reference conflict for ");
-                        previous.getPath().writeDescription(builder);
+                        StringBuilder builder = previous.getPath().writeDescription(new StringBuilder("External reference conflict for "));
                         builder.append(" between ").append(previous.getReferenceId()).append(" and ").append(current.getReferenceId());
                         throw new RuntimeException(builder.toString());
                     }
-                }
+                    return true;
+                });
             }
 
             return this.externalReferences.toImmutable();

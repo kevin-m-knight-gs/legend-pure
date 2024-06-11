@@ -156,25 +156,21 @@ public class ModuleMetadata
         if (list.size() > 1)
         {
             list.sortThisBy(PackageableElementMetadata::getPath);
-            ConcreteElementMetadata previous = list.get(0);
-            int index = 1;
-            while (index < list.size())
+            ConcreteElementMetadata[] prev = new ConcreteElementMetadata[1];
+            list.removeIf(current ->
             {
-                ConcreteElementMetadata current = list.get(index);
-                if (!previous.getPath().equals(current.getPath()))
+                ConcreteElementMetadata previous = prev[0];
+                if ((previous == null) || !previous.getPath().equals(current.getPath()))
                 {
-                    index++;
-                    previous = current;
+                    prev[0] = current;
+                    return false;
                 }
-                else if (previous.equals(current))
-                {
-                    list.remove(index);
-                }
-                else
+                if (!previous.equals(current))
                 {
                     throw new IllegalArgumentException("Conflict for element: " + current.getPath());
                 }
-            }
+                return true;
+            });
         }
         validateSourceInfo(moduleName, list);
         return list.toImmutable();
