@@ -506,12 +506,27 @@ public abstract class AbstractCompiledStateIntegrityTest
     {
         CoreInstance imports = processorSupport.package_getByUserPath("system::imports");
         Assert.assertNotNull("Could not find system::imports", imports);
-        ListIterable<? extends CoreInstance> importGroupsWithoutSourceInfo = imports.getValueForMetaPropertyToMany(M3Properties.children).select(child -> child.getSourceInformation() == null);
+
+        MutableList<String> importGroupsWithoutSourceInfo = imports.getValueForMetaPropertyToMany(M3Properties.children)
+                .collectIf(
+                        ig -> ig.getSourceInformation() == null,
+                        PackageableElement::getUserPathForPackageableElement,
+                        Lists.mutable.empty());
         if (importGroupsWithoutSourceInfo.notEmpty())
         {
-            Assert.fail(importGroupsWithoutSourceInfo.collect(PackageableElement::getUserPathForPackageableElement, Lists.mutable.withInitialCapacity(importGroupsWithoutSourceInfo.size()))
-                    .sortThis()
-                    .makeString("The following ImportGroups have no source information:\n\t", "\n\t", ""));
+            Assert.fail(importGroupsWithoutSourceInfo.sortThis().makeString("The following ImportGroups have no source information:\n\t", "\n\t", ""));
+        }
+
+        MutableList<? extends CoreInstance> importGroupsWithInvalidSourceInfo = imports.getValueForMetaPropertyToMany(M3Properties.children).reject(ig -> ig.getSourceInformation().isValid(), Lists.mutable.empty());
+        if (importGroupsWithInvalidSourceInfo.notEmpty())
+        {
+            StringBuilder builder = new StringBuilder("The following ImportGroups have invalid source information:");
+            importGroupsWithInvalidSourceInfo.sortThisBy(CoreInstance::getSourceInformation).forEach(ig ->
+            {
+                PackageableElement.writeUserPathForPackageableElement(builder.append("\n\t"), ig);
+                ig.getSourceInformation().appendMessage(builder.append(" "));
+            });
+            Assert.fail(builder.toString());
         }
     }
 
