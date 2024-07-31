@@ -15,10 +15,10 @@
 package org.finos.legend.pure.runtime.java.compiled.generation.processors.type.measureUnit;
 
 import org.eclipse.collections.api.RichIterable;
-import org.eclipse.collections.api.block.function.Function;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.set.MutableSet;
 import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation.type.Type;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
@@ -30,34 +30,24 @@ public class MeasureProcessor
 {
     static String typeParameters(CoreInstance _class)
     {
-        return _class.getValueForMetaPropertyToMany(M3Properties.typeParameters).collect(new Function<CoreInstance, String>()
-        {
-            @Override
-            public String valueOf(CoreInstance coreInstance)
-            {
-                return coreInstance.getValueForMetaPropertyToOne(M3Properties.name).getName();
-            }
-        }).makeString(",");
+        return _class.getValueForMetaPropertyToMany(M3Properties.typeParameters).asLazy().collect(tp -> PrimitiveUtilities.getStringValue(tp.getValueForMetaPropertyToOne(M3Properties.name))).makeString(",");
     }
 
-    public static RichIterable<CoreInstance> processMeasure(final CoreInstance measure, final ProcessorContext processorContext)
+    public static RichIterable<CoreInstance> processMeasure(CoreInstance measure, ProcessorContext processorContext)
     {
-        ProcessorSupport processorSupport = processorContext.getSupport();
-        MutableList<StringJavaSource> classes = processorContext.getClasses();
-        MutableSet<CoreInstance> processedMeasures = processorContext.getProcessedMeasures(org.finos.legend.pure.runtime.java.compiled.generation.processors.type.measureUnit.MeasureProcessor.class);
-        String _package = JavaPackageAndImportBuilder.buildPackageForPackageableElement(measure);
-        String imports = JavaPackageAndImportBuilder.buildImports(measure);
-
-        if (!processedMeasures.contains(measure))
+        MutableSet<CoreInstance> processedMeasures = processorContext.getProcessedMeasures(MeasureProcessor.class);
+        if (processedMeasures.add(measure))
         {
-            processedMeasures.add(measure);
             boolean useJavaInheritance = measure.getValueForMetaPropertyToMany(M3Properties.generalizations).size() == 1;
+            ProcessorSupport processorSupport = processorContext.getSupport();
             CoreInstance genericType = Type.wrapGenericType(measure, null, processorSupport);
 
+            String _package = JavaPackageAndImportBuilder.buildPackageForPackageableElement(measure);
+            String imports = JavaPackageAndImportBuilder.buildImports(measure);
+            MutableList<StringJavaSource> classes = processorContext.getClasses();
             classes.add(MeasureInterfaceProcessor.buildInterface(_package, imports, genericType, processorContext, processorSupport, useJavaInheritance));
             classes.add(MeasureImplProcessor.buildImplementation(_package, imports, genericType, processorContext, processorSupport, useJavaInheritance));
         }
         return processedMeasures;
     }
-
 }

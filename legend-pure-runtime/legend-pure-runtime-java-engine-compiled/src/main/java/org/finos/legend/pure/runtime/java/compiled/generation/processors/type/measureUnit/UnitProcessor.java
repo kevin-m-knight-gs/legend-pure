@@ -30,18 +30,16 @@ public class UnitProcessor
 {
     public static RichIterable<CoreInstance> processUnit(CoreInstance unit, ProcessorContext processorContext)
     {
-        ProcessorSupport processorSupport = processorContext.getSupport();
-        MutableList<StringJavaSource> classes = processorContext.getClasses();
         MutableSet<CoreInstance> processedUnits = processorContext.getProcessedUnits(org.finos.legend.pure.runtime.java.compiled.generation.processors.type.measureUnit.UnitProcessor.class);
-        String _package = JavaPackageAndImportBuilder.buildPackageForPackageableElement(unit);
-        String imports = JavaPackageAndImportBuilder.buildImports(unit);
-
-        if (!processedUnits.contains(unit))
+        if (processedUnits.add(unit))
         {
-            processedUnits.add(unit);
+            ProcessorSupport processorSupport = processorContext.getSupport();
             boolean useJavaInheritance = unit.getValueForMetaPropertyToMany(M3Properties.generalizations).size() == 1;
             CoreInstance genericType = Type.wrapGenericType(unit, null, processorSupport);
 
+            String _package = JavaPackageAndImportBuilder.buildPackageForPackageableElement(unit);
+            String imports = JavaPackageAndImportBuilder.buildImports(unit);
+            MutableList<StringJavaSource> classes = processorContext.getClasses();
             classes.add(UnitInterfaceProcessor.buildInterface(_package, imports, genericType, processorContext, processorSupport, useJavaInheritance));
             classes.add(UnitInstanceInterfaceProcessor.buildInterface(_package, imports, genericType, processorContext, processorSupport, useJavaInheritance));
             classes.add(UnitImplProcessor.buildImplementation(_package, imports, genericType, processorContext, processorSupport, useJavaInheritance));
@@ -52,7 +50,7 @@ public class UnitProcessor
 
     static String typeParameters(CoreInstance _class)
     {
-        return _class.getValueForMetaPropertyToMany(M3Properties.typeParameters).collect(i -> PrimitiveUtilities.getStringValue(i.getValueForMetaPropertyToOne(M3Properties.name))).makeString(",");
+        return _class.getValueForMetaPropertyToMany(M3Properties.typeParameters).asLazy().collect(i -> PrimitiveUtilities.getStringValue(i.getValueForMetaPropertyToOne(M3Properties.name))).makeString(",");
     }
 
     public static String convertToJavaCompatibleClassName(String tildeName)

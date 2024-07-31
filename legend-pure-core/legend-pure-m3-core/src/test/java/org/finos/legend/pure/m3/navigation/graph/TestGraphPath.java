@@ -137,20 +137,23 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                 GraphPath.buildPath("Integer", "generalizations", "general", "rawType").getDescription());
 
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum").getDescription());
+                "test::domain::RomanLength",
+                GraphPath.buildPath("test::domain::RomanLength").getDescription());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum.measure",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure").getDescription());
+                "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum']",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").getDescription());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum.measure.canonicalUnit",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit").getDescription());
+                "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperty("measure").getDescription());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum.measure.canonicalUnit.measure",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit", "measure").getDescription());
+                "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure.canonicalUnit",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit").getDescription());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum.measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']",
-                GraphPath.builder("test::domain::RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().getDescription());
+                "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure.canonicalUnit.measure",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").getDescription());
+        Assert.assertEquals(
+                "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().getDescription());
     }
 
     @Test
@@ -215,20 +218,23 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                 GraphPath.buildPath("Integer", "generalizations", "general", "rawType").getPureExpression());
 
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum").getPureExpression());
+                "test::domain::RomanLength",
+                GraphPath.buildPath("test::domain::RomanLength").getPureExpression());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum.measure",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure").getPureExpression());
+                "test::domain::RomanLength.nonCanonicalUnits->find(x | $x.name == 'RomanLength~Cubitum')->toOne()",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").getPureExpression());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum.measure.canonicalUnit",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit").getPureExpression());
+                "test::domain::RomanLength.nonCanonicalUnits->find(x | $x.name == 'RomanLength~Cubitum')->toOne().measure",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperty("measure").getPureExpression());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum.measure.canonicalUnit.measure",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit", "measure").getPureExpression());
+                "test::domain::RomanLength.nonCanonicalUnits->find(x | $x.name == 'RomanLength~Cubitum')->toOne().measure.canonicalUnit",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit").getPureExpression());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum.measure.canonicalUnit.measure.nonCanonicalUnits->find(x | $x.name == 'RomanLength~Actus')->toOne()",
-                GraphPath.builder("test::domain::RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().getPureExpression());
+                "test::domain::RomanLength.nonCanonicalUnits->find(x | $x.name == 'RomanLength~Cubitum')->toOne().measure.canonicalUnit.measure",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").getPureExpression());
+        Assert.assertEquals(
+                "test::domain::RomanLength.nonCanonicalUnits->find(x | $x.name == 'RomanLength~Cubitum')->toOne().measure.canonicalUnit.measure.nonCanonicalUnits->find(x | $x.name == 'RomanLength~Actus')->toOne()",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().getPureExpression());
     }
 
     @Test
@@ -293,20 +299,23 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                 GraphPath.buildPath("Integer", "generalizations", "general", "rawType").getStartNodePath());
 
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum").getStartNodePath());
+                "test::domain::RomanLength",
+                GraphPath.buildPath("test::domain::RomanLength").getStartNodePath());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure").getStartNodePath());
+                "test::domain::RomanLength",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").build().getStartNodePath());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit").getStartNodePath());
+                "test::domain::RomanLength",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperty("measure").build().getStartNodePath());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum",
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit", "measure").getStartNodePath());
+                "test::domain::RomanLength",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit").build().getStartNodePath());
         Assert.assertEquals(
-                "test::domain::RomanLength~Cubitum",
-                GraphPath.builder("test::domain::RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().getStartNodePath());
+                "test::domain::RomanLength",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").build().getStartNodePath());
+        Assert.assertEquals(
+                "test::domain::RomanLength",
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().getStartNodePath());
     }
 
     @Test
@@ -358,20 +367,23 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                 GraphPath.buildPath("Integer", "generalizations", "general", "rawType").resolve(processorSupport));
 
         Assert.assertEquals(
-                runtime.getCoreInstance("test::domain::RomanLength~Cubitum"),
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum").resolve(processorSupport));
+                runtime.getCoreInstance("test::domain::RomanLength"),
+                GraphPath.buildPath("test::domain::RomanLength").resolve(processorSupport));
+        Assert.assertEquals(
+                runtime.getCoreInstance("test::domain::RomanLength").getValueInValueForMetaPropertyToMany("nonCanonicalUnits", "RomanLength~Cubitum"),
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").build().resolve(processorSupport));
         Assert.assertEquals(
                 runtime.getCoreInstance("test::domain::RomanLength"),
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure").resolve(processorSupport));
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperty("measure").build().resolve(processorSupport));
         Assert.assertEquals(
-                runtime.getCoreInstance("test::domain::RomanLength~Pes"),
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit").resolve(processorSupport));
+                runtime.getCoreInstance("test::domain::RomanLength").getValueForMetaPropertyToOne("canonicalUnit"),
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit").build().resolve(processorSupport));
         Assert.assertEquals(
                 runtime.getCoreInstance("test::domain::RomanLength"),
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit", "measure").resolve(processorSupport));
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").build().resolve(processorSupport));
         Assert.assertEquals(
-                runtime.getCoreInstance("test::domain::RomanLength~Actus"),
-                GraphPath.builder("test::domain::RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().resolve(processorSupport));
+                runtime.getCoreInstance("test::domain::RomanLength").getValueInValueForMetaPropertyToMany("nonCanonicalUnits", "RomanLength~Actus"),
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().resolve(processorSupport));
     }
 
     @Test
@@ -515,30 +527,38 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                 runtime.getCoreInstance("Number"));
 
         assertResolveFully(
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum"),
-                runtime.getCoreInstance("test::domain::RomanLength~Cubitum"));
-        assertResolveFully(
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure"),
-                runtime.getCoreInstance("test::domain::RomanLength~Cubitum"),
+                GraphPath.buildPath("test::domain::RomanLength"),
                 runtime.getCoreInstance("test::domain::RomanLength"));
         assertResolveFully(
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit"),
-                runtime.getCoreInstance("test::domain::RomanLength~Cubitum"),
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").build(),
                 runtime.getCoreInstance("test::domain::RomanLength"),
-                runtime.getCoreInstance("test::domain::RomanLength~Pes"));
+                runtime.getCoreInstance("test::domain::RomanLength").getValueInValueForMetaPropertyToMany("nonCanonicalUnits", "RomanLength~Cubitum"));
         assertResolveFully(
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit", "measure"),
-                runtime.getCoreInstance("test::domain::RomanLength~Cubitum"),
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperty("measure").build(),
                 runtime.getCoreInstance("test::domain::RomanLength"),
-                runtime.getCoreInstance("test::domain::RomanLength~Pes"),
+                runtime.getCoreInstance("test::domain::RomanLength").getValueInValueForMetaPropertyToMany("nonCanonicalUnits", "RomanLength~Cubitum"),
                 runtime.getCoreInstance("test::domain::RomanLength"));
         assertResolveFully(
-                GraphPath.builder("test::domain::RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build(),
-                runtime.getCoreInstance("test::domain::RomanLength~Cubitum"),
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit").build(),
                 runtime.getCoreInstance("test::domain::RomanLength"),
-                runtime.getCoreInstance("test::domain::RomanLength~Pes"),
+                runtime.getCoreInstance("test::domain::RomanLength").getValueInValueForMetaPropertyToMany("nonCanonicalUnits", "RomanLength~Cubitum"),
                 runtime.getCoreInstance("test::domain::RomanLength"),
-                runtime.getCoreInstance("test::domain::RomanLength~Actus"));
+                runtime.getCoreInstance("test::domain::RomanLength").getValueForMetaPropertyToOne("canonicalUnit"));
+        assertResolveFully(
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").build(),
+                runtime.getCoreInstance("test::domain::RomanLength"),
+                runtime.getCoreInstance("test::domain::RomanLength").getValueInValueForMetaPropertyToMany("nonCanonicalUnits", "RomanLength~Cubitum"),
+                runtime.getCoreInstance("test::domain::RomanLength"),
+                runtime.getCoreInstance("test::domain::RomanLength").getValueForMetaPropertyToOne("canonicalUnit"),
+                runtime.getCoreInstance("test::domain::RomanLength"));
+        assertResolveFully(
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build(),
+                runtime.getCoreInstance("test::domain::RomanLength"),
+                runtime.getCoreInstance("test::domain::RomanLength").getValueInValueForMetaPropertyToMany("nonCanonicalUnits", "RomanLength~Cubitum"),
+                runtime.getCoreInstance("test::domain::RomanLength"),
+                runtime.getCoreInstance("test::domain::RomanLength").getValueForMetaPropertyToOne("canonicalUnit"),
+                runtime.getCoreInstance("test::domain::RomanLength"),
+                runtime.getCoreInstance("test::domain::RomanLength").getValueInValueForMetaPropertyToMany("nonCanonicalUnits", "RomanLength~Actus"));
     }
 
     private void assertResolveFully(GraphPath path, CoreInstance... nodes)
@@ -687,20 +707,23 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                 GraphPath.buildPath("Integer", "generalizations", "general", "rawType", "name").reduce(processorSupport));
 
         Assert.assertEquals(
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum"),
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum").reduce(processorSupport));
+                GraphPath.buildPath("test::domain::RomanLength"),
+                GraphPath.buildPath("test::domain::RomanLength").reduce(processorSupport));
+        Assert.assertEquals(
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").build(),
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").build().reduce(processorSupport));
         Assert.assertEquals(
                 GraphPath.buildPath("test::domain::RomanLength"),
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure").reduce(processorSupport));
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperty("measure").build().reduce(processorSupport));
         Assert.assertEquals(
-                GraphPath.buildPath("test::domain::RomanLength~Pes"),
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit").reduce(processorSupport));
+                GraphPath.buildPath("test::domain::RomanLength", "canonicalUnit"),
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit").build().reduce(processorSupport));
         Assert.assertEquals(
                 GraphPath.buildPath("test::domain::RomanLength"),
-                GraphPath.buildPath("test::domain::RomanLength~Cubitum", "measure", "canonicalUnit", "measure").reduce(processorSupport));
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").build().reduce(processorSupport));
         Assert.assertEquals(
-                GraphPath.buildPath("test::domain::RomanLength~Actus"),
-                GraphPath.builder("test::domain::RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().reduce(processorSupport));
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build(),
+                GraphPath.builder("test::domain::RomanLength").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Cubitum").addToOneProperties("measure", "canonicalUnit", "measure").addToManyPropertyValueWithName("nonCanonicalUnits", "RomanLength~Actus").build().reduce(processorSupport));
     }
 
     @Test
@@ -806,16 +829,16 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                         "Integer.generalizations",
                         "Integer.generalizations.general",
                         "Integer.generalizations.general.rawType",
-                        "test::domain::RomanLength~Cubitum",
-                        "test::domain::RomanLength~Cubitum.measure",
-                        "test::domain::RomanLength~Cubitum.measure.canonicalUnit",
-                        "test::domain::RomanLength~Cubitum.measure.canonicalUnit.measure",
-                        "test::domain::RomanLength~Cubitum.measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']")
+                        "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum']",
+                        "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure",
+                        "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure.canonicalUnit",
+                        "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure.canonicalUnit.measure",
+                        "test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']")
                 .forEach(s -> Assert.assertEquals(s, GraphPath.parse(s).getDescription()));
 
         // excess whitespace is not present when generating the description
         Assert.assertEquals("test::domain::ClassA", GraphPath.parse("\t\ttest::domain::ClassA\n\n").getDescription());
-        Assert.assertEquals("test::domain::RomanLength~Cubitum.measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']", GraphPath.parse("test::domain::RomanLength~Cubitum\n\t.measure\n\t.canonicalUnit\n\t.measure.nonCanonicalUnits[    'RomanLength~Actus'    ]\n").getDescription());
+        Assert.assertEquals("test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']", GraphPath.parse("test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum']\n\t.measure\n\t.canonicalUnit\n\t.measure.nonCanonicalUnits[    'RomanLength~Actus'    ]\n").getDescription());
     }
 
     @Test
@@ -879,8 +902,8 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
                 Lists.mutable.with("properties / name / prop2", "genericType", "rawType"),
                 GraphPath.parse("test::domain::ClassA.properties['prop2'].genericType.rawType").getEdges().collect(e -> e.visit(visitor)));
         Assert.assertEquals(
-                Lists.mutable.with("measure", "canonicalUnit", "measure", "nonCanonicalUnits / name / RomanLength~Actus"),
-                GraphPath.parse("test::domain::RomanLength~Cubitum.measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']").getEdges().collect(e -> e.visit(visitor)));
+                Lists.mutable.with("nonCanonicalUnits / name / RomanLength~Cubitum", "measure", "canonicalUnit", "measure", "nonCanonicalUnits / name / RomanLength~Actus"),
+                GraphPath.parse("test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']").getEdges().collect(e -> e.visit(visitor)));
     }
 
     @Test
@@ -926,9 +949,9 @@ public class TestGraphPath extends AbstractPureTestWithCoreCompiled
         toOneEdges.clear();
         toManyIndexEdges.clear();
         toManyKeyEdges.clear();
-        GraphPath.parse("test::domain::RomanLength~Cubitum.measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']").forEachEdge(consumer);
+        GraphPath.parse("test::domain::RomanLength.nonCanonicalUnits['RomanLength~Cubitum'].measure.canonicalUnit.measure.nonCanonicalUnits['RomanLength~Actus']").forEachEdge(consumer);
         Assert.assertEquals(Lists.mutable.with(new ToOnePropertyEdge("measure"), new ToOnePropertyEdge("canonicalUnit"), new ToOnePropertyEdge("measure")), toOneEdges);
         Assert.assertEquals(Lists.mutable.empty(), toManyIndexEdges);
-        Assert.assertEquals(Lists.mutable.with(new ToManyPropertyWithStringKeyEdge("nonCanonicalUnits", "name", "RomanLength~Actus")), toManyKeyEdges);
+        Assert.assertEquals(Lists.mutable.with(new ToManyPropertyWithStringKeyEdge("nonCanonicalUnits", "name", "RomanLength~Cubitum"), new ToManyPropertyWithStringKeyEdge("nonCanonicalUnits", "name", "RomanLength~Actus")), toManyKeyEdges);
     }
 }

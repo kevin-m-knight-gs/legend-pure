@@ -20,8 +20,10 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.generics.G
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.InstanceValue;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.finos.legend.pure.m4.coreinstance.indexing.IndexSpecifications;
 
 /**
  * The structure of a unit instance is an InstanceValue wrapping an InstanceValue in its values field,
@@ -101,5 +103,13 @@ public class Measure
     private static boolean isNonEmptyInstanceValue(CoreInstance instance, ProcessorSupport processorSupport)
     {
         return (instance instanceof InstanceValue) && Instance.getValueForMetaPropertyToManyResolved(instance, M3Properties.values, processorSupport).notEmpty();
+    }
+
+    public static CoreInstance findUnit(CoreInstance measure, String name)
+    {
+        CoreInstance canonicalUnit = measure.getValueForMetaPropertyToOne(M3Properties.canonicalUnit);
+        return ((canonicalUnit != null) && name.equals(PrimitiveUtilities.getStringValue(canonicalUnit.getValueForMetaPropertyToOne(M3Properties.name)))) ?
+                canonicalUnit :
+                measure.getValueInValueForMetaPropertyToManyByIDIndex(M3Properties.nonCanonicalUnits, IndexSpecifications.getPropertyValueNameIndexSpec(M3Properties.name), name);
     }
 }

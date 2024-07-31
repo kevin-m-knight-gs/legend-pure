@@ -224,9 +224,9 @@ public final class JavaSourceCodeGenerator
 
             return javaClasses;
         }
-        catch (Throwable t)
+        catch (Exception e)
         {
-            throw new RuntimeException("Error generating Java code for " + source.getId(), t);
+            throw new RuntimeException("Error generating Java code for " + source.getId(), e);
         }
     }
 
@@ -416,14 +416,11 @@ public final class JavaSourceCodeGenerator
     {
         if (Instance.instanceOf(coreInstance, M3Paths.Package, this.processorSupport))
         {
-            for (CoreInstance element : coreInstance.getValueForMetaPropertyToMany(M3Properties.children))
-            {
-                this.toJava(element, codeRepository, allTypes, processorContext);
-            }
+            coreInstance.getValueForMetaPropertyToMany(M3Properties.children).forEach(e -> toJava(e, codeRepository, allTypes, processorContext));
         }
         if (codeRepository == null || (coreInstance.getSourceInformation() != null && coreInstance.getSourceInformation().getSourceId().startsWith("/" + codeRepository.getName())))
         {
-            if (allTypes == null || (allTypes != null && allTypes.contains(PackageableElement.getUserPathForPackageableElement(coreInstance))))
+            if (allTypes == null || allTypes.contains(PackageableElement.getUserPathForPackageableElement(coreInstance)))
             {
                 try
                 {
@@ -452,8 +449,13 @@ public final class JavaSourceCodeGenerator
                     }
                     if (Instance.instanceOf(coreInstance, M3Paths.Measure, this.processorSupport))
                     {
-                        RichIterable<CoreInstance> processedMeasure = MeasureProcessor.processMeasure(coreInstance, processorContext);
-                        this.processedMeasures.addAllIterable(processedMeasure);
+                        this.processedMeasures.addAllIterable(MeasureProcessor.processMeasure(coreInstance, processorContext));
+                        CoreInstance canonicalUnit = coreInstance.getValueForMetaPropertyToOne(M3Properties.canonicalUnit);
+                        if (canonicalUnit != null)
+                        {
+                            toJava(canonicalUnit, codeRepository, allTypes, processorContext);
+                        }
+                        coreInstance.getValueForMetaPropertyToMany(M3Properties.nonCanonicalUnits).forEach(unit -> toJava(unit, codeRepository, allTypes, processorContext));
                     }
                     if (Instance.instanceOf(coreInstance, M3Paths.Unit, this.processorSupport))
                     {
@@ -468,18 +470,16 @@ public final class JavaSourceCodeGenerator
                 {
                     throw e;
                 }
-                catch (Throwable t)
+                catch (Exception e)
                 {
-                    PureException pe = PureException.findPureException(t);
+                    PureException pe = PureException.findPureException(e);
                     if (pe == null)
                     {
-                        throw new PureCompilationException(coreInstance.getSourceInformation(), "Error generating Java code for " + coreInstance, t);
+                        throw new PureCompilationException(coreInstance.getSourceInformation(), "Error generating Java code for " + coreInstance, e);
                     }
-                    else
-                    {
-                        String info = pe.getInfo();
-                        throw new PureCompilationException(coreInstance.getSourceInformation(), info == null ? "Error generating Java code for " + coreInstance : info, pe);
-                    }
+
+                    String info = pe.getInfo();
+                    throw new PureCompilationException(coreInstance.getSourceInformation(), info == null ? "Error generating Java code for " + coreInstance : info, pe);
                 }
             }
         }
