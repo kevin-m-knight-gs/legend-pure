@@ -147,7 +147,7 @@ public class JavaPackageAndImportBuilder
         return appendable;
     }
 
-    public static <T extends Appendable> T  buildImplClassNameFromUserPath(T appendable, String elementPath)
+    public static <T extends Appendable> T buildImplClassNameFromUserPath(T appendable, String elementPath)
     {
         return buildImplClassNameFromUserPath(appendable, elementPath, ClassImplProcessor.CLASS_IMPL_SUFFIX);
     }
@@ -198,7 +198,7 @@ public class JavaPackageAndImportBuilder
 
     public static <T extends Appendable> T  buildLazyImplClassReferenceFromType(T appendable, CoreInstance type)
     {
-        buildImplClassNameFromType(SafeAppendable.wrap(appendable).append(CODE_GEN_PACKAGE_NAME).append('.'), type);
+        buildLazyImplClassNameFromType(SafeAppendable.wrap(appendable).append(CODE_GEN_PACKAGE_NAME).append('.'), type);
         return appendable;
     }
 
@@ -240,7 +240,13 @@ public class JavaPackageAndImportBuilder
         return M3ToJavaGenerator.getFullyQualifiedM3InterfaceForCompiledModel(elementPath);
     }
 
+    @Deprecated
     public static String buildInterfaceFromUserPath(String elementPath)
+    {
+        return buildInterfaceNameFromUserPath(elementPath);
+    }
+
+    public static String buildInterfaceNameFromUserPath(String elementPath)
     {
         return buildInterfaceNameFromUserPath(new StringBuilder(elementPath.length()), elementPath).toString();
     }
@@ -258,6 +264,7 @@ public class JavaPackageAndImportBuilder
 
     public static <T extends Appendable> T buildInterfaceNameFromUserPath(T appendable, String elementPath)
     {
+        // TODO should we check for M3_CLASSES or extra supported types?
         SafeAppendable.wrap(appendable).append("Root_").append(convertUnitName(elementPath.replace("::", "_")));
         return appendable;
     }
@@ -287,6 +294,7 @@ public class JavaPackageAndImportBuilder
 
     public static <T extends Appendable> T buildInterfaceNameFromType(T appendable, CoreInstance type)
     {
+        // TODO should we check ClassProcessor.isPlatformClass(type)?
         buildClassOrInterfaceNameFromType(SafeAppendable.wrap(appendable), type);
         return appendable;
     }

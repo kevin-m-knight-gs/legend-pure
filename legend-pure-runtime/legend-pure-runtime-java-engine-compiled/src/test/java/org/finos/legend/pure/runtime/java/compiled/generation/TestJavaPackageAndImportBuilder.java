@@ -15,6 +15,7 @@
 package org.finos.legend.pure.runtime.java.compiled.generation;
 
 import org.eclipse.collections.api.RichIterable;
+import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.impl.tuple.Tuples;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.PackageableElement;
@@ -108,8 +109,8 @@ public class TestJavaPackageAndImportBuilder extends AbstractPureTestWithCoreCom
     {
         Assert.assertEquals("Root_test_generation_compiled_SimpleClass_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromUserPath("test::generation::compiled::SimpleClass"));
         Assert.assertEquals("Root_test_generation_compiled_extra_ExtraClass_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromUserPath("test::generation::compiled::extra::ExtraClass"));
-        Assert.assertEquals("Root_" + M3Paths.Class.replace("::", "_") + "_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromUserPath(M3Paths.Class));
-        Assert.assertEquals("Root_" + M3Paths.Enumeration.replace("::", "_") + "_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromUserPath(M3Paths.Enumeration));
+        Assert.assertEquals("Root_meta_pure_metamodel_type_Class_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromUserPath(M3Paths.Class));
+        Assert.assertEquals("Root_meta_pure_metamodel_type_Enumeration_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromUserPath(M3Paths.Enumeration));
     }
 
     @Test
@@ -117,8 +118,8 @@ public class TestJavaPackageAndImportBuilder extends AbstractPureTestWithCoreCom
     {
         Assert.assertEquals("Root_test_generation_compiled_SimpleClass_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromType(getElement("test::generation::compiled::SimpleClass")));
         Assert.assertEquals("Root_test_generation_compiled_extra_ExtraClass_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromType(getElement("test::generation::compiled::extra::ExtraClass")));
-        Assert.assertEquals("Root_" + M3Paths.Class.replace("::", "_") + "_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromType(getElement(M3Paths.Class)));
-        Assert.assertEquals("Root_" + M3Paths.Enumeration.replace("::", "_") + "_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromType(getElement(M3Paths.Enumeration)));
+        Assert.assertEquals("Root_meta_pure_metamodel_type_Class_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromType(getElement(M3Paths.Class)));
+        Assert.assertEquals("Root_meta_pure_metamodel_type_Enumeration_Impl", JavaPackageAndImportBuilder.buildImplClassNameFromType(getElement(M3Paths.Enumeration)));
     }
 
     @Test
@@ -126,8 +127,8 @@ public class TestJavaPackageAndImportBuilder extends AbstractPureTestWithCoreCom
     {
         Assert.assertEquals("Root_test_generation_compiled_SimpleClass_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassNameFromType(getElement("test::generation::compiled::SimpleClass")));
         Assert.assertEquals("Root_test_generation_compiled_extra_ExtraClass_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassNameFromType(getElement("test::generation::compiled::extra::ExtraClass")));
-        Assert.assertEquals("Root_" + M3Paths.Class.replace("::", "_") + "_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassNameFromType(getElement(M3Paths.Class)));
-        Assert.assertEquals("Root_" + M3Paths.Enumeration.replace("::", "_") + "_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassNameFromType(getElement(M3Paths.Enumeration)));
+        Assert.assertEquals("Root_meta_pure_metamodel_type_Class_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassNameFromType(getElement(M3Paths.Class)));
+        Assert.assertEquals("Root_meta_pure_metamodel_type_Enumeration_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassNameFromType(getElement(M3Paths.Enumeration)));
     }
 
     @Test
@@ -135,8 +136,8 @@ public class TestJavaPackageAndImportBuilder extends AbstractPureTestWithCoreCom
     {
         Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_SimpleClass_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromUserPath("test::generation::compiled::SimpleClass"));
         Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_extra_ExtraClass_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromUserPath("test::generation::compiled::extra::ExtraClass"));
-        Assert.assertEquals("org.finos.legend.pure.generated.Root_" + M3Paths.Class.replace("::", "_") + "_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromUserPath(M3Paths.Class));
-        Assert.assertEquals("org.finos.legend.pure.generated.Root_" + M3Paths.Enumeration.replace("::", "_") + "_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromUserPath(M3Paths.Enumeration));
+        Assert.assertEquals("org.finos.legend.pure.generated.Root_meta_pure_metamodel_type_Class_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromUserPath(M3Paths.Class));
+        Assert.assertEquals("org.finos.legend.pure.generated.Root_meta_pure_metamodel_type_Enumeration_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromUserPath(M3Paths.Enumeration));
     }
 
     @Test
@@ -144,8 +145,8 @@ public class TestJavaPackageAndImportBuilder extends AbstractPureTestWithCoreCom
     {
         Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_SimpleClass_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromType(getElement("test::generation::compiled::SimpleClass")));
         Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_extra_ExtraClass_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromType(getElement("test::generation::compiled::extra::ExtraClass")));
-        Assert.assertEquals("org.finos.legend.pure.generated.Root_" + M3Paths.Class.replace("::", "_") + "_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromType(getElement(M3Paths.Class)));
-        Assert.assertEquals("org.finos.legend.pure.generated.Root_" + M3Paths.Enumeration.replace("::", "_") + "_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromType(getElement(M3Paths.Enumeration)));
+        Assert.assertEquals("org.finos.legend.pure.generated.Root_meta_pure_metamodel_type_Class_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromType(getElement(M3Paths.Class)));
+        Assert.assertEquals("org.finos.legend.pure.generated.Root_meta_pure_metamodel_type_Enumeration_Impl", JavaPackageAndImportBuilder.buildImplClassReferenceFromType(getElement(M3Paths.Enumeration)));
     }
 
     @Test
@@ -153,15 +154,15 @@ public class TestJavaPackageAndImportBuilder extends AbstractPureTestWithCoreCom
     {
         Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_SimpleClass_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassReferenceFromType(getElement("test::generation::compiled::SimpleClass")));
         Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_extra_ExtraClass_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassReferenceFromType(getElement("test::generation::compiled::extra::ExtraClass")));
-        Assert.assertEquals("org.finos.legend.pure.generated.Root_" + M3Paths.Class.replace("::", "_") + "_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassReferenceFromType(getElement(M3Paths.Class)));
-        Assert.assertEquals("org.finos.legend.pure.generated.Root_" + M3Paths.Enumeration.replace("::", "_") + "_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassReferenceFromType(getElement(M3Paths.Enumeration)));
+        Assert.assertEquals("org.finos.legend.pure.generated.Root_meta_pure_metamodel_type_Class_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassReferenceFromType(getElement(M3Paths.Class)));
+        Assert.assertEquals("org.finos.legend.pure.generated.Root_meta_pure_metamodel_type_Enumeration_LazyImpl", JavaPackageAndImportBuilder.buildLazyImplClassReferenceFromType(getElement(M3Paths.Enumeration)));
     }
 
     @Test
-    public void testBuildInterfaceFromUserPath()
+    public void testBuildInterfaceNameFromUserPath()
     {
-        Assert.assertEquals("Root_test_generation_compiled_SimpleClass", JavaPackageAndImportBuilder.buildInterfaceFromUserPath("test::generation::compiled::SimpleClass"));
-        Assert.assertEquals("Root_test_generation_compiled_extra_ExtraClass", JavaPackageAndImportBuilder.buildInterfaceFromUserPath("test::generation::compiled::extra::ExtraClass"));
+        Assert.assertEquals("Root_test_generation_compiled_SimpleClass", JavaPackageAndImportBuilder.buildInterfaceNameFromUserPath("test::generation::compiled::SimpleClass"));
+        Assert.assertEquals("Root_test_generation_compiled_extra_ExtraClass", JavaPackageAndImportBuilder.buildInterfaceNameFromUserPath("test::generation::compiled::extra::ExtraClass"));
     }
 
     @Test
@@ -169,8 +170,26 @@ public class TestJavaPackageAndImportBuilder extends AbstractPureTestWithCoreCom
     {
         Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_SimpleClass", JavaPackageAndImportBuilder.buildInterfaceReferenceFromUserPath("test::generation::compiled::SimpleClass"));
         Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_extra_ExtraClass", JavaPackageAndImportBuilder.buildInterfaceReferenceFromUserPath("test::generation::compiled::extra::ExtraClass"));
-        Assert.assertEquals("org.finos.legend.pure.m3.coreinstance." + M3Paths.Class.replace("::", "."), JavaPackageAndImportBuilder.buildInterfaceReferenceFromUserPath(M3Paths.Class));
-        Assert.assertEquals("org.finos.legend.pure.m3.coreinstance." + M3Paths.Enumeration.replace("::", "."), JavaPackageAndImportBuilder.buildInterfaceReferenceFromUserPath(M3Paths.Enumeration));
+        Assert.assertEquals("org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class", JavaPackageAndImportBuilder.buildInterfaceReferenceFromUserPath(M3Paths.Class));
+        Assert.assertEquals("org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enumeration", JavaPackageAndImportBuilder.buildInterfaceReferenceFromUserPath(M3Paths.Enumeration));
+        Assert.assertEquals("org.finos.legend.pure.m3.coreinstance.test.generation.compiled.SimpleClass", JavaPackageAndImportBuilder.buildInterfaceReferenceFromUserPath("test::generation::compiled::SimpleClass", Sets.immutable.with("test::generation::compiled::SimpleClass", "test::generation::compiled::extra::ExtraClass")));
+        Assert.assertEquals("org.finos.legend.pure.m3.coreinstance.test.generation.compiled.extra.ExtraClass", JavaPackageAndImportBuilder.buildInterfaceReferenceFromUserPath("test::generation::compiled::extra::ExtraClass", Sets.immutable.with("test::generation::compiled::SimpleClass", "test::generation::compiled::extra::ExtraClass")));
+    }
+
+    @Test
+    public void testBuildInterfaceNameFromType()
+    {
+        Assert.assertEquals("Root_test_generation_compiled_SimpleClass", JavaPackageAndImportBuilder.buildInterfaceNameFromType(getElement("test::generation::compiled::SimpleClass")));
+        Assert.assertEquals("Root_test_generation_compiled_extra_ExtraClass", JavaPackageAndImportBuilder.buildInterfaceNameFromType(getElement("test::generation::compiled::extra::ExtraClass")));
+    }
+
+    @Test
+    public void testBuildInterfaceReferenceFromType()
+    {
+        Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_SimpleClass", JavaPackageAndImportBuilder.buildInterfaceReferenceFromType(getElement("test::generation::compiled::SimpleClass")));
+        Assert.assertEquals("org.finos.legend.pure.generated.Root_test_generation_compiled_extra_ExtraClass", JavaPackageAndImportBuilder.buildInterfaceReferenceFromType(getElement("test::generation::compiled::extra::ExtraClass")));
+        Assert.assertEquals("org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class", JavaPackageAndImportBuilder.buildInterfaceReferenceFromType(getElement(M3Paths.Class)));
+        Assert.assertEquals("org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enumeration", JavaPackageAndImportBuilder.buildInterfaceReferenceFromType(getElement(M3Paths.Enumeration)));
     }
 
     @SuppressWarnings("unchecked")
