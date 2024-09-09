@@ -27,7 +27,7 @@ import org.finos.legend.pure.m4.ModelRepository;
 /**
  * Post-processor for any Unit.
  */
-public class UnitProcessor extends Processor<Unit>
+public class UnitProcessor extends Processor<Unit<?>>
 {
     @Override
     public String getClassName()
@@ -36,7 +36,7 @@ public class UnitProcessor extends Processor<Unit>
     }
 
     @Override
-    public void process(Unit instance, ProcessorState state, Matcher matcher, ModelRepository repository, Context context, ProcessorSupport processorSupport)
+    public void process(Unit<?> instance, ProcessorState state, Matcher matcher, ModelRepository repository, Context context, ProcessorSupport processorSupport)
     {
         FunctionDefinition<?> conversionFunction = instance._conversionFunction();
         if (conversionFunction != null)
@@ -49,7 +49,7 @@ public class UnitProcessor extends Processor<Unit>
     }
 
     @Override
-    public void populateReferenceUsages(Unit unit, ModelRepository repository, ProcessorSupport processorSupport)
+    public void populateReferenceUsages(Unit<?> unit, ModelRepository repository, ProcessorSupport processorSupport)
     {
     }
 }

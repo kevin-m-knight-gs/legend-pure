@@ -29,7 +29,7 @@ public class NewUnit extends AbstractNative
 {
     public NewUnit()
     {
-        super("newUnit_Unit_1__Number_1__Any_1_");
+        super("newUnit_Unit_1__Number_1__U_1_");
     }
 
     @Override

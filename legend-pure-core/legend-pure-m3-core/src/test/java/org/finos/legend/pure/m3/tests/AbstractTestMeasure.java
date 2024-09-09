@@ -42,36 +42,36 @@ public abstract class AbstractTestMeasure extends AbstractPureTestWithCoreCompil
                     "}\n" +
                     "function meta::pure::functions::math::plus(masses: Mass[*]):Mass~Gram[1]\n" +
                     "{\n" +
-                    "   let cv = $masses->map(m|let cv = $m->type()->cast(@Unit).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(getUnitValue($m)));\n" +
+                    "   let cv = $masses->map(m|let cv = $m->type()->cast(@Unit<Any>).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(getUnitValue($m)));\n" +
                     "   let resultNumeric = $cv->sum();\n" +
-                    "   newUnit(Mass~Gram, $resultNumeric)->cast(@Mass~Gram);\n" +
+                    "   newUnit(Mass~Gram, $resultNumeric);\n" +
                     "}\n";
 
     private static final String minusFunction =
             "function meta::pure::functions::math::minus(masses: Mass[*]):Mass~Gram[1]\n" +
                     "{\n" +
-                    "   let cv = $masses->map(m|let cv = $m->type()->cast(@Unit).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(getUnitValue($m)));\n" +
+                    "   let cv = $masses->map(m|let cv = $m->type()->cast(@Unit<Any>).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(getUnitValue($m)));\n" +
                     "   let resultNumeric = $cv->minus();\n" +
-                    "   newUnit(Mass~Gram, $resultNumeric)->cast(@Mass~Gram);\n" +
+                    "   newUnit(Mass~Gram, $resultNumeric);\n" +
                     "}\n";
 
     private static final String multFunction =
             "function meta::pure::unit::massScalarTimes(mass: Mass[1], nums: Number[*]):Mass~Gram[1]\n" +
                     "{\n" +
-                    "   let convertedValue = $mass->type()->cast(@Unit).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(getUnitValue($mass));\n" +
+                    "   let convertedValue = $mass->type()->cast(@Unit<Any>).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(getUnitValue($mass));\n" +
                     "   let numsMultResult = $nums->times();\n" +
                     "   let myValue = [$convertedValue, $numsMultResult]->times();\n" +
-                    "   newUnit(Mass~Gram, $myValue)->cast(@Mass~Gram);\n" +
+                    "   newUnit(Mass~Gram, $myValue);\n" +
                     "}\n";
 
     private static final String divFunction =
             "function meta::pure::unit::massScalarDivision(mass: Mass[1], nums: Number[*]):Mass~Gram[1]\n" +
                     "{\n" +
-                    "   let convertedValue = $mass->type()->cast(@Unit).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(getUnitValue($mass));\n" +
+                    "   let convertedValue = $mass->type()->cast(@Unit<Any>).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(getUnitValue($mass));\n" +
                     "   let numsMultResult = $nums->times();\n" +
                     "   assert($numsMultResult != 0, 'Cannot divide by zero.');\n" +
                     "   let myValue = $convertedValue->divide($numsMultResult);\n" +
-                    "   newUnit(Mass~Gram, $myValue)->cast(@Mass~Gram);\n" +
+                    "   newUnit(Mass~Gram, $myValue);\n" +
                     "}\n";
 
     @After
@@ -172,7 +172,7 @@ public abstract class AbstractTestMeasure extends AbstractPureTestWithCoreCompil
                         massDefinition +
                         "function testConversionFunc():Number[1]\n" +
                         "{\n" +
-                        "   let num = 5 Mass~Gram->type()->cast(@Unit).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(5);\n" +
+                        "   let num = 5 Mass~Gram->type()->cast(@Unit<Any>).conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(5);\n" +
                         "}\n");
         CoreInstance result = execute("testConversionFunc():Number[1]");
         Assert.assertEquals("5", result.getValueForMetaPropertyToOne(M3Properties.values).getName());
@@ -186,7 +186,7 @@ public abstract class AbstractTestMeasure extends AbstractPureTestWithCoreCompil
                         massDefinition +
                         "function testGetCanonical():Number[1]\n" +
                         "{\n" +
-                        "   let canonical = 5 Mass~Kilogram->type()->cast(@Unit).measure.canonicalUnit.conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(5);\n" +
+                        "   let canonical = 5 Mass~Kilogram->type()->cast(@Unit<Any>).measure.canonicalUnit.conversionFunction->cast(@Function<{Number[1]->Number[1]}>)->toOne()->eval(5);\n" +
                         "}\n");
         CoreInstance result = execute("testGetCanonical():Number[1]");
         Assert.assertEquals("5", result.getValueForMetaPropertyToOne(M3Properties.values).getName());
@@ -318,8 +318,8 @@ public abstract class AbstractTestMeasure extends AbstractPureTestWithCoreCompil
                 "import pkg::*;\n" +
                         "function testFunc():Mass~Pound[1]\n" +
                         "{\n" +
-                        "   let teddy = newUnit(Mass~Pound, 10)->cast(@Mass~Pound);\n" +
-                        "   $teddy;" +
+                        "   let teddy = newUnit(Mass~Pound, 10);\n" +
+                        "   $teddy;\n" +
                         "}");
         CoreInstance result = execute("testFunc():Mass~Pound[1]");
         Assert.assertEquals("pkg::Mass~Pound", GenericType.print(result.getValueForMetaPropertyToOne(M3Properties.genericType), true, processorSupport));
@@ -332,14 +332,14 @@ public abstract class AbstractTestMeasure extends AbstractPureTestWithCoreCompil
         compileTestSource("testModel.pure", massDefinition);
         compileTestSource("testFunc.pure",
                 "import pkg::*;\n" +
-                        "function testNewUnit(unit:Unit[1], n:Number[1]):Any[1]\n" +
+                        "function testNewUnit<U>(unit:Unit<U>[1], n:Number[1]):U[1]\n" +
                         "{\n" +
                         "    newUnit($unit, $n)\n" +
                         "}\n" +
                         "\n" +
                         "function testFunc():Mass~Pound[1]\n" +
                         "{\n" +
-                        "   testNewUnit(Mass~Pound, 10)->cast(@Mass~Pound);\n" +
+                        "   testNewUnit(Mass~Pound, 10);\n" +
                         "}");
         CoreInstance result = execute("testFunc():Mass~Pound[1]");
         Assert.assertEquals("Mass~Pound", GenericType.print(result.getValueForMetaPropertyToOne(M3Properties.genericType), processorSupport));
@@ -352,14 +352,14 @@ public abstract class AbstractTestMeasure extends AbstractPureTestWithCoreCompil
         compileTestSource("testModel.pure", massDefinition);
         compileTestSource("testFunc.pure",
                 "import pkg::*;\n" +
-                        "function testNewUnit(unit:Unit[1], n:Number[1]):Any[1]\n" +
+                        "function testNewUnit<U>(unit:Unit<U>[1], n:Number[1]):U[1]\n" +
                         "{\n" +
                         "    newUnit($unit, $n)\n" +
                         "}\n" +
                         "\n" +
                         "function testFunc():Mass~Pound[1]\n" +
                         "{\n" +
-                        "   testNewUnit_Unit_1__Number_1__Any_1_->eval(Mass~Pound, 10)->cast(@Mass~Pound);\n" +
+                        "   testNewUnit_Unit_1__Number_1__U_1_->eval(Mass~Pound, 10);\n" +
                         "}");
         CoreInstance result = execute("testFunc():Mass~Pound[1]");
         Assert.assertEquals("Mass~Pound", GenericType.print(result.getValueForMetaPropertyToOne(M3Properties.genericType), processorSupport));
@@ -466,7 +466,7 @@ public abstract class AbstractTestMeasure extends AbstractPureTestWithCoreCompil
                 "import pkg::*;\n" +
                         plusFunction +
                         "Class A {\n" +
-                        "   myUnit: Unit[1];\n" +
+                        "   myUnit: Unit<Any>[1];\n" +
                         "   lb : Mass~Pound[1];\n" +
                         "   kgs : Mass~Kilogram[*];\n" +
                         "   \n" +
@@ -577,8 +577,8 @@ public abstract class AbstractTestMeasure extends AbstractPureTestWithCoreCompil
                         "{\n" +
                         "   myKilo: pkg::Mass~Kilogram[1];\n" +
                         "   mySecondKilo: pkg::Mass[1];\n" +
-                        "   myUnit: Unit[1];\n" +
-                        "   myMeasure: Measure[1];\n" +
+                        "   myUnit: Unit<Any>[1];\n" +
+                        "   myMeasure: Measure<Any>[1];\n" +
                         "}\n";
 
         compileTestSource("testModel.pure", massAndClassDefinition);

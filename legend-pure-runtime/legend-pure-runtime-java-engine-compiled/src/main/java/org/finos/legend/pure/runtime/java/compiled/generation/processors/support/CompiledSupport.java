@@ -2094,20 +2094,20 @@ public class CompiledSupport
         return getUserObjectPathForPackageableElement(pkg, includeRoot).with(packageableElement.getName());
     }
 
-    public static QuantityCoreInstance newUnitInstance(CoreInstance unit, Number value, ExecutionSupport executionSupport)
+    public static <U> U newUnitInstance(CoreInstance unit, Number value, ExecutionSupport executionSupport)
     {
         return newUnitInstance(unit, value, (CompiledExecutionSupport) executionSupport);
     }
 
     @SuppressWarnings("unchecked")
-    public static QuantityCoreInstance newUnitInstance(CoreInstance unit, Number value, CompiledExecutionSupport executionSupport)
+    public static <U> U newUnitInstance(CoreInstance unit, Number value, CompiledExecutionSupport executionSupport)
     {
-        Class<? extends QuantityCoreInstance> unitImplClass;
+        Class<U> unitImplClass;
         try
         {
             String javaClassImplName = JavaPackageAndImportBuilder.buildImplClassReferenceFromType(unit, executionSupport.getProcessorSupport());
             ClassLoader classLoader = executionSupport.getClassLoader();
-            unitImplClass = (Class<? extends QuantityCoreInstance>) classLoader.loadClass(javaClassImplName);
+            unitImplClass = (Class<U>) classLoader.loadClass(javaClassImplName);
         }
         catch (ClassNotFoundException e)
         {
@@ -2129,7 +2129,7 @@ public class CompiledSupport
 
         try
         {
-            Constructor<? extends QuantityCoreInstance> constructor = unitImplClass.getConstructor(Number.class, CompiledExecutionSupport.class);
+            Constructor<U> constructor = unitImplClass.getConstructor(Number.class, CompiledExecutionSupport.class);
             return constructor.newInstance(value, executionSupport);
         }
         catch (Exception e)

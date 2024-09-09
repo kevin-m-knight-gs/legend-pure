@@ -2257,19 +2257,17 @@ public class AntlrContextToM3CoreInstance
         return enumerationInstance;
     }
 
-    /**
-     * Parses the measure given its definition context.
-     * Returns the parsed measure as a CoreInstance.
-     */
-    private Measure measureParser(MeasureDefinitionContext ctx, ImportGroup importId) throws PureParserException
+    private Measure<?> measureParser(MeasureDefinitionContext ctx, ImportGroup importId) throws PureParserException
     {
         checkExists(ctx.qualifiedName().packagePath(), ctx.qualifiedName().identifier(), null);
 
         SourceInformation sourceInfo = this.sourceInformation.getPureSourceInformation(ctx.getStart(), ctx.qualifiedName().identifier().getStart(), ctx.getStop());
         String measureName = ctx.qualifiedName().identifier().getText();
-        Measure measure = MeasureInstance.createPersistent(this.repository, measureName, sourceInfo)
-                ._name(measureName)
-                ._classifierGenericType(GenericTypeInstance.createPersistent(this.repository, sourceInfo)._rawType((Type) this.processorSupport.package_getByUserPath(M3Paths.Measure)));
+        MeasureInstance measure = MeasureInstance.createPersistent(this.repository, measureName, sourceInfo);
+        measure._name(measureName);
+        measure._classifierGenericType(GenericTypeInstance.createPersistent(this.repository, sourceInfo)
+                ._rawType((Type) this.processorSupport.package_getByUserPath(M3Paths.Measure))
+                ._typeArguments(Lists.immutable.with(GenericTypeInstance.createPersistent(this.repository, sourceInfo)._rawType(measure))));
 
         Package packageInstance = buildPackage(ctx.qualifiedName().packagePath());
         measure._package(packageInstance);
@@ -2294,7 +2292,7 @@ public class AntlrContextToM3CoreInstance
             // traditional canonical unit pattern
             measure._canonicalUnit(unitParser(measureBodyCtx.canonicalUnitExpr().unitExpr(), importId, measure));
 
-            MutableList<Unit> nonCanonicalUnits = ListIterate.collect(measureBodyCtx.unitExpr(), unitCtx -> unitParser(unitCtx, importId, measure));
+            MutableList<Unit<? extends CoreInstance>> nonCanonicalUnits = ListIterate.collect(measureBodyCtx.unitExpr(), unitCtx -> unitParser(unitCtx, importId, measure));
             if (nonCanonicalUnits.notEmpty())
             {
                 measure._nonCanonicalUnits(nonCanonicalUnits);
@@ -2303,7 +2301,7 @@ public class AntlrContextToM3CoreInstance
         else
         {
             // non-convertible unit pattern
-            MutableList<Unit> nonConvertibleUnits = ListIterate.collect(measureBodyCtx.nonConvertibleUnitExpr(), unitCtx -> nonConvertibleUnitParser(unitCtx, measure));
+            MutableList<Unit<? extends CoreInstance>> nonConvertibleUnits = ListIterate.collect(measureBodyCtx.nonConvertibleUnitExpr(), unitCtx -> nonConvertibleUnitParser(unitCtx, measure));
             measure._canonicalUnit(nonConvertibleUnits.get(0));
             if (nonConvertibleUnits.size() > 1)
             {
@@ -2317,13 +2315,14 @@ public class AntlrContextToM3CoreInstance
      * Helps build the unitInstance for any canonical and non-canonical units and returns the parsed unitInstance.
      */
     @SuppressWarnings("unchecked")
-    private Unit unitParser(UnitExprContext ctx, ImportGroup importId, Measure measure)
+    private Unit<? extends CoreInstance> unitParser(UnitExprContext ctx, ImportGroup importId, Measure<?> measure)
     {
         SourceInformation sourceInfo = this.sourceInformation.getPureSourceInformation(ctx.getStart(), ctx.identifier().getStart(), ctx.getStop());
         String unitName = ctx.identifier().getText();
-        Unit unit = UnitInstance.createPersistent(this.repository, unitName, sourceInfo, measure)
-                ._name(unitName)
-                ._classifierGenericType(GenericTypeInstance.createPersistent(this.repository, sourceInfo)._rawType((Type) this.processorSupport.package_getByUserPath(M3Paths.Unit)));
+        Unit<? extends CoreInstance> unit = UnitInstance.createPersistent(this.repository, unitName, sourceInfo, measure)._name(unitName);
+        unit._classifierGenericType(GenericTypeInstance.createPersistent(this.repository)
+                ._rawType((Type) this.processorSupport.package_getByUserPath(M3Paths.Unit))
+                ._typeArguments(Lists.immutable.with(GenericTypeInstance.createPersistent(this.repository)._rawType(unit))));
 
         // set unit super type to be its measure (Kilogram -> Mass)
         Generalization generalization = GeneralizationInstance.createPersistent(this.repository, sourceInfo, GenericTypeInstance.createPersistent(this.repository, sourceInfo)._rawType(measure), unit);
@@ -2357,17 +2356,20 @@ public class AntlrContextToM3CoreInstance
         return unit;
     }
 
-    private Unit nonConvertibleUnitParser(NonConvertibleUnitExprContext ctx, Measure measure)
+    private Unit<? extends CoreInstance> nonConvertibleUnitParser(NonConvertibleUnitExprContext ctx, Measure<?> measure)
     {
         SourceInformation sourceInfo = this.sourceInformation.getPureSourceInformation(ctx.getStart(), ctx.identifier().getStart(), ctx.getStop());
         String unitName = ctx.identifier().getText();
-        Unit unitInstance = UnitInstance.createPersistent(this.repository, unitName, sourceInfo, measure)
-                ._name(unitName)
-                ._classifierGenericType(GenericTypeInstance.createPersistent(this.repository, sourceInfo)._rawType((Type) this.processorSupport.package_getByUserPath(M3Paths.Unit)));
-        Generalization generalization = GeneralizationInstance.createPersistent(this.repository, sourceInfo, GenericTypeInstance.createPersistent(this.repository, sourceInfo)._rawType(measure), unitInstance);
-        unitInstance._generalizations(Lists.immutable.with(generalization));
+        Unit<? extends CoreInstance> unit = UnitInstance.createPersistent(this.repository, unitName, sourceInfo, measure)._name(unitName);
+        unit._classifierGenericType(GenericTypeInstance.createPersistent(this.repository)
+                ._rawType((Type) this.processorSupport.package_getByUserPath(M3Paths.Unit))
+                ._typeArguments(Lists.immutable.with(GenericTypeInstance.createPersistent(this.repository)._rawType(unit))));
+
+        Generalization generalization = GeneralizationInstance.createPersistent(this.repository, sourceInfo, GenericTypeInstance.createPersistent(this.repository, sourceInfo)._rawType(measure), unit);
+        unit._generalizations(Lists.immutable.with(generalization));
         measure._specializationsAdd(generalization);
-        return unitInstance;
+
+        return unit;
     }
 
     private CoreInstance classParser(ClassDefinitionContext ctx, ImportGroup importId, boolean addLines) throws PureParserException

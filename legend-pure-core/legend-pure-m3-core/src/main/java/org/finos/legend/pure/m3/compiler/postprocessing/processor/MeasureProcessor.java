@@ -24,7 +24,7 @@ import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.tools.matcher.Matcher;
 import org.finos.legend.pure.m4.ModelRepository;
 
-public class MeasureProcessor extends Processor<Measure>
+public class MeasureProcessor extends Processor<Measure<?>>
 {
     @Override
     public String getClassName()
@@ -33,9 +33,9 @@ public class MeasureProcessor extends Processor<Measure>
     }
 
     @Override
-    public void process(Measure measure, ProcessorState state, Matcher matcher, ModelRepository repository, Context context, ProcessorSupport processorSupport)
+    public void process(Measure<?> measure, ProcessorState state, Matcher matcher, ModelRepository repository, Context context, ProcessorSupport processorSupport)
     {
-        Unit canonicalUnit = measure._canonicalUnit();
+        Unit<?> canonicalUnit = measure._canonicalUnit();
         if (canonicalUnit != null)
         {
             PostProcessor.processElement(matcher, canonicalUnit, state, processorSupport);
@@ -44,7 +44,7 @@ public class MeasureProcessor extends Processor<Measure>
     }
 
     @Override
-    public void populateReferenceUsages(Measure measure, ModelRepository repository, ProcessorSupport processorSupport)
+    public void populateReferenceUsages(Measure<?> measure, ModelRepository repository, ProcessorSupport processorSupport)
     {
     }
 }

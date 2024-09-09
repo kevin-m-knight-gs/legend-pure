@@ -21,10 +21,9 @@ import org.finos.legend.pure.m3.tools.matcher.MatchRunner;
 import org.finos.legend.pure.m3.tools.matcher.Matcher;
 import org.finos.legend.pure.m3.tools.matcher.MatcherState;
 import org.finos.legend.pure.m4.ModelRepository;
-import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.exception.PureCompilationException;
 
-public class MeasureUnloaderWalk implements MatchRunner<Measure>
+public class MeasureUnloaderWalk implements MatchRunner<Measure<?>>
 {
     @Override
     public String getClassName()
@@ -33,7 +32,7 @@ public class MeasureUnloaderWalk implements MatchRunner<Measure>
     }
 
     @Override
-    public void run(Measure measure, MatcherState state, Matcher matcher, ModelRepository modelRepository, Context context) throws PureCompilationException
+    public void run(Measure<?> measure, MatcherState state, Matcher matcher, ModelRepository modelRepository, Context context) throws PureCompilationException
     {
         WalkerState walkerState = (WalkerState)state;
         walkerState.addInstance(measure);
@@ -44,10 +43,7 @@ public class MeasureUnloaderWalk implements MatchRunner<Measure>
         }
         if (measure._nonCanonicalUnits() != null)
         {
-            for (CoreInstance value : measure._nonCanonicalUnits())
-            {
-                matcher.fullMatch(value, state);
-            }
+            measure._nonCanonicalUnits().forEach(u -> matcher.fullMatch(u, state));
         }
     }
 }
