@@ -18,6 +18,7 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Unit;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation.measure.Measure;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.JavaPackageAndImportBuilder;
@@ -35,21 +36,34 @@ public class NewUnit extends AbstractNative
     @Override
     public String build(CoreInstance topLevelElement, CoreInstance functionExpression, ListIterable<String> transformedParams, ProcessorContext processorContext)
     {
-        CoreInstance unit = Instance.getValueForMetaPropertyToOneResolved(functionExpression.getValueForMetaPropertyToMany(M3Properties.parametersValues).getFirst(), M3Properties.values, processorContext.getSupport());
-        return Measure.isUnit(unit, processorContext.getSupport()) ?
-               // concretely specified unit: we can generate the Java instantiation directly
-               ("new " + JavaPackageAndImportBuilder.buildImplClassReferenceFromType(unit, processorContext.getSupport()) + "(" + transformedParams.get(1) + ", es)") :
-               // unit comes from a variable or function expression or something like that: we have to instantiate reflectively
-               ("CompiledSupport.newUnitInstance(" + transformedParams.get(0) + ", " + transformedParams.get(1) + ", es)");
+        ProcessorSupport processorSupport = processorContext.getSupport();
+        CoreInstance unit = Instance.getValueForMetaPropertyToOneResolved(functionExpression.getValueForMetaPropertyToMany(M3Properties.parametersValues).getFirst(), M3Properties.values, processorSupport);
+        if (Measure.isUnit(unit, processorContext.getSupport()))
+        {
+            // concretely specified unit: we can generate the Java instantiation directly
+            return "new " + JavaPackageAndImportBuilder.buildImplClassReferenceFromType(unit, processorSupport) + "(" + transformedParams.get(1) + ", es)";
+        }
+
+        // unit comes from a variable or function expression or something like that: we have to instantiate reflectively
+        StringBuilder builder = new StringBuilder("CompiledSupport.");
+        CoreInstance rawType = Instance.getValueForMetaPropertyToOneResolved(functionExpression, M3Properties.genericType, M3Properties.rawType, processorSupport);
+        if (rawType != null)
+        {
+            JavaPackageAndImportBuilder.buildInterfaceReferenceFromType(builder.append('<'), rawType, processorSupport).append('>');
+        }
+        return builder.append("newUnitInstance(").append(transformedParams.get(0)).append(", ").append(transformedParams.get(1)).append(", es)").toString();
     }
 
     @Override
     public String buildBody()
     {
-        return "new DefendedPureFunction2<" + Unit.class.getName() + ", " + Number.class.getName() + ", " + QuantityCoreInstance.class.getSimpleName() + ">()\n" +
+        String quantityCoreInstance = QuantityCoreInstance.class.getSimpleName();
+        String unitType = Unit.class.getName() + "<? extends " + quantityCoreInstance + ">";
+        String numberClass = Number.class.getName();
+        return "new DefendedPureFunction2<" + unitType + ", " + numberClass + ", " + quantityCoreInstance + ">()\n" +
                 "        {\n" +
                 "            @Override\n" +
-                "            public " + QuantityCoreInstance.class.getSimpleName() + " value(" + Unit.class.getName() + " unit, " + Number.class.getName() + " value, ExecutionSupport es)\n" +
+                "            public " + quantityCoreInstance + " value(" + unitType + " unit, " + numberClass + " value, ExecutionSupport es)\n" +
                 "            {\n" +
                 "                return CompiledSupport.newUnitInstance(unit, value, es);\n" +
                 "            }\n" +

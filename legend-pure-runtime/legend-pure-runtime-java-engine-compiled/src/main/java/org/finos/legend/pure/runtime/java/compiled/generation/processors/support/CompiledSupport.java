@@ -2094,13 +2094,13 @@ public class CompiledSupport
         return getUserObjectPathForPackageableElement(pkg, includeRoot).with(packageableElement.getName());
     }
 
-    public static <U> U newUnitInstance(CoreInstance unit, Number value, ExecutionSupport executionSupport)
+    public static <U extends QuantityCoreInstance> U newUnitInstance(CoreInstance unit, Number value, ExecutionSupport executionSupport)
     {
         return newUnitInstance(unit, value, (CompiledExecutionSupport) executionSupport);
     }
 
     @SuppressWarnings("unchecked")
-    public static <U> U newUnitInstance(CoreInstance unit, Number value, CompiledExecutionSupport executionSupport)
+    public static <U extends QuantityCoreInstance> U newUnitInstance(CoreInstance unit, Number value, CompiledExecutionSupport executionSupport)
     {
         Class<U> unitImplClass;
         try
