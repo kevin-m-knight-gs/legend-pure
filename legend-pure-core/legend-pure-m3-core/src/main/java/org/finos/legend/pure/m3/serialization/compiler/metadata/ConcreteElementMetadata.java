@@ -17,17 +17,17 @@ package org.finos.legend.pure.m3.serialization.compiler.metadata;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.MutableList;
-import org.finos.legend.pure.m3.navigation.graph.GraphPath;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
+import org.finos.legend.pure.m4.serialization.grammar.StringEscape;
 
 import java.util.Objects;
 
 public class ConcreteElementMetadata extends PackageableElementMetadata
 {
     private final SourceInformation sourceInfo;
-    private final ImmutableList<ExternalReference> externalReferences;
+    private final ImmutableList<String> externalReferences;
 
-    private ConcreteElementMetadata(String path, String classifierPath, SourceInformation sourceInfo, ImmutableList<ExternalReference> externalReferences)
+    private ConcreteElementMetadata(String path, String classifierPath, SourceInformation sourceInfo, ImmutableList<String> externalReferences)
     {
         super(path, classifierPath);
         this.sourceInfo = Objects.requireNonNull(sourceInfo, "source information is required");
@@ -43,7 +43,7 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
         return this.sourceInfo;
     }
 
-    public ImmutableList<ExternalReference> getExternalReferences()
+    public ImmutableList<String> getExternalReferences()
     {
         return this.externalReferences;
     }
@@ -85,8 +85,8 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
         if (this.externalReferences.notEmpty())
         {
             builder.append(" externalReferences=[");
-            int len = builder.length();
-            this.externalReferences.forEach(e -> e.appendMessage((builder.length() == len) ? builder : builder.append(", ")));
+            this.externalReferences.forEach(ref -> StringEscape.escape(builder.append("'"), ref).append("', "));
+            builder.setLength(builder.length() - 2);
             builder.append(']');
         }
     }
@@ -106,7 +106,7 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
         private String path;
         private String classifierPath;
         private SourceInformation sourceInfo;
-        private final MutableList<ExternalReference> externalReferences;
+        private final MutableList<String> externalReferences;
 
         private Builder()
         {
@@ -136,15 +136,15 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
             return this;
         }
 
-        public Builder withExternalReference(ExternalReference externalReference)
+        public Builder withExternalReference(String referenceId)
         {
-            this.externalReferences.add(Objects.requireNonNull(externalReference));
+            this.externalReferences.add(Objects.requireNonNull(referenceId));
             return this;
         }
 
-        public Builder withExternalReferences(Iterable<? extends ExternalReference> externalReferences)
+        public Builder withExternalReferences(Iterable<? extends String> referenceIds)
         {
-            externalReferences.forEach(this::withExternalReference);
+            referenceIds.forEach(this::withExternalReference);
             return this;
         }
 
@@ -153,140 +153,20 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
             return new ConcreteElementMetadata(this.path, this.classifierPath, this.sourceInfo, processExternalReferences());
         }
 
-        private ImmutableList<ExternalReference> processExternalReferences()
+        private ImmutableList<String> processExternalReferences()
         {
-            // Validate that all graph paths start from this element
-            Objects.requireNonNull(this.path, "path is required");
-            this.externalReferences.forEach(extRef ->
+            this.externalReferences.sortThis();
+            String[] prev = new String[1];
+            this.externalReferences.removeIf(current ->
             {
-                if (!this.path.equals(extRef.getPath().getStartNodePath()))
+                if (current.equals(prev[0]))
                 {
-                    throw new RuntimeException(extRef.appendMessage(new StringBuilder("Invalid external reference for ").append(this.path).append(": ")).toString());
-                }
-            });
-
-            // Sort references and remove duplicates
-            if (this.externalReferences.size() > 1)
-            {
-                this.externalReferences.sortThis(ConcreteElementMetadata::compareExternalReferences);
-                ExternalReference[] prev = new ExternalReference[1];
-                this.externalReferences.removeIf(current ->
-                {
-                    ExternalReference previous = prev[0];
-                    if ((previous == null) || !previous.getPath().equals(current.getPath()))
-                    {
-                        prev[0] = current;
-                        return false;
-                    }
-                    if (!previous.equals(current))
-                    {
-                        StringBuilder builder = previous.getPath().writeDescription(new StringBuilder("External reference conflict for "));
-                        builder.append(" between ").append(previous.getReferenceId()).append(" and ").append(current.getReferenceId());
-                        throw new RuntimeException(builder.toString());
-                    }
                     return true;
-                });
-            }
-
+                }
+                prev[0] = current;
+                return false;
+            });
             return this.externalReferences.toImmutable();
         }
-    }
-
-    private static int compareExternalReferences(ExternalReference extRef1, ExternalReference extRef2)
-    {
-        int cmp = comparePaths(extRef1.getPath(), extRef2.getPath());
-        return (cmp != 0) ? cmp : extRef1.getReferenceId().compareTo(extRef2.getReferenceId());
-    }
-
-    private static int comparePaths(GraphPath path1, GraphPath path2)
-    {
-        // NB: we don't need to compare start node paths, since we know they're all the same
-        // First compare the number of edges, since this is cheap
-        int cmp = Integer.compare(path1.getEdgeCount(), path2.getEdgeCount());
-        if (cmp != 0)
-        {
-            return cmp;
-        }
-
-        // If we have the same number of edges, compare them individually
-        for (int i = 0, end = path1.getEdgeCount(); i < end; i++)
-        {
-            cmp = compareEdges(path1.getEdge(i), path2.getEdge(i));
-            if (cmp != 0)
-            {
-                return cmp;
-            }
-        }
-        return 0;
-    }
-
-    private static int compareEdges(GraphPath.Edge edge1, GraphPath.Edge edge2)
-    {
-        int cmp = edge1.getProperty().compareTo(edge2.getProperty());
-        if (cmp != 0)
-        {
-            return cmp;
-        }
-
-        return edge1.visit(new GraphPath.EdgeVisitor<Integer>()
-        {
-            @Override
-            public Integer visit(GraphPath.ToOnePropertyEdge e1)
-            {
-                return (edge2 instanceof GraphPath.ToOnePropertyEdge) ? 0 : -1;
-            }
-
-            @Override
-            public Integer visit(GraphPath.ToManyPropertyAtIndexEdge e1)
-            {
-                return edge2.visit(new GraphPath.EdgeVisitor<Integer>()
-                {
-                    @Override
-                    public Integer visit(GraphPath.ToOnePropertyEdge e2)
-                    {
-                        return -1;
-                    }
-
-                    @Override
-                    public Integer visit(GraphPath.ToManyPropertyAtIndexEdge e2)
-                    {
-                        return Integer.compare(e1.getIndex(), e2.getIndex());
-                    }
-
-
-                    @Override
-                    public Integer visit(GraphPath.ToManyPropertyWithStringKeyEdge e2)
-                    {
-                        return 1;
-                    }
-                });
-            }
-
-            @Override
-            public Integer visit(GraphPath.ToManyPropertyWithStringKeyEdge e1)
-            {
-                return edge2.visit(new GraphPath.EdgeVisitor<Integer>()
-                {
-                    @Override
-                    public Integer visit(GraphPath.ToOnePropertyEdge e2)
-                    {
-                        return -1;
-                    }
-
-                    @Override
-                    public Integer visit(GraphPath.ToManyPropertyAtIndexEdge e2)
-                    {
-                        return -1;
-                    }
-
-                    @Override
-                    public Integer visit(GraphPath.ToManyPropertyWithStringKeyEdge e2)
-                    {
-                        int cmp = e1.getKeyProperty().compareTo(e2.getKeyProperty());
-                        return (cmp != 0) ? cmp : e1.getKey().compareTo(e2.getKey());
-                    }
-                });
-            }
-        });
     }
 }
