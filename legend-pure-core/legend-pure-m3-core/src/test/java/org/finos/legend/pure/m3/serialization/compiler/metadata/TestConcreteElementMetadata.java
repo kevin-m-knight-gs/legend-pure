@@ -17,7 +17,6 @@ package org.finos.legend.pure.m3.serialization.compiler.metadata;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.impl.factory.Lists;
 import org.finos.legend.pure.m3.navigation.M3Paths;
-import org.finos.legend.pure.m3.navigation.graph.GraphPath;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.junit.Assert;
 import org.junit.Test;
@@ -75,40 +74,5 @@ public class TestConcreteElementMetadata
                     .build());
             Assert.assertEquals(message, "Invalid source information for model::test::MyClass", e.getMessage());
         }
-    }
-
-    @Test
-    public void testInvalidExternalReference()
-    {
-        RuntimeException e1 = Assert.assertThrows(RuntimeException.class, () -> ConcreteElementMetadata.builder()
-                .withPath("model::test::MyClass")
-                .withClassifierPath(M3Paths.Class)
-                .withSourceInformation(new SourceInformation("/source.pure", 1, 1, 2, 2, 3, 3))
-                .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyClass.properties[0].genericType"), "model::test::MyOtherClass"))
-                .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyOtherClass.properties[1].genericType"), "model::test::MyOtherClass"))
-                .build());
-        Assert.assertEquals("Invalid external reference for model::test::MyClass: model::test::MyOtherClass.properties[1].genericType='model::test::MyOtherClass'", e1.getMessage());
-
-        RuntimeException e2 = Assert.assertThrows(RuntimeException.class, () -> ConcreteElementMetadata.builder()
-                .withPath("model::test::MyOtherClass")
-                .withClassifierPath(M3Paths.Class)
-                .withSourceInformation(new SourceInformation("/source.pure", 1, 1, 2, 2, 3, 3))
-                .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyClass.properties[0].genericType"), "model::test::MyOtherClass"))
-                .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyOtherClass.properties[0].genericType"), "model::test::MyOtherClass"))
-                .build());
-        Assert.assertEquals("Invalid external reference for model::test::MyOtherClass: model::test::MyClass.properties[0].genericType='model::test::MyOtherClass'", e2.getMessage());
-    }
-
-    @Test
-    public void testExternalReferenceConflict()
-    {
-        RuntimeException e = Assert.assertThrows(RuntimeException.class, () -> ConcreteElementMetadata.builder()
-                .withPath("model::test::MyClass")
-                .withClassifierPath(M3Paths.Class)
-                .withSourceInformation(new SourceInformation("/source.pure", 1, 1, 2, 2, 3, 3))
-                .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyClass.properties[0].genericType"), "model::test::MyThirdClass"))
-                .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyClass.properties[0].genericType"), "model::test::MyOtherClass"))
-                .build());
-        Assert.assertEquals("External reference conflict for model::test::MyClass.properties[0].genericType between model::test::MyOtherClass and model::test::MyThirdClass", e.getMessage());
     }
 }
