@@ -15,34 +15,33 @@
 package org.finos.legend.pure.m3.serialization.compiler.metadata;
 
 import org.finos.legend.pure.m3.navigation.M3Paths;
-import org.finos.legend.pure.m3.navigation.graph.GraphPath;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
 import java.util.Arrays;
 
 public abstract class AbstractMetadataTest
 {
-    protected static ConcreteElementMetadata newClass(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newClass(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, String... externalReferences)
     {
         return newElement(path, M3Paths.Class, sourceId, startLine, startCol, endLine, endCol, externalReferences);
     }
 
-    protected static ConcreteElementMetadata newAssociation(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newAssociation(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, String... externalReferences)
     {
         return newElement(path, M3Paths.Association, sourceId, startLine, startCol, endLine, endCol, externalReferences);
     }
 
-    protected static ConcreteElementMetadata newEnumeration(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newEnumeration(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, String... externalReferences)
     {
         return newElement(path, M3Paths.Enumeration, sourceId, startLine, startCol, endLine, endCol, externalReferences);
     }
 
-    protected static ConcreteElementMetadata newElement(String path, String classifierPath, String sourceId, int startLine, int startCol, int endLine, int endCol, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newElement(String path, String classifierPath, String sourceId, int startLine, int startCol, int endLine, int endCol, String... externalReferences)
     {
         return newElement(path, classifierPath, newSourceInfo(sourceId, startLine, startCol, endLine, endCol), externalReferences);
     }
 
-    protected static ConcreteElementMetadata newElement(String path, String classifierPath, SourceInformation sourceInfo, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newElement(String path, String classifierPath, SourceInformation sourceInfo, String... externalReferences)
     {
         return ConcreteElementMetadata.builder()
                 .withPath(path)
@@ -50,11 +49,6 @@ public abstract class AbstractMetadataTest
                 .withSourceInformation(sourceInfo)
                 .withExternalReferences(Arrays.asList(externalReferences))
                 .build();
-    }
-
-    protected static ExternalReference newExtRef(String graphPath, String referenceId)
-    {
-        return new ExternalReference(GraphPath.parse(graphPath), referenceId);
     }
 
     protected static SourceInformation newSourceInfo(String sourceId, int startLine, int startCol, int endLine, int endCol)
