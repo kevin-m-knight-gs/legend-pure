@@ -15,9 +15,7 @@
 package org.finos.legend.pure.m3.serialization.compiler.metadata.v1;
 
 import org.eclipse.collections.api.list.ImmutableList;
-import org.finos.legend.pure.m3.navigation.graph.GraphPath;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.ConcreteElementMetadata;
-import org.finos.legend.pure.m3.serialization.compiler.metadata.ExternalReference;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.ModuleMetadata;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.ModuleMetadataSerializerExtension;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
@@ -26,11 +24,6 @@ import org.finos.legend.pure.m4.serialization.Writer;
 
 public class ModuleMetadataSerializerV1 implements ModuleMetadataSerializerExtension
 {
-    private static final int GRAPH_PATH_EDGE_TYPE_MASK = 0b1100_0000;
-    private static final int GRAPH_PATH_TO_ONE_EDGE = 0b0000_0000;
-    private static final int GRAPH_PATH_TO_MANY_INDEX_EDGE = 0b1000_0000;
-    private static final int GRAPH_PATH_TO_MANY_KEY_EDGE = 0b0100_0000;
-
     private static final int INT_TYPE_MASK = 0b0000_0011;
     private static final int BYTE_INT = 0b0000_0000;
     private static final int SHORT_INT = 0b0000_0001;
@@ -70,9 +63,9 @@ public class ModuleMetadataSerializerV1 implements ModuleMetadataSerializerExten
         writer.writeString(element.getPath());
         writer.writeString(element.getClassifierPath());
         writeSourceInfo(writer, element.getSourceInformation());
-        ImmutableList<ExternalReference> externalReferences = element.getExternalReferences();
+        ImmutableList<String> externalReferences = element.getExternalReferences();
         writer.writeInt(externalReferences.size());
-        externalReferences.forEach(extRef -> writeExternalReference(writer, extRef));
+        externalReferences.forEach(writer::writeString);
     }
 
     private ConcreteElementMetadata readElement(Reader reader)
@@ -85,10 +78,10 @@ public class ModuleMetadataSerializerV1 implements ModuleMetadataSerializerExten
                 .withPath(path)
                 .withClassifierPath(classifierPath)
                 .withSourceInformation(sourceInfo);
-
         for (int i = 0; i < extRefCount; i++)
         {
-            builder.withExternalReference(readExternalReference(reader, path));
+            String refId = reader.readString();
+            builder.withExternalReference(refId);
         }
         return builder.build();
     }
@@ -185,123 +178,6 @@ public class ModuleMetadataSerializerV1 implements ModuleMetadataSerializerExten
             }
         }
         return new SourceInformation(sourceId, startLine, startCol, line, col, endLine, endCol);
-    }
-
-    private void writeExternalReference(Writer writer, ExternalReference externalReference)
-    {
-        GraphPath path = externalReference.getPath();
-        writer.writeInt(path.getEdgeCount());
-        path.forEachEdge(new GraphPath.EdgeConsumer()
-        {
-            @Override
-            protected void accept(GraphPath.ToOnePropertyEdge edge)
-            {
-                writer.writeByte((byte) GRAPH_PATH_TO_ONE_EDGE);
-                writer.writeString(edge.getProperty());
-            }
-
-            @Override
-            protected void accept(GraphPath.ToManyPropertyAtIndexEdge edge)
-            {
-                int intType = getIntType(edge.getIndex());
-                writer.writeByte((byte) (GRAPH_PATH_TO_MANY_INDEX_EDGE | intType));
-                writer.writeString(edge.getProperty());
-                switch (intType)
-                {
-                    case BYTE_INT:
-                    {
-                        writer.writeByte((byte) edge.getIndex());
-                        break;
-                    }
-                    case SHORT_INT:
-                    {
-                        writer.writeShort((short) edge.getIndex());
-                        break;
-                    }
-                    case INT_INT:
-                    {
-                        writer.writeInt(edge.getIndex());
-                        break;
-                    }
-                    default:
-                    {
-                        throw new RuntimeException(String.format("Unknown int type code: %02x", intType));
-                    }
-                }
-            }
-
-            @Override
-            protected void accept(GraphPath.ToManyPropertyWithStringKeyEdge edge)
-            {
-                writer.writeByte((byte) GRAPH_PATH_TO_MANY_KEY_EDGE);
-                writer.writeString(edge.getProperty());
-                writer.writeString(edge.getKeyProperty());
-                writer.writeString(edge.getKey());
-            }
-        });
-        writer.writeString(externalReference.getReferenceId());
-    }
-
-    private ExternalReference readExternalReference(Reader reader, String path)
-    {
-        int edgeCount = reader.readInt();
-        GraphPath.Builder builder = GraphPath.builder(edgeCount).withStartNodePath(path);
-        for (int i = 0; i < edgeCount; i++)
-        {
-            byte edgeType = reader.readByte();
-            switch (edgeType & GRAPH_PATH_EDGE_TYPE_MASK)
-            {
-                case GRAPH_PATH_TO_ONE_EDGE:
-                {
-                    String property = reader.readString();
-                    builder.addToOneProperty(property);
-                    break;
-                }
-                case GRAPH_PATH_TO_MANY_INDEX_EDGE:
-                {
-                    String property = reader.readString();
-                    int index;
-                    switch (edgeType & INT_TYPE_MASK)
-                    {
-                        case BYTE_INT:
-                        {
-                            index = reader.readByte();
-                            break;
-                        }
-                        case SHORT_INT:
-                        {
-                            index = reader.readShort();
-                            break;
-                        }
-                        case INT_INT:
-                        {
-                            index = reader.readInt();
-                            break;
-                        }
-                        default:
-                        {
-                            throw new RuntimeException(String.format("Unknown int type code: %02x", edgeType & INT_TYPE_MASK));
-                        }
-                    }
-                    builder.addToManyPropertyValueAtIndex(property, index);
-                    break;
-                }
-                case GRAPH_PATH_TO_MANY_KEY_EDGE:
-                {
-                    String property = reader.readString();
-                    String keyProperty = reader.readString();
-                    String key = reader.readString();
-                    builder.addToManyPropertyValueWithKey(property, keyProperty, key);
-                    break;
-                }
-                default:
-                {
-                    throw new RuntimeException(String.format("Unknown graph path edge type code: %02x", edgeType & GRAPH_PATH_EDGE_TYPE_MASK));
-                }
-            }
-        }
-        String referenceId = reader.readString();
-        return new ExternalReference(builder.build(), referenceId);
     }
 
     private static int getIntType(int... ints)
