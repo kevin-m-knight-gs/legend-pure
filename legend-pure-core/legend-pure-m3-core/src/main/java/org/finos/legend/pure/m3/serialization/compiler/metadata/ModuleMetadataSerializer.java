@@ -16,7 +16,6 @@ package org.finos.legend.pure.m3.serialization.compiler.metadata;
 
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.set.MutableSet;
-import org.finos.legend.pure.m3.navigation.graph.GraphPath;
 import org.finos.legend.pure.m3.serialization.compiler.ExtensibleSerializer;
 import org.finos.legend.pure.m3.serialization.compiler.strings.StringIndexer;
 import org.finos.legend.pure.m4.serialization.Reader;
@@ -76,34 +75,7 @@ public class ModuleMetadataSerializer extends ExtensibleSerializer<ModuleMetadat
             stringSet.add(element.getPath());
             stringSet.add(element.getClassifierPath());
             stringSet.add(element.getSourceInformation().getSourceId());
-            element.getExternalReferences().forEach(extRef ->
-            {
-                stringSet.add(extRef.getReferenceId());
-                GraphPath graphPath = extRef.getPath();
-                stringSet.add(graphPath.getStartNodePath());
-                graphPath.forEachEdge(new GraphPath.EdgeConsumer()
-                {
-                    @Override
-                    protected void accept(GraphPath.ToOnePropertyEdge edge)
-                    {
-                        stringSet.add(edge.getProperty());
-                    }
-
-                    @Override
-                    protected void accept(GraphPath.ToManyPropertyAtIndexEdge edge)
-                    {
-                        stringSet.add(edge.getProperty());
-                    }
-
-                    @Override
-                    protected void accept(GraphPath.ToManyPropertyWithStringKeyEdge edge)
-                    {
-                        stringSet.add(edge.getProperty());
-                        stringSet.add(edge.getKeyProperty());
-                        stringSet.add(edge.getKey());
-                    }
-                });
-            });
+            stringSet.addAll(element.getExternalReferences().castToList());
         });
         return stringSet;
     }
