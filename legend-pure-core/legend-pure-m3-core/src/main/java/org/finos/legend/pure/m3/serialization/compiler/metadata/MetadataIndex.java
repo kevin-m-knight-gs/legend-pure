@@ -202,24 +202,19 @@ public class MetadataIndex
         return this.externalReferences.getAllExternalReferenceIds();
     }
 
-    public RichIterable<ExternalReference> getAllExternalReferences()
-    {
-        return this.externalReferences.getAllExternalReferences();
-    }
-
-    public ImmutableList<ExternalReference> getAllReferencesTo(String referenceId)
+    public ImmutableList<String> getAllReferencesTo(String referenceId)
     {
         return this.externalReferences.getAllReferencesTo(referenceId);
     }
 
-    public void forEachExternalReference(Consumer<? super ExternalReference> consumer)
+    public void forEachExternalReference(BiConsumer<? super String, ? super String> consumer)
     {
         this.externalReferences.forEachExternalReference(consumer);
     }
 
-    public void forEachIdWithExternalReferences(BiConsumer<? super String, ? super ImmutableList<ExternalReference>> consumer)
+    public void forEachIdWithReferencesTo(BiConsumer<? super String, ? super ImmutableList<String>> consumer)
     {
-        this.externalReferences.forEachIdWithExternalReferences(consumer);
+        this.externalReferences.forEachIdWithReferencesTo(consumer);
     }
 
     // Builder
