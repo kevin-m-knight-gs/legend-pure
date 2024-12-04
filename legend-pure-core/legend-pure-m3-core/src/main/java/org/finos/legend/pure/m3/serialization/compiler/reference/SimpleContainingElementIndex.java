@@ -96,45 +96,43 @@ class SimpleContainingElementIndex implements ContainingElementIndex
     public CoreInstance findContainingElement(CoreInstance instance)
     {
         SourceInformation sourceInfo = instance.getSourceInformation();
-        if (sourceInfo != null)
+        if (sourceInfo == null)
         {
-            ImmutableList<CoreInstance> sourceElements = this.sourceIndex.get(sourceInfo.getSourceId());
-            if (sourceElements != null)
-            {
-                // Binary search among elements sorted by position in the source
-                int low = 0;
-                int high = sourceElements.size() - 1;
-                while (low <= high)
-                {
-                    int mid = (low + high) >>> 1;
-                    CoreInstance element = sourceElements.get(mid);
-                    if (element == instance)
-                    {
-                        return element;
-                    }
+            return this.virtualPackages.contains(instance) ? instance : null;
+        }
 
-                    SourceInformation elementSourceInfo = element.getSourceInformation();
-                    if (SourceInformation.isBefore(sourceInfo.getEndLine(), sourceInfo.getEndColumn(), elementSourceInfo.getStartLine(), elementSourceInfo.getStartColumn()))
-                    {
-                        // instance ends before element starts
-                        high = mid - 1;
-                    }
-                    else if (SourceInformation.isAfter(sourceInfo.getStartLine(), sourceInfo.getStartColumn(), elementSourceInfo.getEndLine(), elementSourceInfo.getEndColumn()))
-                    {
-                        // instance starts after element ends
-                        low = mid + 1;
-                    }
-                    else
-                    {
-                        // instance and element must intersect, which by assumption means that element contains instance
-                        return element;
-                    }
+        ImmutableList<CoreInstance> sourceElements = this.sourceIndex.get(sourceInfo.getSourceId());
+        if (sourceElements != null)
+        {
+            // Binary search among elements sorted by position in the source
+            int low = 0;
+            int high = sourceElements.size() - 1;
+            while (low <= high)
+            {
+                int mid = (low + high) >>> 1;
+                CoreInstance element = sourceElements.get(mid);
+                if (element == instance)
+                {
+                    return element;
+                }
+
+                SourceInformation elementSourceInfo = element.getSourceInformation();
+                if (SourceInformation.isBefore(sourceInfo.getEndLine(), sourceInfo.getEndColumn(), elementSourceInfo.getStartLine(), elementSourceInfo.getStartColumn()))
+                {
+                    // instance ends before element starts
+                    high = mid - 1;
+                }
+                else if (SourceInformation.isAfter(sourceInfo.getStartLine(), sourceInfo.getStartColumn(), elementSourceInfo.getEndLine(), elementSourceInfo.getEndColumn()))
+                {
+                    // instance starts after element ends
+                    low = mid + 1;
+                }
+                else
+                {
+                    // instance and element must intersect, which by assumption means that element contains instance
+                    return element;
                 }
             }
-        }
-        else if (this.virtualPackages.contains(instance))
-        {
-            return instance;
         }
         return null;
     }
@@ -193,12 +191,12 @@ class SimpleContainingElementIndex implements ContainingElementIndex
 
         SimpleContainingElementIndex build()
         {
-            MutableMap<String, ImmutableList<CoreInstance>> finalIndex = Maps.mutable.ofInitialCapacity(this.elementsBySource.size());
+            MutableMap<String, ImmutableList<CoreInstance>> index = Maps.mutable.ofInitialCapacity(this.elementsBySource.size());
             this.elementsBySource.forEachKeyValue((source, elements) ->
             {
                 if (elements.size() > 1)
                 {
-                    elements.sortThis(Builder::compareByStartPosition);
+                    elements.sortThis((e1, e2) -> SourceInformation.compareByStartPosition(e1.getSourceInformation(), e2.getSourceInformation()));
                     CoreInstance[] prev = new CoreInstance[1];
                     elements.removeIf(current ->
                     {
@@ -220,16 +218,12 @@ class SimpleContainingElementIndex implements ContainingElementIndex
                         return false;
                     });
                 }
-                finalIndex.put(source, elements.toImmutable());
+                if (elements.notEmpty())
+                {
+                    index.put(source, elements.toImmutable());
+                }
             });
-            return new SimpleContainingElementIndex(finalIndex, Sets.mutable.withAll(this.virtualPackages));
-        }
-
-        private static int compareByStartPosition(CoreInstance element1, CoreInstance element2)
-        {
-            SourceInformation sourceInfo1 = element1.getSourceInformation();
-            SourceInformation sourceInfo2 = element2.getSourceInformation();
-            return SourceInformation.comparePositions(sourceInfo1.getStartLine(), sourceInfo1.getStartColumn(), sourceInfo2.getStartLine(), sourceInfo2.getStartColumn());
+            return new SimpleContainingElementIndex(index, this.virtualPackages.isEmpty() ? Sets.immutable.empty() : Sets.mutable.withAll(this.virtualPackages));
         }
 
         private static boolean overlaps(CoreInstance element1, CoreInstance element2)
