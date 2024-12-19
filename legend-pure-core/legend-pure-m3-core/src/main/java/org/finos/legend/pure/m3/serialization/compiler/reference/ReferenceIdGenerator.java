@@ -49,7 +49,7 @@ import java.util.Collection;
 import java.util.Deque;
 import java.util.Objects;
 
-public class ReferenceIdGenerator
+class ReferenceIdGenerator
 {
     private static final ImmutableMap<String, ImmutableList<String>> SKIP_PROPERTY_PATHS = M3PropertyPaths.BACK_REFERENCE_PROPERTY_PATHS
             .groupByUniqueKey(ImmutableList::getLast, Maps.mutable.ofInitialCapacity(M3PropertyPaths.BACK_REFERENCE_PROPERTY_PATHS.size() + 2))
@@ -60,13 +60,13 @@ public class ReferenceIdGenerator
     private final ProcessorSupport processorSupport;
     private final TypeCache typeCache;
 
-    public ReferenceIdGenerator(ProcessorSupport processorSupport)
+    ReferenceIdGenerator(ProcessorSupport processorSupport)
     {
         this.processorSupport = Objects.requireNonNull(processorSupport, "processorSupport is required");
         this.typeCache = new TypeCache(this.processorSupport);
     }
 
-    public MapIterable<CoreInstance, String> generateIdsForElement(String path)
+    MapIterable<CoreInstance, String> generateIdsForElement(String path)
     {
         CoreInstance element = this.processorSupport.package_getByUserPath(Objects.requireNonNull(path, "path may not be null"));
         if (element == null)
@@ -77,7 +77,7 @@ public class ReferenceIdGenerator
         return generateIdsForElement(element, path);
     }
 
-    public MapIterable<CoreInstance, String> generateIdsForElement(CoreInstance element)
+    MapIterable<CoreInstance, String> generateIdsForElement(CoreInstance element)
     {
         validateIsPackageableElement(Objects.requireNonNull(element, "element may not be null"));
         return generateIdsForElement(element, PackageableElement.getUserPathForPackageableElement(element));
