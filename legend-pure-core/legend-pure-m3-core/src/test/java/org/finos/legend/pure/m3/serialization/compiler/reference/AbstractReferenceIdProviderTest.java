@@ -60,7 +60,7 @@ import java.util.Objects;
 
 public abstract class AbstractReferenceIdProviderTest extends AbstractReferenceTest
 {
-    protected static ReferenceIdGenerator idGenerator;
+    static ReferenceIdGenerator idGenerator;
     protected static ContainingElementIndex containingElementIndex;
     protected static ReferenceIdProvider referenceIdProvider;
 
