@@ -17,7 +17,7 @@ package org.finos.legend.pure.m3.serialization.compiler.element;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.serialization.compiler.ExtensibleSerializer;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProvider;
-import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProviders;
+import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIds;
 import org.finos.legend.pure.m3.serialization.compiler.strings.StringIndexer;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.serialization.Reader;
@@ -30,33 +30,36 @@ public class ConcreteElementSerializer extends ExtensibleSerializer<ConcreteElem
 {
     private static final long LEGEND_ENTITY_SIGNATURE = Long.parseLong("LegendEntity", 36);
 
-    private final ReferenceIdProvider referenceIdProvider;
+    private final ReferenceIds referenceIds;
     private final StringIndexer stringIndexer;
     private final ProcessorSupport processorSupport;
 
-    private ConcreteElementSerializer(Iterable<? extends ConcreteElementSerializerExtension> extensions, int defaultVersion, StringIndexer stringIndexer, ReferenceIdProvider referenceIdProvider, ProcessorSupport processorSupport)
+    private ConcreteElementSerializer(Iterable<? extends ConcreteElementSerializerExtension> extensions, int defaultVersion, StringIndexer stringIndexer, ReferenceIds referenceIds, ProcessorSupport processorSupport)
     {
         super(extensions, defaultVersion);
         this.stringIndexer = stringIndexer;
-        this.referenceIdProvider = referenceIdProvider;
+        this.referenceIds = referenceIds;
         this.processorSupport = processorSupport;
     }
 
     public void serialize(Writer writer, CoreInstance element)
     {
-        serialize(writer, element, getDefaultExtension());
+        serialize(writer, element, getDefaultExtension(), this.referenceIds.provider());
     }
 
-    public void serialize(Writer writer, CoreInstance element, int version)
+    public void serialize(Writer writer, CoreInstance element, int serializerVersion, int referenceIdVersion)
     {
-        serialize(writer, element, getExtension(version));
+        ConcreteElementSerializerExtension serializerExtension = getExtension(serializerVersion);
+        ReferenceIdProvider referenceIdProvider = this.referenceIds.provider(referenceIdVersion);
+        serialize(writer, element, serializerExtension, referenceIdProvider);
     }
 
-    private void serialize(Writer writer, CoreInstance element, ConcreteElementSerializerExtension extension)
+    private void serialize(Writer writer, CoreInstance element, ConcreteElementSerializerExtension serializerExtension, ReferenceIdProvider referenceIdProvider)
     {
         writer.writeLong(LEGEND_ENTITY_SIGNATURE);
-        writer.writeInt(extension.version());
-        extension.serialize(writer, element, new SerializationContext(this.stringIndexer, this.referenceIdProvider, this.processorSupport));
+        writer.writeInt(serializerExtension.version());
+        writer.writeInt(referenceIdProvider.version());
+        serializerExtension.serialize(writer, element, new SerializationContext(this.stringIndexer, referenceIdProvider, this.processorSupport));
     }
 
     public DeserializedConcreteElement deserialize(Reader reader)
@@ -68,7 +71,8 @@ public class ConcreteElementSerializer extends ExtensibleSerializer<ConcreteElem
         }
         int version = reader.readInt();
         ConcreteElementSerializerExtension extension = getExtension(version);
-        return extension.deserialize(reader, new SerializationContext(this.stringIndexer, this.referenceIdProvider, this.processorSupport));
+        int referenceIdVersion = reader.readInt();
+        return extension.deserialize(reader, new SerializationContext(this.stringIndexer, this.referenceIds.provider(referenceIdVersion), this.processorSupport));
     }
 
     public static Builder builder(ProcessorSupport processorSupport)
@@ -79,7 +83,7 @@ public class ConcreteElementSerializer extends ExtensibleSerializer<ConcreteElem
     public static class Builder extends AbstractBuilder<ConcreteElementSerializerExtension, ConcreteElementSerializer>
     {
         private StringIndexer stringIndexer;
-        private ReferenceIdProvider referenceIdProvider;
+        private ReferenceIds referenceIds;
         private final ProcessorSupport processorSupport;
 
         private Builder(ProcessorSupport processorSupport)
@@ -128,29 +132,29 @@ public class ConcreteElementSerializer extends ExtensibleSerializer<ConcreteElem
             return this;
         }
 
-        public Builder withReferenceIdProvider(ReferenceIdProvider referenceIdProvider)
+        public Builder withReferenceIds(ReferenceIds referenceIds)
         {
-            this.referenceIdProvider = referenceIdProvider;
+            this.referenceIds = referenceIds;
             return this;
         }
 
         @Override
         protected ConcreteElementSerializer build(Iterable<ConcreteElementSerializerExtension> extensions, int defaultVersion)
         {
-            return new ConcreteElementSerializer(extensions, defaultVersion, resolveStringIndexer(), resolveReferenceIdProvider(), this.processorSupport);
+            return new ConcreteElementSerializer(extensions, defaultVersion, resolveStringIndexer(), resolveReferenceIds(), this.processorSupport);
         }
 
-        private ReferenceIdProvider resolveReferenceIdProvider()
+        private ReferenceIds resolveReferenceIds()
         {
-            // If no reference id provider has been specified, create one
-            return (this.referenceIdProvider == null) ?
-                   ReferenceIdProviders.fromProcessorSupport(this.processorSupport, true) :
-                   this.referenceIdProvider;
+            // If reference ids has not been specified, create one
+            return (this.referenceIds == null) ?
+                   ReferenceIds.builder(this.processorSupport).withAvailableExtensions().build() :
+                   this.referenceIds;
         }
 
         private StringIndexer resolveStringIndexer()
         {
-            // if no string indexer has been specified, use the default
+            // if string indexer has not been specified, use the default
             return (this.stringIndexer == null) ? StringIndexer.defaultStringIndexer() : this.stringIndexer;
         }
 

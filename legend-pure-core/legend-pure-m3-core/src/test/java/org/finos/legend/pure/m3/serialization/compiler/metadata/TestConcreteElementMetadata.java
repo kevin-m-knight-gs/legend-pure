@@ -30,6 +30,7 @@ public class TestConcreteElementMetadata
         NullPointerException e = Assert.assertThrows(NullPointerException.class, () -> ConcreteElementMetadata.builder()
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(new SourceInformation("/source.pure", 1, 1, 2, 2, 3, 3))
+                .withReferenceIdVersion(1)
                 .build());
         Assert.assertEquals("path is required", e.getMessage());
     }
@@ -40,6 +41,7 @@ public class TestConcreteElementMetadata
         NullPointerException e = Assert.assertThrows(NullPointerException.class, () -> ConcreteElementMetadata.builder()
                 .withPath("model::test::MyClass")
                 .withSourceInformation(new SourceInformation("/source.pure", 1, 1, 2, 2, 3, 3))
+                .withReferenceIdVersion(1)
                 .build());
         Assert.assertEquals("classifier path is required", e.getMessage());
     }
@@ -50,6 +52,7 @@ public class TestConcreteElementMetadata
         NullPointerException e = Assert.assertThrows(NullPointerException.class, () -> ConcreteElementMetadata.builder()
                 .withPath("model::test::MyClass")
                 .withClassifierPath(M3Paths.Class)
+                .withReferenceIdVersion(1)
                 .build());
         Assert.assertEquals("source information is required", e.getMessage());
     }
@@ -72,9 +75,21 @@ public class TestConcreteElementMetadata
                     .withPath("model::test::MyClass")
                     .withClassifierPath(M3Paths.Class)
                     .withSourceInformation(sourceInfo)
+                    .withReferenceIdVersion(1)
                     .build());
             Assert.assertEquals(message, "Invalid source information for model::test::MyClass", e.getMessage());
         }
+    }
+
+    @Test
+    public void testReferenceIdVersionRequired()
+    {
+        NullPointerException e = Assert.assertThrows(NullPointerException.class, () -> ConcreteElementMetadata.builder()
+                .withPath("model::test::MyClass")
+                .withClassifierPath(M3Paths.Class)
+                .withSourceInformation(new SourceInformation("/source.pure", 1, 1, 2, 2, 3, 3))
+                .build());
+        Assert.assertEquals("reference id version is required", e.getMessage());
     }
 
     @Test
@@ -84,6 +99,7 @@ public class TestConcreteElementMetadata
                 .withPath("model::test::MyClass")
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(new SourceInformation("/source.pure", 1, 1, 2, 2, 3, 3))
+                .withReferenceIdVersion(1)
                 .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyClass.properties[0].genericType"), "model::test::MyOtherClass"))
                 .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyOtherClass.properties[1].genericType"), "model::test::MyOtherClass"))
                 .build());
@@ -93,6 +109,7 @@ public class TestConcreteElementMetadata
                 .withPath("model::test::MyOtherClass")
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(new SourceInformation("/source.pure", 1, 1, 2, 2, 3, 3))
+                .withReferenceIdVersion(1)
                 .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyClass.properties[0].genericType"), "model::test::MyOtherClass"))
                 .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyOtherClass.properties[0].genericType"), "model::test::MyOtherClass"))
                 .build());
@@ -106,6 +123,7 @@ public class TestConcreteElementMetadata
                 .withPath("model::test::MyClass")
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(new SourceInformation("/source.pure", 1, 1, 2, 2, 3, 3))
+                .withReferenceIdVersion(1)
                 .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyClass.properties[0].genericType"), "model::test::MyThirdClass"))
                 .withExternalReference(new ExternalReference(GraphPath.parse("model::test::MyClass.properties[0].genericType"), "model::test::MyOtherClass"))
                 .build());

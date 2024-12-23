@@ -12,19 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.finos.legend.pure.m3.serialization.compiler.reference;
+package org.finos.legend.pure.m3.serialization.compiler.reference.v1;
 
+import org.eclipse.collections.api.map.ConcurrentMutableMap;
+import org.eclipse.collections.api.map.MapIterable;
+import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
+import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProvider;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
-abstract class BaseReferenceIdProvider implements ReferenceIdProvider
+class ReferenceIdProviderV1 implements ReferenceIdProvider
 {
     private final ContainingElementIndex containingElementIndex;
+    private final ReferenceIdGenerator idGenerator;
+    private final ConcurrentMutableMap<CoreInstance, MapIterable<CoreInstance, String>> idCache = ConcurrentHashMap.newMap();
 
-    protected BaseReferenceIdProvider(ContainingElementIndex containingElementIndex)
+    ReferenceIdProviderV1(ContainingElementIndex containingElementIndex, ReferenceIdGenerator idGenerator)
     {
         this.containingElementIndex = containingElementIndex;
+        this.idGenerator = idGenerator;
+    }
+
+    ReferenceIdProviderV1(ProcessorSupport processorSupport)
+    {
+        this(ContainingElementIndex.builder(processorSupport).withAllElements().build(), new ReferenceIdGenerator(processorSupport));
+    }
+
+    @Override
+    public int version()
+    {
+        return 1;
     }
 
     @Override
@@ -33,7 +52,7 @@ abstract class BaseReferenceIdProvider implements ReferenceIdProvider
         CoreInstance owner = this.containingElementIndex.findContainingElement(reference);
         if (owner != null)
         {
-            String id = getReferenceId(reference, owner);
+            String id = this.idCache.getIfAbsentPutWithKey(owner, this.idGenerator::generateIdsForElement).get(reference);
             if (id != null)
             {
                 return id;
@@ -61,6 +80,4 @@ abstract class BaseReferenceIdProvider implements ReferenceIdProvider
         }
         throw new IllegalArgumentException(builder.append(": ").append(reference).toString());
     }
-
-    protected abstract String getReferenceId(CoreInstance reference, CoreInstance owner);
 }

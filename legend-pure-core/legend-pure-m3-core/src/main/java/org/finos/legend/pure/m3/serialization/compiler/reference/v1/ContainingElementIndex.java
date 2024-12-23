@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.finos.legend.pure.m3.serialization.compiler.reference;
+package org.finos.legend.pure.m3.serialization.compiler.reference.v1;
 
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
@@ -22,20 +22,24 @@ import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.SetIterable;
+import org.finos.legend.pure.m3.coreinstance.Package;
+import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
+import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation._package._Package;
+import org.finos.legend.pure.m3.tools.PackageTreeIterable;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
 import java.util.Objects;
 
-class SimpleContainingElementIndex implements ContainingElementIndex
+class ContainingElementIndex
 {
     private final MapIterable<String, ImmutableList<CoreInstance>> sourceIndex;
     private final SetIterable<CoreInstance> virtualPackages;
 
-    private SimpleContainingElementIndex(MapIterable<String, ImmutableList<CoreInstance>> sourceIndex, SetIterable<CoreInstance> virtualPackages)
+    private ContainingElementIndex(MapIterable<String, ImmutableList<CoreInstance>> sourceIndex, SetIterable<CoreInstance> virtualPackages)
     {
         this.sourceIndex = sourceIndex;
         this.virtualPackages = virtualPackages;
@@ -48,11 +52,11 @@ class SimpleContainingElementIndex implements ContainingElementIndex
         {
             return true;
         }
-        if (!(other instanceof SimpleContainingElementIndex))
+        if (!(other instanceof ContainingElementIndex))
         {
             return false;
         }
-        SimpleContainingElementIndex that = (SimpleContainingElementIndex) other;
+        ContainingElementIndex that = (ContainingElementIndex) other;
         return this.sourceIndex.equals(that.sourceIndex) && this.virtualPackages.equals(that.virtualPackages);
     }
 
@@ -92,8 +96,7 @@ class SimpleContainingElementIndex implements ContainingElementIndex
         return builder.toString();
     }
 
-    @Override
-    public CoreInstance findContainingElement(CoreInstance instance)
+    CoreInstance findContainingElement(CoreInstance instance)
     {
         SourceInformation sourceInfo = instance.getSourceInformation();
         if (sourceInfo == null)
@@ -189,7 +192,21 @@ class SimpleContainingElementIndex implements ContainingElementIndex
             return this;
         }
 
-        SimpleContainingElementIndex build()
+        void addAllElements()
+        {
+            addElement(this.processorSupport.repository_getTopLevel(M3Paths.Package));
+            addElement(this.processorSupport.repository_getTopLevel(M3Paths.Root));
+            PrimitiveUtilities.forEachPrimitiveType(processorSupport, this::addElement);
+            addElements(PackageTreeIterable.newRootPackageTreeIterable(this.processorSupport).flatCollect(Package::_children));
+        }
+
+        Builder withAllElements()
+        {
+            addAllElements();
+            return this;
+        }
+
+        ContainingElementIndex build()
         {
             MutableMap<String, ImmutableList<CoreInstance>> index = Maps.mutable.ofInitialCapacity(this.elementsBySource.size());
             this.elementsBySource.forEachKeyValue((source, elements) ->
@@ -223,7 +240,7 @@ class SimpleContainingElementIndex implements ContainingElementIndex
                     index.put(source, elements.toImmutable());
                 }
             });
-            return new SimpleContainingElementIndex(index, this.virtualPackages.isEmpty() ? Sets.immutable.empty() : Sets.mutable.withAll(this.virtualPackages));
+            return new ContainingElementIndex(index, this.virtualPackages.isEmpty() ? Sets.immutable.empty() : Sets.mutable.withAll(this.virtualPackages));
         }
 
         private static boolean overlaps(CoreInstance element1, CoreInstance element2)

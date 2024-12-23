@@ -36,7 +36,7 @@ public class TestModuleMetadata extends AbstractMetadataTest
 
         Assert.assertEquals(emptyModule, new ModuleMetadata(name));
         Assert.assertNotEquals(emptyModule, new ModuleMetadata(name + "_" + name));
-        Assert.assertNotEquals(emptyModule, new ModuleMetadata("non_empty_module", newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1)));
+        Assert.assertNotEquals(emptyModule, new ModuleMetadata("non_empty_module", newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1, 1)));
     }
 
     @Test
@@ -44,15 +44,15 @@ public class TestModuleMetadata extends AbstractMetadataTest
     {
         String name = "test_module";
 
-        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1);
-        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1);
-        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1);
-        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1);
-        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1);
-        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1);
-        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1);
-        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1);
-        ConcreteElementMetadata notInTheModule = newEnumeration("model::enums::NotInTheModule", "/test_module/model/other_enums.pure", 1, 1, 3, 1);
+        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1, 1);
+        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1, 1);
+        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1, 1);
+        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1, 1);
+        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1, 1);
+        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1, 1);
+        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1, 1);
+        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1, 1);
+        ConcreteElementMetadata notInTheModule = newEnumeration("model::enums::NotInTheModule", "/test_module/model/other_enums.pure", 1, 1, 3, 1, 1);
 
         ModuleMetadata simpleModule = new ModuleMetadata(name, mySimpleClass, myOtherClass, myThirdClass, simpleToOther, simpleToThird, otherToThird, myFirstEnumeration, mySecondEnumeration);
         Assert.assertEquals(name, simpleModule.getName());
@@ -82,15 +82,15 @@ public class TestModuleMetadata extends AbstractMetadataTest
     {
         // this should work, since the two are equal
         new ModuleMetadata("non_empty_module",
-                newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1),
-                newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1));
+                newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1, 1),
+                newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1, 1));
 
         IllegalArgumentException e = Assert.assertThrows(
                 IllegalArgumentException.class,
                 () -> new ModuleMetadata("test_module",
-                        newClass("model::MyClass", "/test_module/file.pure", 1, 1, 5, 1),
-                        newAssociation("model::MyAssociation", "/test_module/file.pure", 6, 1, 8, 1),
-                        newClass("model::MyClass", "/test_module/file.pure", 9, 1, 15, 1)));
+                        newClass("model::MyClass", "/test_module/file.pure", 1, 1, 5, 1, 1),
+                        newAssociation("model::MyAssociation", "/test_module/file.pure", 6, 1, 8, 1, 1),
+                        newClass("model::MyClass", "/test_module/file.pure", 9, 1, 15, 1, 1)));
         Assert.assertEquals("Conflict for element: model::MyClass", e.getMessage());
     }
 
@@ -99,14 +99,14 @@ public class TestModuleMetadata extends AbstractMetadataTest
     {
         // this should work, since the two are equal
         new ModuleMetadata("non_empty_module",
-                newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1),
-                newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1));
+                newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1, 1),
+                newClass("model::MyClass", "/non_empty_module/file.pure", 1, 1, 5, 1, 1));
 
         IllegalArgumentException e = Assert.assertThrows(
                 IllegalArgumentException.class,
                 () -> new ModuleMetadata("test_module",
-                        newClass("model::MyClass", "/test_module/file.pure", 1, 1, 5, 1),
-                        newAssociation("model::MyAssociation", "/test_module/file.pure", 3, 1, 8, 1)));
+                        newClass("model::MyClass", "/test_module/file.pure", 1, 1, 5, 1, 1),
+                        newAssociation("model::MyAssociation", "/test_module/file.pure", 3, 1, 8, 1, 1)));
         Assert.assertEquals("Overlapping source information for model::MyClass (/test_module/file.pure:1c1-5c1) and model::MyAssociation (/test_module/file.pure:3c1-8c1)", e.getMessage());
     }
 
@@ -114,15 +114,15 @@ public class TestModuleMetadata extends AbstractMetadataTest
     public void testWithElement()
     {
         String name = "test_module";
-        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1);
-        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1);
-        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1);
-        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1);
-        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1);
-        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1);
-        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1);
-        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1);
-        ConcreteElementMetadata notInTheModule = newEnumeration("model::enums::NotInTheModule", "/test_module/model/more_enums.pure", 1, 1, 3, 1);
+        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1, 1);
+        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1, 1);
+        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1, 1);
+        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1, 1);
+        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1, 1);
+        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1, 1);
+        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1, 1);
+        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1, 1);
+        ConcreteElementMetadata notInTheModule = newEnumeration("model::enums::NotInTheModule", "/test_module/model/more_enums.pure", 1, 1, 3, 1, 1);
 
         ModuleMetadata simpleModule = new ModuleMetadata(name, mySimpleClass, myOtherClass, myThirdClass, simpleToOther, simpleToThird, otherToThird, myFirstEnumeration, mySecondEnumeration);
         simpleModule.forEachElement(e -> Assert.assertEquals(e.getPath(), simpleModule, simpleModule.withElement(e)));
@@ -132,7 +132,7 @@ public class TestModuleMetadata extends AbstractMetadataTest
         Assert.assertEquals(simpleModule.getElementCount() + 1, simpleModulePlus.getElementCount());
         Assert.assertEquals(simpleModule.getElements().toList().with(notInTheModule).sortThisBy(PackageableElementMetadata::getPath), simpleModulePlus.getElements());
 
-        ConcreteElementMetadata myThirdClassReplacement = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 14, 1, 20, 1);
+        ConcreteElementMetadata myThirdClassReplacement = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 14, 1, 20, 1, 1);
         ModuleMetadata simpleModuleWithReplacement = simpleModule.withElement(myThirdClassReplacement);
         Assert.assertNotEquals(simpleModule, simpleModuleWithReplacement);
         Assert.assertEquals(simpleModule.getElementCount(), simpleModuleWithReplacement.getElementCount());
@@ -146,15 +146,15 @@ public class TestModuleMetadata extends AbstractMetadataTest
     public void testWithElements()
     {
         String name = "test_module";
-        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1);
-        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1);
-        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1);
-        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1);
-        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1);
-        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1);
-        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1);
-        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1);
-        ConcreteElementMetadata notInTheModule = newEnumeration("model::enums::NotInTheModule", "/test_module/model/more_enums.pure", 1, 1, 3, 1);
+        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1, 1);
+        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1, 1);
+        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1, 1);
+        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1, 1);
+        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1, 1);
+        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1, 1);
+        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1, 1);
+        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1, 1);
+        ConcreteElementMetadata notInTheModule = newEnumeration("model::enums::NotInTheModule", "/test_module/model/more_enums.pure", 1, 1, 3, 1, 1);
 
         ModuleMetadata simpleModule = new ModuleMetadata(name, mySimpleClass, myOtherClass, myThirdClass, simpleToOther, simpleToThird, otherToThird, myFirstEnumeration, mySecondEnumeration);
         Assert.assertEquals(simpleModule, simpleModule.withElements(Lists.immutable.empty()));
@@ -165,7 +165,7 @@ public class TestModuleMetadata extends AbstractMetadataTest
         Assert.assertEquals(simpleModule.getElementCount() + 1, simpleModulePlus.getElementCount());
         Assert.assertEquals(simpleModule.getElements().toList().with(notInTheModule).sortThisBy(PackageableElementMetadata::getPath), simpleModulePlus.getElements());
 
-        ConcreteElementMetadata myThirdClassReplacement = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 14, 1, 20, 1);
+        ConcreteElementMetadata myThirdClassReplacement = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 14, 1, 20, 1, 1);
         ModuleMetadata simpleModuleWithReplacement = simpleModule.withElements(mySimpleClass, myOtherClass, myThirdClassReplacement);
         Assert.assertNotEquals(simpleModule, simpleModuleWithReplacement);
         Assert.assertEquals(simpleModule.getElementCount(), simpleModuleWithReplacement.getElementCount());
@@ -184,14 +184,14 @@ public class TestModuleMetadata extends AbstractMetadataTest
     public void testWithoutElements()
     {
         String name = "test_module";
-        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1);
-        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1);
-        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1);
-        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1);
-        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1);
-        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1);
-        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1);
-        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1);
+        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1, 1);
+        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1, 1);
+        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1, 1);
+        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1, 1);
+        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1, 1);
+        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1, 1);
+        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1, 1);
+        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1, 1);
 
         ModuleMetadata baseModule = new ModuleMetadata(name, mySimpleClass, myOtherClass, myThirdClass, simpleToOther, simpleToThird, otherToThird, myFirstEnumeration, mySecondEnumeration);
         Assert.assertSame(baseModule, baseModule.withoutElements());
@@ -220,17 +220,17 @@ public class TestModuleMetadata extends AbstractMetadataTest
     public void testUpdate()
     {
         String name = "test_module";
-        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1);
-        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1);
-        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1);
-        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1);
-        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1);
-        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1);
-        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1);
-        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1);
+        ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1, 1);
+        ConcreteElementMetadata myOtherClass = newClass("model::classes::MyOtherClass", "/test_module/model/classes.pure", 6, 1, 10, 1, 1);
+        ConcreteElementMetadata myThirdClass = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 12, 1, 20, 1, 1);
+        ConcreteElementMetadata simpleToOther = newAssociation("model::associations::SimpleToOther", "/test_module/model/associations.pure", 2, 1, 7, 1, 1);
+        ConcreteElementMetadata simpleToThird = newAssociation("model::associations::SimpleToThird", "/test_module/model/associations.pure", 9, 1, 16, 1, 1);
+        ConcreteElementMetadata otherToThird = newAssociation("model::associations::OtherToThird", "/test_module/model/associations.pure", 18, 1, 25, 1, 1);
+        ConcreteElementMetadata myFirstEnumeration = newEnumeration("model::enums::MyFirstEnumeration", "/test_module/model/enums.pure", 3, 1, 6, 1, 1);
+        ConcreteElementMetadata mySecondEnumeration = newEnumeration("model::enums::MySecondEnumeration", "/test_module/model/enums.pure", 8, 1, 10, 1, 1);
 
-        ConcreteElementMetadata notInTheModule = newEnumeration("model::enums::NotInTheModule", "/test_module/model/more_enums.pure", 1, 1, 3, 1);
-        ConcreteElementMetadata myThirdClassReplacement = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 14, 1, 20, 1);
+        ConcreteElementMetadata notInTheModule = newEnumeration("model::enums::NotInTheModule", "/test_module/model/more_enums.pure", 1, 1, 3, 1, 1);
+        ConcreteElementMetadata myThirdClassReplacement = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 14, 1, 20, 1, 1);
 
         ModuleMetadata baseModule = new ModuleMetadata(name, mySimpleClass, myOtherClass, myThirdClass, simpleToOther, simpleToThird, otherToThird, myFirstEnumeration, mySecondEnumeration);
         Assert.assertSame(baseModule, baseModule.update(null, (Iterable<String>) null));

@@ -69,7 +69,8 @@ public class ConcreteElementMetadataGenerator
         ConcreteElementMetadata.Builder builder = ConcreteElementMetadata.builder()
                 .withPath(elementPath)
                 .withClassifierPath(PackageableElement.getUserPathForPackageableElement(classifier))
-                .withSourceInformation(sourceInfo);
+                .withSourceInformation(sourceInfo)
+                .withReferenceIdVersion(this.referenceIdProvider.version());
         return computeExternalReferences(concreteElement, builder).build();
     }
 

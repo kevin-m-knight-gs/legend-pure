@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.finos.legend.pure.m3.serialization.compiler.reference;
+package org.finos.legend.pure.m3.serialization.compiler.reference.v1;
 
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
@@ -37,7 +37,6 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.proper
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.relationship.Association;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.relationship.Generalization;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enumeration;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.FunctionType;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Measure;
@@ -48,6 +47,7 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecificat
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.VariableExpression;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation._package._Package;
+import org.finos.legend.pure.m3.serialization.compiler.reference.AbstractReferenceTest;
 import org.finos.legend.pure.m3.tools.PackageTreeIterable;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.junit.Assert;
@@ -74,7 +74,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testPackageTree()
     {
         PackageTreeIterable.newRootPackageTreeIterable(processorSupport)
-                .flatCollect(Package::_children)
+                .flatCollect(org.finos.legend.pure.m3.coreinstance.Package::_children)
                 .forEach(this::assertIds);
     }
 
@@ -82,7 +82,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testVirtualPackages()
     {
         String testPath = "test";
-        Package testPackage = getCoreInstance(testPath);
+        org.finos.legend.pure.m3.coreinstance.Package testPackage = getCoreInstance(testPath);
         Assert.assertNull(testPackage.getSourceInformation());
         assertIds(testPath, Maps.immutable.with(testPath, testPackage));
 
@@ -96,7 +96,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testSimpleClass()
     {
         String path = "test::model::SimpleClass";
-        Class<?> simpleClass = getCoreInstance(path);
+        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> simpleClass = getCoreInstance(path);
         Property<?, ?> name = findProperty(simpleClass, "name");
         Property<?, ?> id = findProperty(simpleClass, "id");
         MutableMap<String, CoreInstance> expected = Maps.mutable.<String, CoreInstance>with(path, simpleClass)
@@ -118,8 +118,8 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testEnumeration()
     {
         String path = "test::model::SimpleEnumeration";
-        Enumeration<? extends Enum> testEnumeration = getCoreInstance(path);
-        ListIterable<? extends Enum> enums = toList(testEnumeration._values());
+        Enumeration<? extends org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum> testEnumeration = getCoreInstance(path);
+        ListIterable<? extends org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum> enums = toList(testEnumeration._values());
         MutableMap<String, CoreInstance> expected = Maps.mutable.<String, CoreInstance>with(path, testEnumeration)
                 .withKeyValue(path + ".values['VAL1']", enums.get(0))
                 .withKeyValue(path + ".values['VAL2']", enums.get(1));
@@ -361,7 +361,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
         assertIds(path, expectedLR);
 
         String leftPath = "test::model::Left";
-        Class<?> left = getCoreInstance(leftPath);
+        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> left = getCoreInstance(leftPath);
         Property<?, ?> leftName = findProperty(left, "name");
         MutableMap<String, CoreInstance> expectedL = Maps.mutable.<String, CoreInstance>with(leftPath, left)
                 .withKeyValue(leftPath + ".properties['name']", leftName)
@@ -372,7 +372,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
         assertIds(leftPath, expectedL);
 
         String rightPath = "test::model::Right";
-        Class<?> right = getCoreInstance(rightPath);
+        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> right = getCoreInstance(rightPath);
         Property<?, ?> rightId = findProperty(right, "id");
         MutableMap<String, CoreInstance> expectedR = Maps.mutable.<String, CoreInstance>with(rightPath, right)
                 .withKeyValue(rightPath + ".properties['id']", rightId)
@@ -404,7 +404,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testClassWithGeneralizations()
     {
         String path = "test::model::BothSides";
-        Class<?> bothSides = getCoreInstance(path);
+        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> bothSides = getCoreInstance(path);
         ListIterable<? extends Generalization> generalizations = toList(bothSides._generalizations());
         Property<?, ?> leftCount = findProperty(bothSides, "leftCount");
         Property<?, ?> rightCount = findProperty(bothSides, "rightCount");
@@ -429,7 +429,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testClassWithAnnotations()
     {
         String path = "test::model::ClassWithAnnotations";
-        Class<?> classWithAnnotations = getCoreInstance(path);
+        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> classWithAnnotations = getCoreInstance(path);
         ListIterable<? extends Property<?, ?>> properties = toList(classWithAnnotations._properties());
         MutableMap<String, CoreInstance> expected = Maps.mutable.<String, CoreInstance>with(path, classWithAnnotations)
                 .withKeyValue(path + ".taggedValues[0]", classWithAnnotations._taggedValues().getOnly())
@@ -459,7 +459,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testClassWithTypeAndMultiplicityParameters()
     {
         String path = "test::model::ClassWithTypeAndMultParams";
-        Class<?> classWithTypeMultParams = getCoreInstance(path);
+        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> classWithTypeMultParams = getCoreInstance(path);
         ListIterable<? extends Property<?, ?>> properties = toList(classWithTypeMultParams._properties());
         MutableMap<String, CoreInstance> expected = Maps.mutable.<String, CoreInstance>with(path, classWithTypeMultParams)
 //                .withKeyValue(path + ".multiplicityParameters[0]", classWithTypeMultParams._multiplicityParameters().getFirst())
@@ -486,7 +486,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testClassWithQualifiedProperties()
     {
         String path = "test::model::ClassWithQualifiedProperties";
-        Class<?> classWithQualifiedProps = getCoreInstance(path);
+        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> classWithQualifiedProps = getCoreInstance(path);
         MutableMap<String, CoreInstance> expected = Maps.mutable.with(path, classWithQualifiedProps);
 
         Property<?, ?> names = classWithQualifiedProps._properties().getFirst();
@@ -708,7 +708,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testClassWithMilestoning1()
     {
         String path = "test::model::ClassWithMilestoning1";
-        Class<?> classWithMilestoning1 = getCoreInstance(path);
+        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> classWithMilestoning1 = getCoreInstance(path);
         MutableMap<String, CoreInstance> expected = Maps.mutable.with(path, classWithMilestoning1);
 
         ListIterable<? extends Property<?, ?>> originalMilestonedProperties = toList(classWithMilestoning1._originalMilestonedProperties());
@@ -779,7 +779,7 @@ public class TestReferenceIdGenerator extends AbstractReferenceTest
     public void testClassWithMilestoning2()
     {
         String path = "test::model::ClassWithMilestoning2";
-        Class<?> classWithMilestoning2 = getCoreInstance(path);
+        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> classWithMilestoning2 = getCoreInstance(path);
         MutableMap<String, CoreInstance> expected = Maps.mutable.with(path, classWithMilestoning2);
 
         ListIterable<? extends Property<?, ?>> originalMilestonedProperties = toList(classWithMilestoning2._originalMilestonedProperties());

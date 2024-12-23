@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.finos.legend.pure.m3.serialization.compiler.reference;
+package org.finos.legend.pure.m3.serialization.compiler.reference.v1;
 
-import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.finos.legend.pure.m3.serialization.compiler.reference.AbstractReferenceIdExtensionTest;
+import org.junit.BeforeClass;
 
-public interface ContainingElementIndex
+public class TestReferenceIdExtensionV1 extends AbstractReferenceIdExtensionTest
 {
-    CoreInstance findContainingElement(CoreInstance instance);
+    @BeforeClass
+    public static void setUpExtension()
+    {
+        extension = new ReferenceIdExtensionV1();
+    }
 }

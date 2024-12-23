@@ -105,7 +105,7 @@ class SerializerV1 extends BaseV1
                     strings.add(node.instance.getName());
                 }
                 // We treat the classifier as an external reference, even if it's not
-                strings.add(this.serializationContext.getReferenceId(node.classifier));
+                strings.add(this.serializationContext.getReferenceIdProvider().getReferenceId(node.classifier));
                 getPropertyInfos(node.classifier).forEach(propertyInfo ->
                 {
                     if (!propertyInfo.skip)
@@ -119,7 +119,7 @@ class SerializerV1 extends BaseV1
                             {
                                 if (isExternal(value))
                                 {
-                                    strings.add(this.serializationContext.getReferenceId(value));
+                                    strings.add(this.serializationContext.getReferenceIdProvider().getReferenceId(value));
                                 }
                                 else
                                 {
@@ -186,7 +186,7 @@ class SerializerV1 extends BaseV1
                 }
                 else if (isExternal(value))
                 {
-                    serializeExternalReference(writer, this.serializationContext.getReferenceId(value));
+                    serializeExternalReference(writer, this.serializationContext.getReferenceIdProvider().getReferenceId(value));
                 }
                 else
                 {
@@ -208,7 +208,7 @@ class SerializerV1 extends BaseV1
     private void serializeClassifier(Writer writer, CoreInstance classifier)
     {
         // We treat the classifier as an external reference, even if it's not
-        writer.writeString(this.serializationContext.getReferenceId(classifier));
+        writer.writeString(this.serializationContext.getReferenceIdProvider().getReferenceId(classifier));
     }
 
     private void serializeName(Writer writer, CoreInstance instance)

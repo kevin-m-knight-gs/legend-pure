@@ -71,8 +71,8 @@ public abstract class AbstractTestModuleMetadataSerializerExtension extends Abst
     {
         testModuleMetadataSerializes(new ModuleMetadata(
                 "simple_module",
-                newClass("model::classes::MySimpleClass", "/simple_module/model/classes.pure", 1, 1, 5, 1),
-                newClass("model::classes::MyOtherClass", "/simple_module/model/classes.pure", 6, 1, 10, 1, newExtRef("model::classes::MyOtherClass.properties[0].genericType", "model::classes::MySimpleClass"))
+                newClass("model::classes::MySimpleClass", "/simple_module/model/classes.pure", 1, 1, 5, 1, 1),
+                newClass("model::classes::MyOtherClass", "/simple_module/model/classes.pure", 6, 1, 10, 1, 1, newExtRef("model::classes::MyOtherClass.properties[0].genericType", "model::classes::MySimpleClass"))
         ));
     }
 
@@ -82,27 +82,27 @@ public abstract class AbstractTestModuleMetadataSerializerExtension extends Abst
         testModuleMetadataSerializes(new ModuleMetadata(
                 "multi_source_module",
                 newClass("model::classes::MySimpleClass",
-                        "/multi_source_module/model/classes.pure", 1, 1, 5, 1),
+                        "/multi_source_module/model/classes.pure", 1, 1, 5, 1, 1),
                 newClass("model::classes::MyOtherClass",
-                        "/multi_source_module/model/classes.pure", 6, 1, 10, 1,
+                        "/multi_source_module/model/classes.pure", 6, 1, 10, 1, 1,
                         newExtRef("model::classes::MyOtherClass.properties[0].genericType", "model::classes::MySimpleClass")),
                 newClass("model::classes::MyThirdClass",
-                        "/multi_source_module/model/classes.pure", 12, 1, 20, 1,
+                        "/multi_source_module/model/classes.pure", 12, 1, 20, 1, 1,
                         newExtRef("model::classes::MyThirdClass.properties[1].genericType", "model::classes::MySimpleClass")),
                 newAssociation("model::associations::SimpleToOther",
-                        "/multi_source_module/model/associations.pure", 2, 1, 7, 1,
+                        "/multi_source_module/model/associations.pure", 2, 1, 7, 1, 1,
                         newExtRef("model::associations::SimpleToOther.properties[0].genericType", "model::classes::MySimpleClass"),
                         newExtRef("model::associations::SimpleToOther.properties[1].genericType", "model::classes::MyOtherClass")),
                 newAssociation("model::associations::SimpleToThird",
-                        "/multi_source_module/model/associations.pure", 9, 1, 16, 1,
+                        "/multi_source_module/model/associations.pure", 9, 1, 16, 1, 1,
                         newExtRef("model::associations::SimpleToThird.properties[0].genericType", "model::classes::MySimpleClass"),
                         newExtRef("model::associations::SimpleToThird.properties[1].genericType", "model::classes::MyThirdClass")),
                 newAssociation("model::associations::OtherToThird",
-                        "/multi_source_module/model/associations.pure", 18, 1, 25, 1,
+                        "/multi_source_module/model/associations.pure", 18, 1, 25, 1, 1,
                         newExtRef("model::associations::OtherToThird.properties[0].genericType", "model::classes::MyOtherClass"),
                         newExtRef("model::associations::OtherToThird.properties[1].genericType", "model::classes::MyThirdClass")),
-                newEnumeration("model::enums::MyFirstEnumeration", "/multi_source_module/model/enums.pure", 3, 1, 6, 1),
-                newEnumeration("model::enums::MySecondEnumeration", "/multi_source_module/model/enums.pure", 8, 1, 10, 1)
+                newEnumeration("model::enums::MyFirstEnumeration", "/multi_source_module/model/enums.pure", 3, 1, 6, 1, 1),
+                newEnumeration("model::enums::MySecondEnumeration", "/multi_source_module/model/enums.pure", 8, 1, 10, 1, 1)
         ));
     }
 

@@ -44,6 +44,7 @@ public class DeserializerV1 extends BaseV1
 
     DeserializedConcreteElement deserialize(Reader reader)
     {
+        int referenceIdVersion = this.serializationContext.getReferenceIdProvider().version();
         Reader stringIndexedReader = this.serializationContext.getStringIndexer().readStringIndex(reader);
         String path = stringIndexedReader.readString();
         InternalNode[] nodes = deserializeNodes(stringIndexedReader);
@@ -59,6 +60,12 @@ public class DeserializerV1 extends BaseV1
             public DeserializedElement getInternalElement(int id)
             {
                 return nodes[id];
+            }
+
+            @Override
+            public int getReferenceIdVersion()
+            {
+                return referenceIdVersion;
             }
 
             @Override

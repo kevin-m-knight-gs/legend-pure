@@ -14,6 +14,9 @@
 
 package org.finos.legend.pure.m3.serialization.compiler.reference;
 
+import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.m3.coreinstance.helper.AnyStubHelper;
 import org.finos.legend.pure.m3.navigation.M3PropertyPaths;
 import org.finos.legend.pure.m3.navigation._package._Package;
@@ -21,23 +24,43 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.tools.GraphNodeIterable;
 import org.finos.legend.pure.m4.tools.GraphWalkFilterResult;
 import org.junit.Assert;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public abstract class AbstractReferenceIdResolverTest extends AbstractReferenceTest
-{
-    protected static ReferenceIdProvider referenceIdProvider;
-    protected static ReferenceIdResolver referenceIdResolver;
+import java.util.ServiceLoader;
 
-    @BeforeClass
-    public static void setUpReferenceIdProvider()
+public abstract class AbstractReferenceIdExtensionTest extends AbstractReferenceTest
+{
+    protected static ReferenceIdExtension extension;
+
+    @Test
+    public void testLoadAsService()
     {
-        referenceIdProvider = ReferenceIdProviders.fromProcessorSupport(processorSupport, true);
+        int version = extension.version();
+        MutableList<ReferenceIdExtension> extensionsAtVersion = Iterate.select(ServiceLoader.load(ReferenceIdExtension.class), ext -> version == ext.version(), Lists.mutable.empty());
+        Assert.assertEquals(Lists.fixedSize.with(extension.getClass()), extensionsAtVersion.collect(Object::getClass));
+    }
+
+    @Test
+    public void testReferenceIds()
+    {
+        int version = extension.version();
+        ReferenceIds referenceIds = ReferenceIds.builder(processorSupport).withExtension(extension).build();
+        Assert.assertTrue(referenceIds.isVersionAvailable(version));
+        Assert.assertSame(extension, referenceIds.getExtension(version));
+    }
+
+    @Test
+    public void testProviderAndResolverVersions()
+    {
+        Assert.assertEquals(extension.version(), extension.newProvider(processorSupport).version());
+        Assert.assertEquals(extension.version(), extension.newResolver(processorSupport).version());
     }
 
     @Test
     public void testAllInstancesWithReferenceIds()
     {
+        ReferenceIdProvider provider = extension.newProvider(processorSupport);
+        ReferenceIdResolver resolver = extension.newResolver(processorSupport);
         GraphNodeIterable.builder()
                 .withStartingNodes(repository.getTopLevels())
                 .withKeyFilter((node, key) -> !M3PropertyPaths.BACK_REFERENCE_PROPERTY_PATHS.contains(node.getRealKeyByName(key)))
@@ -45,8 +68,8 @@ public abstract class AbstractReferenceIdResolverTest extends AbstractReferenceT
                 .build()
                 .forEach(instance ->
                 {
-                    String id = referenceIdProvider.getReferenceId(instance);
-                    CoreInstance resolved = referenceIdResolver.resolveReference(id);
+                    String id = provider.getReferenceId(instance);
+                    CoreInstance resolved = resolver.resolveReference(id);
                     Assert.assertSame(id, instance, resolved);
                 });
     }

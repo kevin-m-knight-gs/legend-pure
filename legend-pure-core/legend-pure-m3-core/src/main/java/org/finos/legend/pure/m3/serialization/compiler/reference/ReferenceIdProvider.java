@@ -19,6 +19,13 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 public interface ReferenceIdProvider
 {
     /**
+     * Version of the {@link ReferenceIdExtension} that this provider is associated with.
+     *
+     * @return extension version
+     */
+    int version();
+
+    /**
      * Get an id for the given reference instance. If no id can be found or computed for the reference instance, then
      * the implementing class should throw an {@link IllegalArgumentException} with an explanation of why not.
      *

@@ -20,32 +20,33 @@ import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
 public abstract class AbstractMetadataTest
 {
-    protected static ConcreteElementMetadata newClass(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newClass(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, int referenceIdVersion, ExternalReference... externalReferences)
     {
-        return newElement(path, M3Paths.Class, sourceId, startLine, startCol, endLine, endCol, externalReferences);
+        return newElement(path, M3Paths.Class, sourceId, startLine, startCol, endLine, endCol, referenceIdVersion, externalReferences);
     }
 
-    protected static ConcreteElementMetadata newAssociation(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newAssociation(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, int referenceIdVersion, ExternalReference... externalReferences)
     {
-        return newElement(path, M3Paths.Association, sourceId, startLine, startCol, endLine, endCol, externalReferences);
+        return newElement(path, M3Paths.Association, sourceId, startLine, startCol, endLine, endCol, referenceIdVersion, externalReferences);
     }
 
-    protected static ConcreteElementMetadata newEnumeration(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newEnumeration(String path, String sourceId, int startLine, int startCol, int endLine, int endCol, int referenceIdVersion, ExternalReference... externalReferences)
     {
-        return newElement(path, M3Paths.Enumeration, sourceId, startLine, startCol, endLine, endCol, externalReferences);
+        return newElement(path, M3Paths.Enumeration, sourceId, startLine, startCol, endLine, endCol, referenceIdVersion, externalReferences);
     }
 
-    protected static ConcreteElementMetadata newElement(String path, String classifierPath, String sourceId, int startLine, int startCol, int endLine, int endCol, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newElement(String path, String classifierPath, String sourceId, int startLine, int startCol, int endLine, int endCol, int referenceIdVersion, ExternalReference... externalReferences)
     {
-        return newElement(path, classifierPath, newSourceInfo(sourceId, startLine, startCol, endLine, endCol), externalReferences);
+        return newElement(path, classifierPath, newSourceInfo(sourceId, startLine, startCol, endLine, endCol), referenceIdVersion, externalReferences);
     }
 
-    protected static ConcreteElementMetadata newElement(String path, String classifierPath, SourceInformation sourceInfo, ExternalReference... externalReferences)
+    protected static ConcreteElementMetadata newElement(String path, String classifierPath, SourceInformation sourceInfo, int referenceIdVersion, ExternalReference... externalReferences)
     {
         return ConcreteElementMetadata.builder()
                 .withPath(path)
                 .withClassifierPath(classifierPath)
                 .withSourceInformation(sourceInfo)
+                .withReferenceIdVersion(referenceIdVersion)
                 .withExternalReferences(externalReferences)
                 .build();
     }

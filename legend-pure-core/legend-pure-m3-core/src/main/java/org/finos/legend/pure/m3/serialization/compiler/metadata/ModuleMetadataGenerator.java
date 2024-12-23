@@ -22,7 +22,7 @@ import org.finos.legend.pure.m3.coreinstance.Package;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
-import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProviders;
+import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIds;
 import org.finos.legend.pure.m3.tools.PackageTreeIterable;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
@@ -38,7 +38,7 @@ public class ModuleMetadataGenerator
     ModuleMetadataGenerator(ProcessorSupport processorSupport)
     {
         this.processorSupport = Objects.requireNonNull(processorSupport);
-        this.elementGenerator = new ConcreteElementMetadataGenerator(ReferenceIdProviders.fromProcessorSupport(processorSupport), processorSupport);
+        this.elementGenerator = new ConcreteElementMetadataGenerator(ReferenceIds.builder(this.processorSupport).withAvailableExtensions().build().provider(), processorSupport);
     }
 
     public ModuleMetadata generateModuleMetadata(String name)

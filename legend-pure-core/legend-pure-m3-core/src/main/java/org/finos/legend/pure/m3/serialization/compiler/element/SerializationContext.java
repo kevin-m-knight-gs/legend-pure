@@ -17,7 +17,6 @@ package org.finos.legend.pure.m3.serialization.compiler.element;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProvider;
 import org.finos.legend.pure.m3.serialization.compiler.strings.StringIndexer;
-import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 
 public class SerializationContext
 {
@@ -37,9 +36,9 @@ public class SerializationContext
         return this.stringIndexer;
     }
 
-    public String getReferenceId(CoreInstance instance)
+    public ReferenceIdProvider getReferenceIdProvider()
     {
-        return this.referenceIdProvider.getReferenceId(instance);
+        return this.referenceIdProvider;
     }
 
     public ProcessorSupport getProcessorSupport()

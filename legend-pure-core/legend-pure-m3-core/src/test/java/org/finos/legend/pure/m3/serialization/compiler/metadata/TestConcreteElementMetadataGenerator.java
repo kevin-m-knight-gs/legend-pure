@@ -33,7 +33,8 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Measure;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.graph.GraphPath;
 import org.finos.legend.pure.m3.serialization.compiler.reference.AbstractReferenceTest;
-import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProviders;
+import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIds;
+import org.finos.legend.pure.m3.serialization.compiler.reference.v1.ReferenceIdExtensionV1;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -41,12 +42,14 @@ import org.junit.Test;
 
 public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
 {
+    private static ReferenceIds referenceIds;
     private static ConcreteElementMetadataGenerator generator;
 
     @BeforeClass
     public static void setUpGenerator()
     {
-        generator = new ConcreteElementMetadataGenerator(ReferenceIdProviders.fromProcessorSupport(processorSupport), processorSupport);
+        referenceIds = ReferenceIds.builder(processorSupport).withExtension(new ReferenceIdExtensionV1()).build();
+        generator = new ConcreteElementMetadataGenerator(referenceIds.provider(), processorSupport);
     }
 
     @Test
@@ -58,6 +61,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(simpleClass.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .build();
         assertMetadata(expected, simpleClass);
@@ -72,6 +76,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Enumeration)
                 .withSourceInformation(simpleEnumeration.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .build();
         assertMetadata(expected, simpleEnumeration);
@@ -89,6 +94,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Association)
                 .withSourceInformation(leftRight.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReferences("meta::pure::functions::boolean::equal_Any_MANY__Any_MANY__Boolean_1_",
                         path + ".qualifiedProperties[0].expressionSequence.parametersValues[1].values.expressionSequence.func",
                         path + ".qualifiedProperties[1].expressionSequence.parametersValues[1].values.expressionSequence.func")
@@ -134,6 +140,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(leftPath)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(left.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", leftPath + ".package")
                 .build();
         assertMetadata(expectedLeft, left);
@@ -143,6 +150,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(rightPath)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(right.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", rightPath + ".package")
                 .build();
         assertMetadata(expectedRight, right);
@@ -157,6 +165,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Profile)
                 .withSourceInformation(simpleProfile.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .build();
         assertMetadata(expected, simpleProfile);
@@ -171,6 +180,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(bothSides.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReference("test::model::Left", path + ".generalizations[0].general.rawType.resolvedNode")
                 .withExternalReference("test::model::Right", path + ".generalizations[1].general.rawType.resolvedNode")
@@ -187,6 +197,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(classWithAnnotations.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReferences("meta::pure::profiles::doc.p_stereotypes[value='deprecated']",
                         path + ".stereotypes.resolvedNode",
@@ -211,6 +222,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(classWithTypeMultParams.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .build();
         assertMetadata(expected, classWithTypeMultParams);
@@ -225,6 +237,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(classWithQualifiedProps.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReference("meta::pure::functions::boolean::and_Boolean_1__Boolean_1__Boolean_1_",
                         path + ".qualifiedProperties[2].expressionSequence[0].parametersValues[1].parametersValues[0].func")
@@ -260,6 +273,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(classWithMilestoning1.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReferences("test::model::ClassWithMilestoning2",
                         path + ".originalMilestonedProperties[0].classifierGenericType.typeArguments[1].rawType.resolvedNode",
@@ -358,6 +372,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(classWithMilestoning2.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReferences("test::model::ClassWithMilestoning1",
                         path + ".originalMilestonedProperties[0].classifierGenericType.typeArguments[1].rawType.resolvedNode",
@@ -456,6 +471,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Class)
                 .withSourceInformation(classWithMilestoning3.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReferences("test::model::ClassWithMilestoning1",
                         path + ".originalMilestonedProperties[0].genericType.rawType.resolvedNode",
@@ -575,6 +591,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Association)
                 .withSourceInformation(association.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReferences("test::model::ClassWithMilestoning1",
                         path + ".originalMilestonedProperties[0].genericType.rawType.resolvedNode",
@@ -658,6 +675,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Association)
                 .withSourceInformation(association.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReferences("test::model::ClassWithMilestoning1",
                         path + ".originalMilestonedProperties[0].genericType.rawType.resolvedNode",
@@ -768,6 +786,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Association)
                 .withSourceInformation(association.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReferences("test::model::ClassWithMilestoning2",
                         path + ".originalMilestonedProperties[0].genericType.rawType.resolvedNode",
@@ -878,6 +897,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.NativeFunction)
                 .withSourceInformation(compare.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("meta::pure::profiles::doc.p_tags[value='doc']",
                         path + ".taggedValues[0].tag.resolvedNode")
                 .withExternalReference("meta::pure::test::pct::PCT.p_stereotypes[value='function']",
@@ -897,6 +917,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.ConcreteFunctionDefinition)
                 .withSourceInformation(testFunction.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReference("meta::pure::functions::collection::isEmpty_Any_$0_1$__Boolean_1_",
                         path + ".expressionSequence[0].parametersValues[1].parametersValues[0].func")
@@ -925,6 +946,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.ConcreteFunctionDefinition)
                 .withSourceInformation(testFunction.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReferences("test::model",
                         path + ".expressionSequence[0].parametersValues[1].values.resolvedNode",
                         path + ".package")
@@ -953,6 +975,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.ConcreteFunctionDefinition)
                 .withSourceInformation(testFunction.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReferences("test::model",
                         path + ".expressionSequence.values[0].values.resolvedNode",
                         path + ".expressionSequence.values[4].expressionSequence.parametersValues.values.resolvedNode",
@@ -970,6 +993,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Measure)
                 .withSourceInformation(currency.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .build();
         assertMetadata(expected, currency);
@@ -984,6 +1008,7 @@ public class TestConcreteElementMetadataGenerator extends AbstractReferenceTest
                 .withPath(path)
                 .withClassifierPath(M3Paths.Measure)
                 .withSourceInformation(mass.getSourceInformation())
+                .withReferenceIdVersion(referenceIds.getDefaultVersion())
                 .withExternalReference("test::model", path + ".package")
                 .withExternalReferences("meta::pure::functions::math::times_Number_MANY__Number_1_",
                         path + ".nonCanonicalUnits[0].conversionFunction.expressionSequence.func",

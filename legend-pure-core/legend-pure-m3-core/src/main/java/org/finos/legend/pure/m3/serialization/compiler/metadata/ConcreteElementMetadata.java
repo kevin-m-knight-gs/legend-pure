@@ -31,9 +31,10 @@ import java.util.Objects;
 public class ConcreteElementMetadata extends PackageableElementMetadata
 {
     private final SourceInformation sourceInfo;
+    private final int referenceIdVersion;
     private final ImmutableMap<String, ImmutableList<GraphPath>> externalReferences;
 
-    private ConcreteElementMetadata(String path, String classifierPath, SourceInformation sourceInfo, ImmutableMap<String, ImmutableList<GraphPath>> externalReferences)
+    private ConcreteElementMetadata(String path, String classifierPath, SourceInformation sourceInfo, int referenceIdVersion, ImmutableMap<String, ImmutableList<GraphPath>> externalReferences)
     {
         super(path, classifierPath);
         this.sourceInfo = Objects.requireNonNull(sourceInfo, "source information is required");
@@ -41,12 +42,18 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
         {
             throw new IllegalArgumentException("Invalid source information for " + this.path);
         }
+        this.referenceIdVersion = referenceIdVersion;
         this.externalReferences = externalReferences;
     }
 
     public SourceInformation getSourceInformation()
     {
         return this.sourceInfo;
+    }
+
+    public int getReferenceIdVersion()
+    {
+        return this.referenceIdVersion;
     }
 
     public ImmutableMap<String, ImmutableList<GraphPath>> getExternalReferences()
@@ -71,6 +78,7 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
         return this.path.equals(that.path) &&
                 this.classifierPath.equals(that.classifierPath) &&
                 this.sourceInfo.equals(that.sourceInfo) &&
+                (this.referenceIdVersion == that.referenceIdVersion) &&
                 this.externalReferences.equals(that.externalReferences);
     }
 
@@ -80,6 +88,7 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
         int hashCode = this.path.hashCode();
         hashCode = 31 * hashCode + this.classifierPath.hashCode();
         hashCode = 31 * hashCode + this.sourceInfo.hashCode();
+        hashCode = 31 * hashCode + this.referenceIdVersion;
         hashCode = 31 * hashCode + this.externalReferences.hashCode();
         return hashCode;
     }
@@ -88,6 +97,7 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
     protected void appendStringInfo(StringBuilder builder)
     {
         this.sourceInfo.appendMessage(builder.append(" sourceInfo="));
+        builder.append(" referenceIdVersion=").append(this.referenceIdVersion);
         if (this.externalReferences.notEmpty())
         {
             builder.append(" externalReferences={");
@@ -130,6 +140,7 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
         private String path;
         private String classifierPath;
         private SourceInformation sourceInfo;
+        private Integer referenceIdVersion;
         private final MutableMap<String, MutableList<GraphPath>> externalReferences;
 
         private Builder()
@@ -157,6 +168,12 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
         public Builder withSourceInformation(SourceInformation sourceInfo)
         {
             this.sourceInfo = sourceInfo;
+            return this;
+        }
+
+        public Builder withReferenceIdVersion(int referenceIdVersion)
+        {
+            this.referenceIdVersion = referenceIdVersion;
             return this;
         }
 
@@ -210,12 +227,13 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
 
         public ConcreteElementMetadata build()
         {
-            return new ConcreteElementMetadata(this.path, this.classifierPath, this.sourceInfo, processExternalReferences());
+            Objects.requireNonNull(this.path, "path is required");
+            Objects.requireNonNull(this.referenceIdVersion, "reference id version is required");
+            return new ConcreteElementMetadata(this.path, this.classifierPath, this.sourceInfo, this.referenceIdVersion, processExternalReferences());
         }
 
         private ImmutableMap<String, ImmutableList<GraphPath>> processExternalReferences()
         {
-            Objects.requireNonNull(this.path, "path is required");
             if (this.externalReferences.isEmpty())
             {
                 return Maps.immutable.empty();
@@ -268,12 +286,6 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
             });
             return result.toImmutable();
         }
-    }
-
-    private static int compareExternalReferences(ExternalReference extRef1, ExternalReference extRef2)
-    {
-        int cmp = comparePaths(extRef1.getPath(), extRef2.getPath());
-        return (cmp != 0) ? cmp : extRef1.getReferenceId().compareTo(extRef2.getReferenceId());
     }
 
     private static int comparePaths(GraphPath path1, GraphPath path2)

@@ -71,6 +71,7 @@ public class ModuleMetadataSerializerV1 implements ModuleMetadataSerializerExten
         writer.writeString(element.getPath());
         writer.writeString(element.getClassifierPath());
         writeSourceInfo(writer, element.getSourceInformation());
+        writer.writeInt(element.getReferenceIdVersion());
         ImmutableMap<String, ImmutableList<GraphPath>> externalReferences = element.getExternalReferences();
         writer.writeInt(externalReferences.size());
         externalReferences.keyValuesView().toSortedListBy(Pair::getOne).forEach(pair ->
@@ -88,11 +89,13 @@ public class ModuleMetadataSerializerV1 implements ModuleMetadataSerializerExten
         String path = reader.readString();
         String classifierPath = reader.readString();
         SourceInformation sourceInfo = readSourceInfo(reader);
+        int referenceIdVersion = reader.readInt();
         int extRefCount = reader.readInt();
         ConcreteElementMetadata.Builder builder = ConcreteElementMetadata.builder(extRefCount)
                 .withPath(path)
                 .withClassifierPath(classifierPath)
-                .withSourceInformation(sourceInfo);
+                .withSourceInformation(sourceInfo)
+                .withReferenceIdVersion(referenceIdVersion);
 
         for (int i = 0; i < extRefCount; i++)
         {

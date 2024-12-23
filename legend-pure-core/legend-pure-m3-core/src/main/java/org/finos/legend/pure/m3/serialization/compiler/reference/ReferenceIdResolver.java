@@ -19,6 +19,13 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 public interface ReferenceIdResolver
 {
     /**
+     * Version of the {@link ReferenceIdExtension} that this resolver is associated with.
+     *
+     * @return extension version
+     */
+    int version();
+
+    /**
      * Resolve the reference for the given id. If the id is invalid or cannot be resolved, then the implementing class
      * should throw an {@link IllegalArgumentException} with an explanation of why.
      *

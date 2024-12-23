@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.finos.legend.pure.m3.serialization.compiler.reference;
+package org.finos.legend.pure.m3.serialization.compiler.reference.v1;
 
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
@@ -33,17 +33,25 @@ import org.finos.legend.pure.m3.navigation.generictype.GenericType;
 import org.finos.legend.pure.m3.navigation.importstub.ImportStub;
 import org.finos.legend.pure.m3.navigation.measure.Measure;
 import org.finos.legend.pure.m3.navigation.multiplicity.Multiplicity;
+import org.finos.legend.pure.m3.serialization.compiler.reference.AbstractReferenceTest;
 import org.finos.legend.pure.m3.tools.PackageTreeIterable;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.tools.GraphNodeIterable;
 import org.finos.legend.pure.m4.tools.GraphWalkFilterResult;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
-public abstract class AbstractContainingElementIndexTest extends AbstractReferenceTest
+public class TestContainingElementIndex extends AbstractReferenceTest
 {
-    protected static ContainingElementIndex index;
+    private static ContainingElementIndex index;
+
+    @BeforeClass
+    public static void setUpIndex()
+    {
+        index = ContainingElementIndex.builder(processorSupport).withAllElements().build();
+    }
 
     @Test
     public void testVirtualPackage()
@@ -68,7 +76,7 @@ public abstract class AbstractContainingElementIndexTest extends AbstractReferen
     @Test
     public void testLeftClass()
     {
-        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> leftClass = testInstance("test::model::Left");
+        Class<?> leftClass = testInstance("test::model::Left");
         assertContainingInstance(getCoreInstance("test::model::LeftRight"), leftClass._propertiesFromAssociations().getOnly());
     }
 
@@ -372,4 +380,5 @@ public abstract class AbstractContainingElementIndexTest extends AbstractReferen
                builder.append("<null classifier>") :
                PackageableElement.writeUserPathForPackageableElement(builder, classifier);
     }
+
 }

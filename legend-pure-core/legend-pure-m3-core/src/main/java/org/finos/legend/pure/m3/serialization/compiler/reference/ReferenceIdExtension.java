@@ -14,13 +14,13 @@
 
 package org.finos.legend.pure.m3.serialization.compiler.reference;
 
-import org.junit.BeforeClass;
+import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 
-public class TestReferenceIdResolverFromProcessorSupport extends AbstractReferenceIdResolverTest
+public interface ReferenceIdExtension
 {
-    @BeforeClass
-    public static void setUpReferenceIdResolver()
-    {
-        referenceIdResolver = ReferenceIdResolvers.fromProcessorSupport(processorSupport);
-    }
+    int version();
+
+    ReferenceIdProvider newProvider(ProcessorSupport processorSupport);
+
+    ReferenceIdResolver newResolver(ProcessorSupport processorSupport);
 }

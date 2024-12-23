@@ -19,4 +19,6 @@ public interface DeserializedConcreteElement extends DeserializedElement
     String getPath();
 
     DeserializedElement getInternalElement(int id);
+
+    int getReferenceIdVersion();
 }

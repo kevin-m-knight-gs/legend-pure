@@ -30,9 +30,8 @@ import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.property.Property;
 import org.finos.legend.pure.m3.serialization.compiler.reference.AbstractReferenceTest;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProvider;
-import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProviders;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolver;
-import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolvers;
+import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIds;
 import org.finos.legend.pure.m3.tools.PackageTreeIterable;
 import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
@@ -49,8 +48,7 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
 {
     private ConcreteElementSerializerExtension extension;
     private ConcreteElementSerializer serializer;
-    private ReferenceIdProvider referenceIdProvider;
-    private ReferenceIdResolver referenceIdResolver;
+    private ReferenceIds referenceIds;
     private final ByteArrayOutputStream stream = new ByteArrayOutputStream();
 
     @Before
@@ -58,8 +56,7 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
     {
         this.extension = getExtension();
         this.serializer = ConcreteElementSerializer.builder(processorSupport).withExtension(this.extension).build();
-        this.referenceIdProvider = ReferenceIdProviders.fromProcessorSupport(processorSupport, true);
-        this.referenceIdResolver = ReferenceIdResolvers.fromProcessorSupport(processorSupport);
+        this.referenceIds = ReferenceIds.builder(processorSupport).withAvailableExtensions().build();
     }
 
     @Test
@@ -112,6 +109,9 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
 
     private void assertDeserialization(DeserializedConcreteElement concreteElement, MutableIntObjectMap<CoreInstance> internalReferences, String path, CoreInstance element, DeserializedElement deserialized)
     {
+        ReferenceIdProvider referenceIdProvider = this.referenceIds.provider(concreteElement.getReferenceIdVersion());
+        ReferenceIdResolver referenceIdResolver = this.referenceIds.resolver(concreteElement.getReferenceIdVersion());
+
         if (ModelRepository.isAnonymousInstanceName(element.getName()))
         {
             Assert.assertNull(path, deserialized.getName());
@@ -121,7 +121,7 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
             Assert.assertEquals(path, element.getName(), deserialized.getName());
         }
         Assert.assertEquals(path, element.getSourceInformation(), deserialized.getSourceInformation());
-        Assert.assertEquals(path, getReferenceId(processorSupport.getClassifier(element)), deserialized.getClassifierReferenceId());
+        Assert.assertEquals(path, referenceIdProvider.getReferenceId(processorSupport.getClassifier(element)), deserialized.getClassifierReferenceId());
 
         MutableMap<String, PropertyValues> deserializedPropertyValues = Maps.mutable.empty();
         deserialized.getPropertyValues().forEach(pv ->
@@ -165,7 +165,7 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
                     @Override
                     protected void accept(Reference.ExternalReference reference)
                     {
-                        CoreInstance resolved = resolveReferenceId(reference.getId());
+                        CoreInstance resolved = referenceIdResolver.resolveReference(reference.getId());
                         Assert.assertSame(keyPathWithIndex + "=" + reference.getId(), value, resolved);
                     }
 
@@ -264,14 +264,4 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
     }
 
     protected abstract ConcreteElementSerializerExtension getExtension();
-
-    protected String getReferenceId(CoreInstance instance)
-    {
-        return this.referenceIdProvider.getReferenceId(instance);
-    }
-
-    protected CoreInstance resolveReferenceId(String referenceId)
-    {
-        return this.referenceIdResolver.resolveReference(referenceId);
-    }
 }
