@@ -128,7 +128,7 @@ public class ModuleMetadataGenerator
                 newElements.add(this.elementGenerator.generateMetadata(element));
             }
         });
-        return metadata.update(newElements, toRemove);
+        return metadata.updateElements(newElements, toRemove);
     }
 
     public ModuleMetadata updateAllElements(ModuleMetadata metadata, String... moreElementsToUpdate)
@@ -167,7 +167,7 @@ public class ModuleMetadataGenerator
                 newElements.add(this.elementGenerator.generateMetadata(element));
             }
         });
-        return (newElements.isEmpty() && toRemove.isEmpty()) ? metadata : metadata.update(newElements, toRemove);
+        return (newElements.isEmpty() && toRemove.isEmpty()) ? metadata : metadata.updateElements(newElements, toRemove);
     }
 
     private LazyIterable<ConcreteElementMetadata> getModuleElementMetadata(String moduleName)
