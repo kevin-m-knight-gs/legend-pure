@@ -14,6 +14,7 @@
 
 package org.finos.legend.pure.m3.serialization.compiler.metadata;
 
+import org.eclipse.collections.api.LazyIterable;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
@@ -43,41 +44,34 @@ public class ModuleMetadataGenerator
 
     public ModuleMetadata generateModuleMetadata(String name)
     {
-        return new ModuleMetadata(name,
-                GraphTools.getTopLevelAndPackagedElements(this.processorSupport)
-                        .collectIf(
-                                e -> isSourceInModule(name, e.getSourceInformation()),
-                                this.elementGenerator::generateMetadata));
+        return ModuleMetadata.builder(name).withElements(getModuleElementMetadata(name)).build();
     }
 
     public MutableList<ModuleMetadata> generateModuleMetadata(Iterable<String> moduleNames)
     {
-        MutableMap<String, MutableList<ConcreteElementMetadata>> metadataByModule = Maps.mutable.empty();
-        moduleNames.forEach(name -> metadataByModule.put(Objects.requireNonNull(name), Lists.mutable.empty()));
-        if (metadataByModule.isEmpty())
+        MutableMap<String, ModuleMetadata.Builder> buildersByModule = Maps.mutable.empty();
+        moduleNames.forEach(name -> buildersByModule.put(Objects.requireNonNull(name), ModuleMetadata.builder(name)));
+        if (buildersByModule.isEmpty())
         {
             return Lists.mutable.empty();
         }
-        if (metadataByModule.size() == 1)
+        if (buildersByModule.size() == 1)
         {
-            return Lists.mutable.with(generateModuleMetadata(metadataByModule.keysView().getAny()));
+            return Lists.mutable.with(buildersByModule.valuesView().getAny().withElements(getModuleElementMetadata(buildersByModule.keysView().getAny())).build());
         }
-        GraphTools.getTopLevelAndPackagedElements(this.processorSupport)
-                .forEach(element ->
+        GraphTools.getTopLevelAndPackagedElements(this.processorSupport).forEach(element ->
+        {
+            String moduleName = getModule(element.getSourceInformation());
+            if (moduleName != null)
+            {
+                ModuleMetadata.Builder builder = buildersByModule.get(moduleName);
+                if (builder != null)
                 {
-                    String moduleName = getModule(element.getSourceInformation());
-                    if (moduleName != null)
-                    {
-                        MutableList<ConcreteElementMetadata> elementMetadata = metadataByModule.get(moduleName);
-                        if (elementMetadata != null)
-                        {
-                            elementMetadata.add(this.elementGenerator.generateMetadata(element));
-                        }
-                    }
-                });
-        MutableList<ModuleMetadata> results = Lists.mutable.ofInitialCapacity(metadataByModule.size());
-        metadataByModule.forEachKeyValue((name, elementMetadata) -> results.add(new ModuleMetadata(name, elementMetadata)));
-        return results;
+                    builder.addElement(this.elementGenerator.generateMetadata(element));
+                }
+            }
+        });
+        return buildersByModule.collect(ModuleMetadata.Builder::build, Lists.mutable.ofInitialCapacity(buildersByModule.size()));
     }
 
     public MutableList<ModuleMetadata> generateModuleMetadata(String... moduleNames)
@@ -101,19 +95,16 @@ public class ModuleMetadataGenerator
 
     public MutableList<ModuleMetadata> generateAllModuleMetadata()
     {
-        MutableMap<String, MutableList<ConcreteElementMetadata>> metadataByModule = Maps.mutable.empty();
-        GraphTools.getTopLevelAndPackagedElements(this.processorSupport)
-                .forEach(element ->
-                {
-                    String moduleName = getModule(element.getSourceInformation());
-                    if (moduleName != null)
-                    {
-                        metadataByModule.getIfAbsentPut(moduleName, Lists.mutable::empty).add(this.elementGenerator.generateMetadata(element));
-                    }
-                });
-        MutableList<ModuleMetadata> results = Lists.mutable.ofInitialCapacity(metadataByModule.size());
-        metadataByModule.forEachKeyValue((name, elementMetadata) -> results.add(new ModuleMetadata(name, elementMetadata)));
-        return results;
+        MutableMap<String, ModuleMetadata.Builder> buildersByModule = Maps.mutable.empty();
+        GraphTools.getTopLevelAndPackagedElements(this.processorSupport).forEach(element ->
+        {
+            String moduleName = getModule(element.getSourceInformation());
+            if (moduleName != null)
+            {
+                buildersByModule.getIfAbsentPutWithKey(moduleName, ModuleMetadata::builder).addElement(this.elementGenerator.generateMetadata(element));
+            }
+        });
+        return buildersByModule.collect(ModuleMetadata.Builder::build, Lists.mutable.ofInitialCapacity(buildersByModule.size()));
     }
 
     public ModuleMetadata updateElements(ModuleMetadata metadata, String... elementsToUpdate)
@@ -177,6 +168,14 @@ public class ModuleMetadataGenerator
             }
         });
         return (newElements.isEmpty() && toRemove.isEmpty()) ? metadata : metadata.update(newElements, toRemove);
+    }
+
+    private LazyIterable<ConcreteElementMetadata> getModuleElementMetadata(String moduleName)
+    {
+        return GraphTools.getTopLevelAndPackagedElements(this.processorSupport)
+                .collectIf(
+                        e -> isSourceInModule(moduleName, e.getSourceInformation()),
+                        this.elementGenerator::generateMetadata);
     }
 
     ConcreteElementMetadataGenerator getElementMetadataGenerator()

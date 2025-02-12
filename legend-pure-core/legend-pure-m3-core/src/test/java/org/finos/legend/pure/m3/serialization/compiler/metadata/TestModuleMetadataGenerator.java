@@ -59,7 +59,7 @@ public class TestModuleMetadataGenerator extends AbstractReferenceTest
     public void testEmptyModule()
     {
         String name = "empty";
-        Assert.assertEquals(new ModuleMetadata(name), generator.generateModuleMetadata(name));
+        Assert.assertEquals(ModuleMetadata.builder(name).build(), generator.generateModuleMetadata(name));
     }
 
     @Test
@@ -202,50 +202,46 @@ public class TestModuleMetadataGenerator extends AbstractReferenceTest
 
     private ModuleMetadata getModuleMetadata(String moduleName)
     {
-        return new ModuleMetadata(
-                moduleName,
-                GraphTools.getTopLevelAndPackagedElements(repository).collectIf(
+        return ModuleMetadata.builder()
+                .withName(moduleName)
+                .withElements(GraphTools.getTopLevelAndPackagedElements(repository).collectIf(
                         e -> (e.getSourceInformation() != null) && moduleName.equals(CodeStorageTools.getInitialPathElement(e.getSourceInformation().getSourceId())),
-                        generator.getElementMetadataGenerator()::generateMetadata,
-                        Lists.mutable.empty()));
+                        generator.getElementMetadataGenerator()::generateMetadata))
+                .build();
     }
 
     private MutableList<ModuleMetadata> getModuleMetadata(String... moduleNames)
     {
-        MutableMap<String, MutableList<ConcreteElementMetadata>> byModule = Maps.mutable.ofInitialCapacity(moduleNames.length);
-        ArrayIterate.forEach(moduleNames, name -> byModule.put(name, Lists.mutable.empty()));
+        MutableMap<String, ModuleMetadata.Builder> byModule = Maps.mutable.ofInitialCapacity(moduleNames.length);
+        ArrayIterate.forEach(moduleNames, name -> byModule.put(name, ModuleMetadata.builder(name)));
         GraphTools.getTopLevelAndPackagedElements(repository).forEach(element ->
         {
             SourceInformation sourceInfo = element.getSourceInformation();
             if (sourceInfo != null)
             {
-                MutableList<ConcreteElementMetadata> metadatas = byModule.get(CodeStorageTools.getInitialPathElement(sourceInfo.getSourceId()));
-                if (metadatas != null)
+                ModuleMetadata.Builder builder = byModule.get(CodeStorageTools.getInitialPathElement(sourceInfo.getSourceId()));
+                if (builder != null)
                 {
-                    metadatas.add(generator.getElementMetadataGenerator().generateMetadata(element));
+                    builder.addElement(generator.getElementMetadataGenerator().generateMetadata(element));
                 }
             }
         });
-        MutableList<ModuleMetadata> result = Lists.mutable.ofInitialCapacity(byModule.size());
-        byModule.forEachKeyValue((name, metadatas) -> result.add(new ModuleMetadata(name, metadatas)));
-        return result;
+        return byModule.collect(ModuleMetadata.Builder::build, Lists.mutable.ofInitialCapacity(byModule.size()));
     }
 
     private MutableList<ModuleMetadata> getAllModuleMetadata()
     {
-        MutableMap<String, MutableList<ConcreteElementMetadata>> byModule = Maps.mutable.empty();
+        MutableMap<String, ModuleMetadata.Builder> byModule = Maps.mutable.empty();
         GraphTools.getTopLevelAndPackagedElements(repository).forEach(element ->
         {
             SourceInformation sourceInfo = element.getSourceInformation();
             if (sourceInfo != null)
             {
                 ConcreteElementMetadata metadata = generator.getElementMetadataGenerator().generateMetadata(element);
-                byModule.getIfAbsentPut(CodeStorageTools.getInitialPathElement(sourceInfo.getSourceId()), Lists.mutable::empty).add(metadata);
+                byModule.getIfAbsentPutWithKey(CodeStorageTools.getInitialPathElement(sourceInfo.getSourceId()), ModuleMetadata::builder).addElement(metadata);
             }
         });
-        MutableList<ModuleMetadata> result = Lists.mutable.ofInitialCapacity(byModule.size());
-        byModule.forEachKeyValue((name, metadatas) -> result.add(new ModuleMetadata(name, metadatas)));
-        return result;
+        return byModule.collect(ModuleMetadata.Builder::build, Lists.mutable.ofInitialCapacity(byModule.size()));
     }
 
     private void compileTestCode(String sourceId, String code)
