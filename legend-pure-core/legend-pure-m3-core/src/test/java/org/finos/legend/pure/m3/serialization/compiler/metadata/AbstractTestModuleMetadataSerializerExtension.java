@@ -63,24 +63,22 @@ public abstract class AbstractTestModuleMetadataSerializerExtension extends Abst
     @Test
     public void testEmptyModule()
     {
-        testModuleMetadataSerializes(new ModuleMetadata("empty_module"));
+        testModuleMetadataSerializes(ModuleMetadata.builder("empty_module").build());
     }
 
     @Test
     public void testSimpleModuleWithOneSource()
     {
-        testModuleMetadataSerializes(new ModuleMetadata(
-                "simple_module",
+        testModuleMetadataSerializes(ModuleMetadata.builder("simple_module").withElements(
                 newClass("model::classes::MySimpleClass", "/simple_module/model/classes.pure", 1, 1, 5, 1, 1),
                 newClass("model::classes::MyOtherClass", "/simple_module/model/classes.pure", 6, 1, 10, 1, 1, newExtRef("model::classes::MySimpleClass", refUsage("model::classes::MyOtherClass.properties['simple].classifierGenericType.typeArguments[1]", "rawType")))
-        ));
+        ).build());
     }
 
     @Test
     public void testSimpleModuleWithMultipleSources()
     {
-        testModuleMetadataSerializes(new ModuleMetadata(
-                "multi_source_module",
+        testModuleMetadataSerializes(ModuleMetadata.builder("multi_source_module").withElements(
                 newClass("model::classes::MySimpleClass",
                         "/multi_source_module/model/classes.pure", 1, 1, 5, 1, 1),
                 newClass("model::classes::MyOtherClass",
@@ -103,7 +101,7 @@ public abstract class AbstractTestModuleMetadataSerializerExtension extends Abst
                         newExtRef("model::classes::MyThirdClass", propFromAssoc("model::associations::OtherToThird.properties['toThird']"), refUsage("model::associations::OtherToThird.properties['toThird'].classifierGenericType.typeArguments[1]", "rawType"))),
                 newEnumeration("model::enums::MyFirstEnumeration", "/multi_source_module/model/enums.pure", 3, 1, 6, 1, 1),
                 newEnumeration("model::enums::MySecondEnumeration", "/multi_source_module/model/enums.pure", 8, 1, 10, 1, 1)
-        ));
+        ).build());
     }
 
     protected abstract ModuleMetadataSerializerExtension getExtension();

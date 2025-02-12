@@ -61,12 +61,12 @@ public class ModuleMetadataSerializerV1 implements ModuleMetadataSerializerExten
         String name = reader.readString();
 
         int elementCount = reader.readInt();
-        ConcreteElementMetadata[] elements = new ConcreteElementMetadata[elementCount];
+        ModuleMetadata.Builder builder = ModuleMetadata.builder(elementCount).withName(name);
         for (int i = 0; i < elementCount; i++)
         {
-            elements[i] = readElement(reader);
+            builder.addElement(readElement(reader));
         }
-        return new ModuleMetadata(name, elements);
+        return builder.build();
     }
 
     private void writeElement(Writer writer, ConcreteElementMetadata element)

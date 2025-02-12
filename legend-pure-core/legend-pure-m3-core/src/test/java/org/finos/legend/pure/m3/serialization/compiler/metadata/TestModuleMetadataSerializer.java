@@ -80,7 +80,7 @@ public class TestModuleMetadataSerializer
         Counter v2Serialize = new Counter(0);
         Counter v2Deserialize = new Counter(0);
 
-        ModuleMetadata emptyMetadata = new ModuleMetadata("empty_module");
+        ModuleMetadata emptyMetadata = ModuleMetadata.builder("empty_module").build();
 
         ModuleMetadataSerializerExtension v1 = newExtension(1,
                 (w, m) -> v1Serialize.increment(),
