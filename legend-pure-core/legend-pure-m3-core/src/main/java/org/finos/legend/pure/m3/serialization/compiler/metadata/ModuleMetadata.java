@@ -21,6 +21,7 @@ import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.set.SetIterable;
 import org.eclipse.collections.impl.set.mutable.SetAdapter;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
@@ -41,16 +42,6 @@ public class ModuleMetadata
     {
         this.name = name;
         this.elements = elements;
-    }
-
-    public ModuleMetadata(String name, Iterable<? extends ConcreteElementMetadata> elements)
-    {
-        this(validateName(name), processElements(name, elements));
-    }
-
-    public ModuleMetadata(String name, ConcreteElementMetadata... elements)
-    {
-        this(name, Arrays.asList(elements));
     }
 
     public String getName()
@@ -107,8 +98,7 @@ public class ModuleMetadata
 
     public ModuleMetadata withElement(ConcreteElementMetadata newElement)
     {
-        Objects.requireNonNull(newElement, "element may not be null");
-        return update(Maps.mutable.with(newElement.getPath(), newElement), (Predicate<ConcreteElementMetadata>) null);
+        return builder(this).withElement(newElement, true).build();
     }
 
     public ModuleMetadata withElements(ConcreteElementMetadata... newElements)
@@ -118,22 +108,35 @@ public class ModuleMetadata
 
     public ModuleMetadata withElements(Iterable<? extends ConcreteElementMetadata> newElements)
     {
-        return update(newElements, (Predicate<ConcreteElementMetadata>) null);
+        return builder(this).withElements(newElements, true).build();
+    }
+
+    public ModuleMetadata withoutElement(String toRemove)
+    {
+        Builder builder = builder(this);
+        return builder.removeElement(toRemove) ? builder.buildNoValidation() : this;
     }
 
     public ModuleMetadata withoutElements(String... toRemove)
     {
-        return update(null, Sets.immutable.with(toRemove));
+        if (toRemove.length == 0)
+        {
+            return this;
+        }
+        Builder builder = builder(this);
+        return builder.removeElements(toRemove) ? builder.buildNoValidation() : this;
     }
 
     public ModuleMetadata withoutElements(Iterable<? extends String> toRemove)
     {
-        return update(null, toRemove);
+        Builder builder = builder(this);
+        return builder.removeElements(toRemove) ? builder.buildNoValidation() : this;
     }
 
     public ModuleMetadata withoutElements(Predicate<? super ConcreteElementMetadata> predicate)
     {
-        return update(null, predicate);
+        Builder builder = builder(this);
+        return builder.removeElements(predicate) ? builder.buildNoValidation() : this;
     }
 
     public ModuleMetadata update(Iterable<? extends ConcreteElementMetadata> newElements, Iterable<? extends String> toRemove)
@@ -143,58 +146,333 @@ public class ModuleMetadata
 
     public ModuleMetadata update(Iterable<? extends ConcreteElementMetadata> newElements, Predicate<? super ConcreteElementMetadata> toRemove)
     {
-        MutableMap<String, ConcreteElementMetadata> newElementsByPath;
-        if (newElements == null)
-        {
-            newElementsByPath = null;
-        }
-        else
-        {
-            newElementsByPath = (newElements instanceof Collection) ? Maps.mutable.ofInitialCapacity(((Collection<?>) newElements).size()) : Maps.mutable.empty();
-            newElements.forEach(e ->
-            {
-                ConcreteElementMetadata old = newElementsByPath.put(Objects.requireNonNull(e, "element may not be null").getPath(), e);
-                if ((old != null) && !old.equals(e))
-                {
-                    throw new IllegalArgumentException("Conflict for element: " + e.getPath());
-                }
-            });
-        }
-        return update(newElementsByPath, toRemove);
+        return update(indexElements(newElements), toRemove);
     }
 
     private ModuleMetadata update(MutableMap<String, ConcreteElementMetadata> newElementsByPath, Predicate<? super ConcreteElementMetadata> toRemove)
     {
         if ((newElementsByPath == null) || newElementsByPath.isEmpty())
         {
-            // No new elements, so no validation or sorting is necessary
             if (toRemove != null)
             {
-                MutableList<ConcreteElementMetadata> newElementList = this.elements.reject(toRemove::test, Lists.mutable.empty());
-                if (newElementList.size() != this.elements.size())
+                Builder builder = builder(this);
+                if (builder.removeElements(toRemove))
                 {
-                    return new ModuleMetadata(this.name, newElementList.toImmutable());
+                    return builder.buildNoValidation();
                 }
             }
             return this;
         }
 
-        MutableList<ConcreteElementMetadata> newElementList = Lists.mutable.empty();
-        this.elements.forEach(element ->
+        Builder builder = builder(this);
+        builder.removeElements(toRemove);
+        builder.updateElements(newElementsByPath);
+        return builder.build();
+    }
+
+    public static Builder builder()
+    {
+        return new Builder();
+    }
+
+    public static Builder builder(String name)
+    {
+        return builder().withName(name);
+    }
+
+    public static Builder builder(int elementCount)
+    {
+        return new Builder(elementCount);
+    }
+
+    public static Builder builder(ModuleMetadata metadata)
+    {
+        return new Builder(metadata);
+    }
+
+    public static class Builder
+    {
+        private String name;
+        private final MutableList<ConcreteElementMetadata> elements;
+
+        private Builder()
         {
-            if ((toRemove == null) || !toRemove.test(element))
+            this.elements = Lists.mutable.empty();
+        }
+
+        private Builder(int elementCount)
+        {
+            this.elements = Lists.mutable.ofInitialCapacity(elementCount);
+        }
+
+        private Builder(ModuleMetadata metadata)
+        {
+            this.name = metadata.getName();
+            this.elements = Lists.mutable.withAll(metadata.getElements());
+        }
+
+        public void setName(String name)
+        {
+            if ((name != null) && name.isEmpty())
             {
-                ConcreteElementMetadata replacement = newElementsByPath.remove(element.getPath());
-                newElementList.add((replacement == null) ? element : replacement);
+                throw new IllegalArgumentException("name may not be empty");
+            }
+            this.name = name;
+        }
+
+        public void addElement(ConcreteElementMetadata element)
+        {
+            this.elements.add(Objects.requireNonNull(element, "element metadata may not be null"));
+        }
+
+        public void addElements(Iterable<? extends ConcreteElementMetadata> elements)
+        {
+            elements.forEach(this::addElement);
+        }
+
+        public void addElements(ConcreteElementMetadata... elements)
+        {
+            addElements(Arrays.asList(elements));
+        }
+
+        public void updateElement(ConcreteElementMetadata element)
+        {
+            Objects.requireNonNull(element, "element metadata may not be null");
+            int[] count = {0};
+            String path = element.getPath();
+            this.elements.replaceAll(e -> path.equals(e.getPath()) ? ((count[0]++ == 0) ? element : null) : e);
+            if (count[0] == 0)
+            {
+                this.elements.add(element);
+            }
+            else if (count[0] > 1)
+            {
+                this.elements.removeIf(Objects::isNull);
+            }
+        }
+
+        public void updateElements(Iterable<? extends ConcreteElementMetadata> newElements)
+        {
+            updateElements(indexElements(newElements));
+        }
+
+        private void updateElements(MutableMap<String, ConcreteElementMetadata> newElementsByPath)
+        {
+            if (newElementsByPath.isEmpty())
+            {
+                return;
+            }
+
+            MutableSet<String> updated = Sets.mutable.empty();
+            this.elements.replaceAll(e ->
+            {
+                String path = e.getPath();
+                ConcreteElementMetadata replacement = newElementsByPath.remove(path);
+                if (replacement != null)
+                {
+                    updated.add(path);
+                    return replacement;
+                }
+                return updated.contains(path) ? null : e;
+            });
+            this.elements.removeIf(Objects::isNull);
+            if (newElementsByPath.notEmpty())
+            {
+                this.elements.addAll(newElementsByPath.values());
+            }
+        }
+
+        public boolean removeElement(String toRemove)
+        {
+            return removeElements(getToRemovePredicate(Sets.immutable.with(toRemove)));
+        }
+
+        public boolean removeElements(Predicate<? super ConcreteElementMetadata> toRemove)
+        {
+            return (toRemove != null) && this.elements.removeIf(toRemove::test);
+        }
+
+        public boolean removeElements(Iterable<? extends String> toRemove)
+        {
+            return removeElements(getToRemovePredicate(toRemove));
+        }
+
+        public boolean removeElements(String... toRemove)
+        {
+            switch (toRemove.length)
+            {
+                case 0:
+                {
+                    return false;
+                }
+                case 1:
+                {
+                    return removeElement(toRemove[0]);
+                }
+                default:
+                {
+                    return removeElements(getToRemovePredicate(Sets.immutable.with(toRemove)));
+                }
+            }
+        }
+
+        public Builder withName(String name)
+        {
+            setName(name);
+            return this;
+        }
+
+        public Builder withElement(ConcreteElementMetadata element)
+        {
+            return withElement(element, false);
+        }
+
+        public Builder withElement(ConcreteElementMetadata element, boolean update)
+        {
+            if (update)
+            {
+                updateElement(element);
+            }
+            else
+            {
+                addElement(element);
+            }
+            return this;
+        }
+
+        public Builder withElements(Iterable<? extends ConcreteElementMetadata> elements)
+        {
+            return withElements(elements, false);
+        }
+
+        public Builder withElements(ConcreteElementMetadata... elements)
+        {
+            return withElements(Arrays.asList(elements));
+        }
+
+        public Builder withElements(Iterable<? extends ConcreteElementMetadata> elements, boolean update)
+        {
+            if (update)
+            {
+                updateElements(elements);
+            }
+            else
+            {
+                addElements(elements);
+            }
+            return this;
+        }
+
+        public Builder withoutElement(String toRemove)
+        {
+            removeElement(toRemove);
+            return this;
+        }
+
+        public Builder withoutElements(Predicate<? super ConcreteElementMetadata> toRemove)
+        {
+            removeElements(toRemove);
+            return this;
+        }
+
+        public Builder withoutElements(Iterable<? extends String> toRemove)
+        {
+            removeElements(toRemove);
+            return this;
+        }
+
+        public Builder withoutElements(String... toRemove)
+        {
+            removeElements(toRemove);
+            return this;
+        }
+
+        public ModuleMetadata build()
+        {
+            Objects.requireNonNull(this.name, "name may not be null");
+            sortAndRemoveDuplicateElements();
+            validateSourceInfo();
+            return buildNoValidation();
+        }
+
+        private ModuleMetadata buildNoValidation()
+        {
+            return new ModuleMetadata(this.name, this.elements.toImmutable());
+        }
+
+        private void sortAndRemoveDuplicateElements()
+        {
+            if (this.elements.size() > 1)
+            {
+                this.elements.sortThisBy(PackageableElementMetadata::getPath);
+                ConcreteElementMetadata[] prev = new ConcreteElementMetadata[1];
+                this.elements.removeIf(current ->
+                {
+                    ConcreteElementMetadata previous = prev[0];
+                    if ((previous == null) || !previous.getPath().equals(current.getPath()))
+                    {
+                        prev[0] = current;
+                        return false;
+                    }
+                    if (!previous.equals(current))
+                    {
+                        throw new IllegalArgumentException("Conflict for element: " + current.getPath());
+                    }
+                    return true;
+                });
+            }
+        }
+
+        private void validateSourceInfo()
+        {
+            if (this.elements.isEmpty())
+            {
+                return;
+            }
+
+            if (this.elements.size() == 1)
+            {
+                SourceInformation sourceInfo = elements.get(0).getSourceInformation();
+                if (!isSourceInModule(this.name, sourceInfo.getSourceId()))
+                {
+                    throw new IllegalArgumentException("Invalid source in module '" + this.name + "': " + sourceInfo.getSourceId());
+                }
+                return;
+            }
+
+            MutableList<String> invalidSources = this.elements.collect(e -> e.getSourceInformation().getSourceId(), Sets.mutable.empty()).reject(s -> isSourceInModule(this.name, s), Lists.mutable.empty());
+            if (invalidSources.notEmpty())
+            {
+                StringBuilder builder = new StringBuilder("Invalid source");
+                if (invalidSources.size() > 1)
+                {
+                    invalidSources.sortThis();
+                    builder.append('s');
+                }
+                builder.append(" in module '").append(this.name).append("': ");
+                invalidSources.appendString(builder, ", ");
+                throw new IllegalArgumentException(builder.toString());
+            }
+        }
+    }
+
+    private static MutableMap<String, ConcreteElementMetadata> indexElements(Iterable<? extends ConcreteElementMetadata> elements)
+    {
+        if (elements == null)
+        {
+            return null;
+        }
+
+        MutableMap<String, ConcreteElementMetadata> elementsByPath = (elements instanceof Collection) ? Maps.mutable.ofInitialCapacity(((Collection<?>) elements).size()) : Maps.mutable.empty();
+        elements.forEach(e ->
+        {
+            ConcreteElementMetadata old = elementsByPath.put(Objects.requireNonNull(e, "element metadata may not be null").getPath(), e);
+            if ((old != null) && !old.equals(e))
+            {
+                throw new IllegalArgumentException("Conflict for element: " + e.getPath());
             }
         });
-        if (newElementsByPath.notEmpty())
-        {
-            newElementList.addAll(newElementsByPath.values());
-            newElementList.sortThisBy(PackageableElementMetadata::getPath);
-        }
-        validateSourceInfo(this.name, newElementList);
-        return new ModuleMetadata(this.name, newElementList.toImmutable());
+        return elementsByPath;
     }
 
     private static Predicate<ConcreteElementMetadata> getToRemovePredicate(Iterable<? extends String> toRemove)
