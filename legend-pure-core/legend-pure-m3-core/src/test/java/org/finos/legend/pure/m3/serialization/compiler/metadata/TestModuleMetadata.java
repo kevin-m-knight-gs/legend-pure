@@ -203,7 +203,7 @@ public class TestModuleMetadata extends AbstractMetadataTest
     }
 
     @Test
-    public void testUpdate()
+    public void testUpdateElements()
     {
         String name = "test_module";
         ConcreteElementMetadata mySimpleClass = newClass("model::classes::MySimpleClass", "/test_module/model/classes.pure", 1, 1, 5, 1, 1);
@@ -219,22 +219,22 @@ public class TestModuleMetadata extends AbstractMetadataTest
         ConcreteElementMetadata myThirdClassReplacement = newClass("model::classes::MyThirdClass", "/test_module/model/classes.pure", 14, 1, 20, 1, 1);
 
         ModuleMetadata baseModule = ModuleMetadata.builder(name).withElements(mySimpleClass, myOtherClass, myThirdClass, simpleToOther, simpleToThird, otherToThird, myFirstEnumeration, mySecondEnumeration).build();
-        Assert.assertSame(baseModule, baseModule.update(null, (Iterable<String>) null));
-        Assert.assertSame(baseModule, baseModule.update(null, (Predicate<ConcreteElementMetadata>) null));
-        Assert.assertSame(baseModule, baseModule.update(Lists.immutable.empty(), Lists.immutable.empty()));
-        Assert.assertEquals(baseModule, baseModule.update(baseModule.getElements(), Lists.immutable.with("model::enums::NotInTheModule")));
+        Assert.assertSame(baseModule, baseModule.updateElements(null, (Iterable<String>) null));
+        Assert.assertSame(baseModule, baseModule.updateElements(null, (Predicate<ConcreteElementMetadata>) null));
+        Assert.assertSame(baseModule, baseModule.updateElements(Lists.immutable.empty(), Lists.immutable.empty()));
+        Assert.assertEquals(baseModule, baseModule.updateElements(baseModule.getElements(), Lists.immutable.with("model::enums::NotInTheModule")));
 
         Assert.assertEquals(
                 ModuleMetadata.builder(name).withElements(mySimpleClass, myOtherClass, myThirdClassReplacement, simpleToOther, simpleToThird, otherToThird).build(),
-                baseModule.update(Lists.immutable.with(mySimpleClass, myThirdClassReplacement), Lists.immutable.with("model::enums::MyFirstEnumeration", "model::enums::MySecondEnumeration")));
+                baseModule.updateElements(Lists.immutable.with(mySimpleClass, myThirdClassReplacement), Lists.immutable.with("model::enums::MyFirstEnumeration", "model::enums::MySecondEnumeration")));
         Assert.assertEquals(
                 ModuleMetadata.builder(name).withElements(mySimpleClass, myOtherClass, myThirdClassReplacement, myFirstEnumeration, mySecondEnumeration).build(),
-                baseModule.update(Lists.immutable.with(mySimpleClass, myThirdClassReplacement), emd -> emd.getPath().contains("::associations::")));
+                baseModule.updateElements(Lists.immutable.with(mySimpleClass, myThirdClassReplacement), emd -> emd.getPath().contains("::associations::")));
         Assert.assertEquals(
                 ModuleMetadata.builder(name).withElements(mySimpleClass, myOtherClass, myThirdClassReplacement, simpleToOther, otherToThird, myFirstEnumeration, mySecondEnumeration, notInTheModule).build(),
-                baseModule.update(Lists.immutable.with(myThirdClassReplacement, notInTheModule), Lists.immutable.with("model::associations::SimpleToThird")));
+                baseModule.updateElements(Lists.immutable.with(myThirdClassReplacement, notInTheModule), Lists.immutable.with("model::associations::SimpleToThird")));
 
-        NullPointerException e = Assert.assertThrows(NullPointerException.class, () -> baseModule.update(Lists.immutable.with(notInTheModule, null, myThirdClassReplacement), Lists.immutable.empty()));
+        NullPointerException e = Assert.assertThrows(NullPointerException.class, () -> baseModule.updateElements(Lists.immutable.with(notInTheModule, null, myThirdClassReplacement), Lists.immutable.empty()));
         Assert.assertEquals("element metadata may not be null", e.getMessage());
     }
 

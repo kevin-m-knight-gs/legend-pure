@@ -18,7 +18,6 @@ import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ImmutableList;
-import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
@@ -139,17 +138,17 @@ public class ModuleMetadata
         return builder.removeElements(predicate) ? builder.buildNoValidation() : this;
     }
 
-    public ModuleMetadata update(Iterable<? extends ConcreteElementMetadata> newElements, Iterable<? extends String> toRemove)
+    public ModuleMetadata updateElements(Iterable<? extends ConcreteElementMetadata> newElements, Iterable<? extends String> toRemove)
     {
-        return update(newElements, getToRemovePredicate(toRemove));
+        return updateElements(newElements, getRemoveElementPredicate(toRemove));
     }
 
-    public ModuleMetadata update(Iterable<? extends ConcreteElementMetadata> newElements, Predicate<? super ConcreteElementMetadata> toRemove)
+    public ModuleMetadata updateElements(Iterable<? extends ConcreteElementMetadata> newElements, Predicate<? super ConcreteElementMetadata> toRemove)
     {
-        return update(indexElements(newElements), toRemove);
+        return updateElements(indexElements(newElements), toRemove);
     }
 
-    private ModuleMetadata update(MutableMap<String, ConcreteElementMetadata> newElementsByPath, Predicate<? super ConcreteElementMetadata> toRemove)
+    private ModuleMetadata updateElements(MutableMap<String, ConcreteElementMetadata> newElementsByPath, Predicate<? super ConcreteElementMetadata> toRemove)
     {
         if ((newElementsByPath == null) || newElementsByPath.isEmpty())
         {
@@ -284,7 +283,7 @@ public class ModuleMetadata
 
         public boolean removeElement(String toRemove)
         {
-            return removeElements(getToRemovePredicate(Sets.immutable.with(toRemove)));
+            return removeElements(getRemoveElementPredicate(Sets.immutable.with(toRemove)));
         }
 
         public boolean removeElements(Predicate<? super ConcreteElementMetadata> toRemove)
@@ -294,7 +293,7 @@ public class ModuleMetadata
 
         public boolean removeElements(Iterable<? extends String> toRemove)
         {
-            return removeElements(getToRemovePredicate(toRemove));
+            return removeElements(getRemoveElementPredicate(toRemove));
         }
 
         public boolean removeElements(String... toRemove)
@@ -311,7 +310,7 @@ public class ModuleMetadata
                 }
                 default:
                 {
-                    return removeElements(getToRemovePredicate(Sets.immutable.with(toRemove)));
+                    return removeElements(getRemoveElementPredicate(Sets.immutable.with(toRemove)));
                 }
             }
         }
@@ -405,7 +404,7 @@ public class ModuleMetadata
             if (this.elements.size() > 1)
             {
                 this.elements.sortThisBy(PackageableElementMetadata::getPath);
-                ConcreteElementMetadata[] prev = new ConcreteElementMetadata[1];
+                ConcreteElementMetadata[] prev = {null};
                 this.elements.removeIf(current ->
                 {
                     ConcreteElementMetadata previous = prev[0];
@@ -475,7 +474,7 @@ public class ModuleMetadata
         return elementsByPath;
     }
 
-    private static Predicate<ConcreteElementMetadata> getToRemovePredicate(Iterable<? extends String> toRemove)
+    private static Predicate<ConcreteElementMetadata> getRemoveElementPredicate(Iterable<? extends String> toRemove)
     {
         if (toRemove == null)
         {
@@ -502,94 +501,6 @@ public class ModuleMetadata
                 return emd -> set.contains(emd.getPath());
             }
         }
-    }
-
-    private static String validateName(String name)
-    {
-        Objects.requireNonNull(name, "name may not be null");
-        if (name.isEmpty())
-        {
-            throw new IllegalArgumentException("name may not be empty");
-        }
-        return name;
-    }
-
-    private static ImmutableList<ConcreteElementMetadata> processElements(String moduleName, Iterable<? extends ConcreteElementMetadata> elements)
-    {
-        MutableList<ConcreteElementMetadata> list = (elements instanceof Collection) ? Lists.mutable.ofInitialCapacity(((Collection<?>) elements).size()) : Lists.mutable.empty();
-        elements.forEach(emd -> list.add(Objects.requireNonNull(emd, "element metadata may not be null")));
-        if (list.size() > 1)
-        {
-            list.sortThisBy(PackageableElementMetadata::getPath);
-            ConcreteElementMetadata[] prev = new ConcreteElementMetadata[1];
-            list.removeIf(current ->
-            {
-                ConcreteElementMetadata previous = prev[0];
-                if ((previous == null) || !previous.getPath().equals(current.getPath()))
-                {
-                    prev[0] = current;
-                    return false;
-                }
-                if (!previous.equals(current))
-                {
-                    throw new IllegalArgumentException("Conflict for element: " + current.getPath());
-                }
-                return true;
-            });
-        }
-        validateSourceInfo(moduleName, list);
-        return list.toImmutable();
-    }
-
-    private static void validateSourceInfo(String moduleName, ListIterable<ConcreteElementMetadata> elements)
-    {
-        if (elements.isEmpty())
-        {
-            return;
-        }
-
-        if (elements.size() == 1)
-        {
-            SourceInformation sourceInfo = elements.get(0).getSourceInformation();
-            if (!isSourceInModule(moduleName, sourceInfo.getSourceId()))
-            {
-                throw new IllegalArgumentException("Invalid source '" + sourceInfo.getSourceId() + "' in module '" + moduleName + "' with element " + elements.get(0).getPath());
-            }
-            return;
-        }
-
-        MutableMap<String, MutableList<ConcreteElementMetadata>> elementsBySource = Maps.mutable.empty();
-        elements.forEach(e -> elementsBySource.getIfAbsentPut(e.getSourceInformation().getSourceId(), Lists.mutable::empty).add(e));
-        elementsBySource.forEachKeyValue((sourceId, list) ->
-        {
-            if (!isSourceInModule(moduleName, sourceId))
-            {
-                StringBuilder builder = new StringBuilder("Invalid source '").append(sourceId).append("' in module '").append(moduleName).append("' with elements ");
-                list.collect(PackageableElementMetadata::getPath).sortThis().appendString(builder, ", ");
-                throw new IllegalArgumentException(builder.toString());
-            }
-            if (list.size() > 1)
-            {
-                // We sort by the start position, then check if there is any overlap between subsequent source info
-                list.sortThis((e1, e2) -> SourceInformation.compareByStartPosition(e1.getSourceInformation(), e2.getSourceInformation()))
-                        .injectInto((ConcreteElementMetadata) null, (previous, current) ->
-                        {
-                            if (previous != null)
-                            {
-                                SourceInformation previousSI = previous.getSourceInformation();
-                                SourceInformation currentSI = current.getSourceInformation();
-                                if (previousSI.intersects(currentSI))
-                                {
-                                    StringBuilder builder = new StringBuilder("Overlapping source information for ").append(previous.getPath());
-                                    previousSI.appendMessage(builder.append(" (")).append(") and ").append(current.getPath());
-                                    currentSI.appendMessage(builder.append(" (")).append(")");
-                                    throw new IllegalArgumentException(builder.toString());
-                                }
-                            }
-                            return current;
-                        });
-            }
-        });
     }
 
     static boolean isSourceInModule(String moduleName, String sourceId)
