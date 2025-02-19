@@ -89,6 +89,11 @@ public class MetadataIndex
 
     // Elements by path
 
+    public int getElementCount()
+    {
+        return this.elements.getElementCount();
+    }
+
     public boolean hasElement(String path)
     {
         return this.elements.hasElement(path);
@@ -188,6 +193,16 @@ public class MetadataIndex
     public ImmutableList<PackageableElementMetadata> getPackageChildren(String packagePath)
     {
         return this.packages.getPackageChildren(packagePath);
+    }
+
+    public void forEachPackage(Consumer<? super PackageableElementMetadata> consumer)
+    {
+        this.packages.forEachPackage(consumer);
+    }
+
+    public void forEachVirtualPackage(Consumer<? super VirtualPackageMetadata> consumer)
+    {
+        this.packages.forEachVirtualPackage(consumer);
     }
 
     // External References

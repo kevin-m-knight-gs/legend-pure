@@ -60,6 +60,11 @@ class ElementIndex
         return builder.toString();
     }
 
+    int getElementCount()
+    {
+        return this.pathIndex.size();
+    }
+
     // Elements by path
 
     boolean hasElement(String path)

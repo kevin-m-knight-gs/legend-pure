@@ -27,6 +27,8 @@ import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation._package._Package;
 
+import java.util.function.Consumer;
+
 class PackageIndex
 {
     private final ImmutableList<ConcreteElementMetadata> topLevelElements;
@@ -102,6 +104,23 @@ class PackageIndex
         return (info == null) ? null : info.getChildren();
     }
 
+    void forEachPackage(Consumer<? super PackageableElementMetadata> consumer)
+    {
+        this.packages.forEachValue(pi -> consumer.accept(pi.getMetadata()));
+    }
+
+    void forEachVirtualPackage(Consumer<? super VirtualPackageMetadata> consumer)
+    {
+        this.packages.forEachValue(pi ->
+        {
+            PackageableElementMetadata metadata = pi.getMetadata();
+            if (metadata instanceof VirtualPackageMetadata)
+            {
+                consumer.accept((VirtualPackageMetadata) metadata);
+            }
+        });
+    }
+
     private static class PackageInfo
     {
         private final PackageableElementMetadata metadata;
@@ -161,10 +180,14 @@ class PackageIndex
         // Build initial indexes
         MutableList<ConcreteElementMetadata> topLevelElements = Lists.mutable.empty();
         MutableMap<String, MutableList<PackageableElementMetadata>> packageChildren = Maps.mutable.empty();
-        MutableMap<String, PackageableElementMetadata> packagesByPath = Maps.mutable.empty();
         elementIndex.forEachElement(element ->
         {
             String path = element.getPath();
+            if (M3Paths.Package.equals(element.getClassifierPath()))
+            {
+                packageChildren.getIfAbsentPut(path, Lists.mutable::empty);
+            }
+
             String pkg = getParent(path);
             if (pkg == null)
             {
@@ -173,11 +196,6 @@ class PackageIndex
             else
             {
                 packageChildren.getIfAbsentPut(pkg, Lists.mutable::empty).add(element);
-            }
-            if (M3Paths.Package.equals(element.getClassifierPath()))
-            {
-                packagesByPath.put(path, element);
-                packageChildren.getIfAbsentPut(path, Lists.mutable::empty);
             }
         });
 
@@ -190,6 +208,7 @@ class PackageIndex
                 packagePath = getParent(packagePath);
             }
         });
+        MutableMap<String, PackageableElementMetadata> packagesByPath = Maps.mutable.ofInitialCapacity(allPackagePaths.size());
         allPackagePaths.forEach(packagePath ->
         {
             ConcreteElementMetadata existing = elementIndex.getElement(packagePath);
@@ -203,13 +222,17 @@ class PackageIndex
                     packageChildren.getIfAbsentPut(parent, Lists.mutable::empty).add(packageMetadata);
                 }
             }
-            else if (!M3Paths.Package.equals(existing.getClassifierPath()))
+            else if (M3Paths.Package.equals(existing.getClassifierPath()))
+            {
+                packagesByPath.put(packagePath, existing);
+            }
+            else
             {
                 StringBuilder builder = new StringBuilder("Multiple elements with path ").append(packagePath);
                 builder.append(": instance of ").append(existing.getClassifierPath()).append(" at ");
                 existing.getSourceInformation().appendMessage(builder);
                 builder.append(" and instance of ").append(M3Paths.Package);
-                throw new IllegalArgumentException(builder.toString());
+                throw new RuntimeException(builder.toString());
             }
         });
 
@@ -221,27 +244,13 @@ class PackageIndex
 
     private static String getParent(String path)
     {
-        if (isTopLevel(path))
+        // Check if it's a top-level element, which has no package
+        if (M3Paths.Root.equals(path) || PackageableElement.DEFAULT_PATH_SEPARATOR.equals(path) || _Package.SPECIAL_TYPES.contains(path))
         {
             return null;
         }
-        int index = path.lastIndexOf(PackageableElement.DEFAULT_PATH_SEPARATOR);
-        return (index < 0) ? M3Paths.Root : path.substring(0, index);
-    }
 
-    private static boolean isTopLevel(String path)
-    {
-        switch (path)
-        {
-            case M3Paths.Root:
-            case PackageableElement.DEFAULT_PATH_SEPARATOR:
-            {
-                return true;
-            }
-            default:
-            {
-                return _Package.SPECIAL_TYPES.contains(path);
-            }
-        }
+        int index = path.lastIndexOf(PackageableElement.DEFAULT_PATH_SEPARATOR);
+        return (index == -1) ? M3Paths.Root : path.substring(0, index);
     }
 }
