@@ -14,11 +14,10 @@
 
 package org.finos.legend.pure.m3.serialization.compiler.element.v1;
 
-import org.eclipse.collections.api.IntIterable;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
-import org.eclipse.collections.impl.list.primitive.IntInterval;
+import org.finos.legend.pure.m3.coreinstance.helper.AnyStubHelper;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation._package._Package;
 import org.finos.legend.pure.m3.serialization.compiler.element.DeserializedConcreteElement;
@@ -49,35 +48,38 @@ public class DeserializerV1 extends BaseV1
         int referenceIdVersion = this.serializationContext.getReferenceIdProvider().version();
         Reader stringIndexedReader = this.serializationContext.getStringIndexer().readStringIndex(reader);
         String path = stringIndexedReader.readString();
-        InternalNode[] nodes = deserializeNodes(stringIndexedReader);
-        return new MainNode(path, nodes, referenceIdVersion);
+        DeserializedElement[] nodes = deserializeNodes(stringIndexedReader);
+        return DeserializedConcreteElement.newDeserializedConcreteElement(path, referenceIdVersion, Lists.immutable.with(nodes));
     }
 
-    private InternalNode[] deserializeNodes(Reader reader)
+    private DeserializedElement[] deserializeNodes(Reader reader)
     {
         String sourceId = reader.readString();
+        int compileStateBitSetWidth = reader.readByte();
         int nodeCount = reader.readInt();
         int internalIdWidth = getIntWidth(nodeCount);
-        InternalNode[] nodes = new InternalNode[nodeCount];
+        DeserializedElement[] nodes = new DeserializedElement[nodeCount];
         for (int i = 0; i < nodeCount; i++)
         {
-            nodes[i] = deserializeNode(reader, sourceId, internalIdWidth);
+            nodes[i] = deserializeNode(reader, sourceId, internalIdWidth, compileStateBitSetWidth);
         }
         return nodes;
     }
 
-    private InternalNode deserializeNode(Reader reader, String sourceId, int internalIdWidth)
+    private DeserializedElement deserializeNode(Reader reader, String sourceId, int internalIdWidth, int compileStateBitSetWidth)
     {
         String name = readName(reader);
         String classifierId = readClassifier(reader);
         SourceInformation sourceInfo = readSourceInfo(reader, sourceId);
+        String referenceId = readReferenceId(reader, sourceInfo, classifierId);
+        int compileStateBitSet = readCompileStateBitSet(reader, compileStateBitSetWidth);
         int propertyCount = reader.readInt();
         MutableList<PropertyValues> propertiesWithValues = Lists.mutable.ofInitialCapacity(propertyCount);
         for (int i = 0; i < propertyCount; i++)
         {
             propertiesWithValues.add(readPropertyWithValues(reader, internalIdWidth));
         }
-        return new InternalNode(name, classifierId, sourceInfo, propertiesWithValues.asUnmodifiable());
+        return DeserializedElement.newDeserializedElement(name, classifierId, sourceInfo, referenceId, compileStateBitSet, propertiesWithValues.asUnmodifiable());
     }
 
     private String readName(Reader reader)
@@ -115,6 +117,16 @@ public class DeserializerV1 extends BaseV1
                 throw new RuntimeException(String.format("Unknown value present code: %02x", code & NODE_TYPE_MASK));
             }
         }
+    }
+
+    private String readReferenceId(Reader reader, SourceInformation sourceInfo, String classifierPath)
+    {
+        return (sourceInfo == null) || AnyStubHelper.STUB_CLASSES.contains(classifierPath) ? null : reader.readString();
+    }
+
+    private int readCompileStateBitSet(Reader reader, int compileStateBitSetWidth)
+    {
+        return readIntOfWidth(reader, compileStateBitSetWidth);
     }
 
     private PropertyValues readPropertyWithValues(Reader reader, int internalIdWidth)
@@ -255,108 +267,6 @@ public class DeserializerV1 extends BaseV1
             {
                 throw new RuntimeException(String.format("Unknown node type code: %02x", code & NODE_TYPE_MASK));
             }
-        }
-    }
-
-    private static class MainNode extends DeserializedConcreteElement
-    {
-        private final String path;
-        private final InternalNode[] internalNodes;
-        private final int referenceIdVersion;
-
-        private MainNode(String path, InternalNode[] internalNodes, int referenceIdVersion)
-        {
-            this.path = path;
-            this.internalNodes = internalNodes;
-            this.referenceIdVersion = referenceIdVersion;
-        }
-
-        @Override
-        public String getPath()
-        {
-            return this.path;
-        }
-
-        @Override
-        public IntIterable getInternalElementIds()
-        {
-            return IntInterval.zeroTo(this.internalNodes.length - 1);
-        }
-
-        @Override
-        public DeserializedElement getInternalElement(int id)
-        {
-            return this.internalNodes[id];
-        }
-
-        @Override
-        public int getReferenceIdVersion()
-        {
-            return this.referenceIdVersion;
-        }
-
-        @Override
-        public String getName()
-        {
-            return this.internalNodes[0].getName();
-        }
-
-        @Override
-        public String getClassifierReferenceId()
-        {
-            return this.internalNodes[0].getClassifierReferenceId();
-        }
-
-        @Override
-        public SourceInformation getSourceInformation()
-        {
-            return this.internalNodes[0].getSourceInformation();
-        }
-
-        @Override
-        public ListIterable<? extends PropertyValues> getPropertyValues()
-        {
-            return this.internalNodes[0].getPropertyValues();
-        }
-    }
-
-    private static class InternalNode extends DeserializedElement
-    {
-        private final String name;
-        private final String classifierId;
-        private final SourceInformation sourceInfo;
-        private final ListIterable<PropertyValues> propertiesWithValues;
-
-        private InternalNode(String name, String classifierId, SourceInformation sourceInfo, ListIterable<PropertyValues> propertiesWithValues)
-        {
-            this.name = name;
-            this.classifierId = classifierId;
-            this.sourceInfo = sourceInfo;
-            this.propertiesWithValues = propertiesWithValues;
-        }
-
-        @Override
-        public String getName()
-        {
-            return this.name;
-        }
-
-        @Override
-        public String getClassifierReferenceId()
-        {
-            return this.classifierId;
-        }
-
-        @Override
-        public SourceInformation getSourceInformation()
-        {
-            return this.sourceInfo;
-        }
-
-        @Override
-        public ListIterable<? extends PropertyValues> getPropertyValues()
-        {
-            return this.propertiesWithValues;
         }
     }
 }

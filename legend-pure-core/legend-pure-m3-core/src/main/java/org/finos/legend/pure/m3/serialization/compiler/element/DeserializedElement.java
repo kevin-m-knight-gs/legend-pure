@@ -19,15 +19,54 @@ import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
 import java.util.Objects;
 
-public abstract class DeserializedElement
+public class DeserializedElement
 {
-    public abstract String getName();
+    private final String name;
+    private final String classifierPath;
+    private final SourceInformation sourceInfo;
+    private final String referenceId;
+    private final int compileStateBitSet;
+    private final ListIterable<? extends PropertyValues> propertyValues;
 
-    public abstract String getClassifierReferenceId();
+    private DeserializedElement(String name, String classifierPath, SourceInformation sourceInfo, String referenceId, int compileStateBitSet, ListIterable<? extends PropertyValues> propertyValues)
+    {
+        this.name = name;
+        this.classifierPath = Objects.requireNonNull(classifierPath);
+        this.sourceInfo = sourceInfo;
+        this.referenceId = referenceId;
+        this.compileStateBitSet = compileStateBitSet;
+        this.propertyValues = Objects.requireNonNull(propertyValues);
+    }
 
-    public abstract SourceInformation getSourceInformation();
+    public String getName()
+    {
+        return this.name;
+    }
 
-    public abstract ListIterable<? extends PropertyValues> getPropertyValues();
+    public String getClassifierPath()
+    {
+        return this.classifierPath;
+    }
+
+    public SourceInformation getSourceInformation()
+    {
+        return this.sourceInfo;
+    }
+
+    public String getReferenceId()
+    {
+        return this.referenceId;
+    }
+
+    public int getCompileStateBitSet()
+    {
+        return this.compileStateBitSet;
+    }
+
+    public ListIterable<? extends PropertyValues> getPropertyValues()
+    {
+        return this.propertyValues;
+    }
 
     @Override
     public boolean equals(Object other)
@@ -42,41 +81,44 @@ public abstract class DeserializedElement
         }
 
         DeserializedElement that = (DeserializedElement) other;
-        return Objects.equals(this.getName(), that.getName()) &&
-                Objects.equals(this.getClassifierReferenceId(), that.getClassifierReferenceId()) &&
-                Objects.equals(this.getSourceInformation(), that.getSourceInformation()) &&
-                this.getPropertyValues().equals(that.getPropertyValues());
+        return (this.compileStateBitSet == that.compileStateBitSet) &&
+                Objects.equals(this.name, that.name) &&
+                Objects.equals(this.classifierPath, that.classifierPath) &&
+                Objects.equals(this.sourceInfo, that.sourceInfo) &&
+                this.propertyValues.equals(that.propertyValues);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(getName(), getClassifierReferenceId(), getSourceInformation());
+        return Objects.hash(this.name, this.classifierPath, this.sourceInfo, this.compileStateBitSet);
     }
 
     @Override
     public String toString()
     {
-        StringBuilder builder = new StringBuilder(DeserializedElement.class.getSimpleName()).append('{');
-        if (getClassifierReferenceId() != null)
+        StringBuilder builder = new StringBuilder(DeserializedElement.class.getSimpleName())
+                .append("{classifier=").append(this.classifierPath).append(' ');
+        if (this.name != null)
         {
-            builder.append("classifier=").append(getClassifierReferenceId()).append(' ');
+            builder.append(" name='").append(this.name).append('\'');
         }
-        if (getName() != null)
+        if (this.sourceInfo != null)
         {
-            builder.append("name='").append(getName()).append("' ");
+            this.sourceInfo.appendMessage(builder.append(" sourceInfo="));
         }
-        if (getSourceInformation() != null)
+        builder.append(" compiledStateBitSet=").append(this.compileStateBitSet)
+                .append(" propertyValues=[");
+        if (this.propertyValues.notEmpty())
         {
-            getSourceInformation().appendMessage(builder.append("sourceInfo=")).append(' ');
-        }
-        builder.append("propertyValues=[");
-        ListIterable<? extends PropertyValues> propertyValues = getPropertyValues();
-        if (propertyValues.notEmpty())
-        {
-            propertyValues.forEach(pv -> builder.append(pv.getPropertyName()).append("=").append(pv.getValues()).append(", "));
+            this.propertyValues.forEach(pv -> pv.getValues().appendString(builder.append(pv.getPropertyName()), "=[", ", ", "], "));
             builder.setLength(builder.length() - 2);
         }
         return builder.append("]}").toString();
+    }
+
+    public static DeserializedElement newDeserializedElement(String name, String classifierPath, SourceInformation sourceInfo, String referenceId, int compileStateBitSet, ListIterable<? extends PropertyValues> propertyValues)
+    {
+        return new DeserializedElement(name, classifierPath, sourceInfo, referenceId, compileStateBitSet, propertyValues);
     }
 }

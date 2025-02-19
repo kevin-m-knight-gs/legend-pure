@@ -14,21 +14,78 @@
 
 package org.finos.legend.pure.m3.serialization.compiler.element;
 
-import org.eclipse.collections.api.IntIterable;
-import org.eclipse.collections.api.set.primitive.IntSet;
-import org.eclipse.collections.impl.list.primitive.IntInterval;
+import org.eclipse.collections.api.list.ImmutableList;
 
 import java.util.Objects;
 
-public abstract class DeserializedConcreteElement extends DeserializedElement
+public class DeserializedConcreteElement
 {
-    public abstract String getPath();
+    private final String path;
+    private final int referenceIdVersion;
+    private final ImmutableList<DeserializedElement> elements;
 
-    public abstract int getReferenceIdVersion();
+    private DeserializedConcreteElement(String path, int referenceIdVersion, ImmutableList<DeserializedElement> elements)
+    {
+        this.path = Objects.requireNonNull(path);
+        this.referenceIdVersion = referenceIdVersion;
+        this.elements = Objects.requireNonNull(elements);
+        if (this.elements.isEmpty())
+        {
+            throw new IllegalArgumentException("elements may not be empty");
+        }
+    }
 
-    public abstract IntIterable getInternalElementIds();
+    /**
+     * Get the package path of the concrete element that was deserialized.
+     *
+     * @return concrete element package path
+     */
+    public String getPath()
+    {
+        return this.path;
+    }
 
-    public abstract DeserializedElement getInternalElement(int id);
+    /**
+     * Get the reference id version used when the element was serialized.
+     *
+     * @return reference id version
+     */
+    public int getReferenceIdVersion()
+    {
+        return this.referenceIdVersion;
+    }
+
+    /**
+     * Get the elements that were deserialized, including the concrete element itself and all component instances. The
+     * concrete element itself will always be first in the list.
+     *
+     * @return deserialized elements
+     */
+    public ImmutableList<DeserializedElement> getElements()
+    {
+        return this.elements;
+    }
+
+    /**
+     * Get the element at the given index. This index is also its id as an internal element.
+     *
+     * @param index element index
+     * @return element at index
+     */
+    public DeserializedElement getElement(int index)
+    {
+        return this.elements.get(index);
+    }
+
+    /**
+     * Get the deserialized concrete element itself. This is equivalent to {@link #getElement}(0).
+     *
+     * @return deserialized concrete element
+     */
+    public DeserializedElement getConcreteElement()
+    {
+        return getElement(0);
+    }
 
     @Override
     public boolean equals(Object other)
@@ -42,59 +99,29 @@ public abstract class DeserializedConcreteElement extends DeserializedElement
             return false;
         }
         DeserializedConcreteElement that = (DeserializedConcreteElement) other;
-        if ((this.getReferenceIdVersion() != that.getReferenceIdVersion()) ||
-                !this.getPath().equals(that.getPath()) ||
-                !Objects.equals(this.getName(), that.getName()) ||
-                !Objects.equals(this.getClassifierReferenceId(), that.getClassifierReferenceId()) ||
-                !Objects.equals(this.getSourceInformation(), that.getSourceInformation()) ||
-                !this.getPropertyValues().equals(that.getPropertyValues()))
-        {
-            return false;
-        }
-
-        IntIterable thisIds = this.getInternalElementIds();
-        IntIterable thatIds = that.getInternalElementIds();
-        if (thisIds.size() != thatIds.size())
-        {
-            return false;
-        }
-        IntIterable thatIdsCol = ((thatIds instanceof IntInterval) || (thatIds instanceof IntSet)) ? thatIds : thatIds.toSet();
-        return thisIds.allSatisfy(id -> thatIdsCol.contains(id) && this.getInternalElement(id).equals(that.getInternalElement(id)));
+        return (this.referenceIdVersion == that.referenceIdVersion) &&
+                this.path.equals(that.path) &&
+                this.elements.equals(that.elements);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(getPath(), getReferenceIdVersion(), getClassifierReferenceId(), getSourceInformation());
+        return (31 * getPath().hashCode()) + Integer.hashCode(getReferenceIdVersion());
     }
 
     @Override
     public String toString()
     {
-        StringBuilder builder = new StringBuilder(DeserializedElement.class.getSimpleName());
-        builder.append("{path=").append(getPath());
-        if (getClassifierReferenceId() != null)
-        {
-            builder.append(" classifier=").append(getClassifierReferenceId());
-        }
-        if (getName() != null)
-        {
-            builder.append(" name='").append(getName()).append("'");
-        }
-        if (getSourceInformation() != null)
-        {
-            getSourceInformation().appendMessage(builder.append(" sourceInfo="));
-        }
-        builder.append(" propertyValues=[");
-        getPropertyValues().appendString(builder, " propertyValues=[", ", ", "]");
-        builder.append(" referenceIdVersion=").append(getReferenceIdVersion());
-        builder.append(" internalElements=[");
-        IntIterable ids = getInternalElementIds();
-        if (ids.notEmpty())
-        {
-            ids.forEach(id -> builder.append(id).append('=').append(getInternalElement(id)).append(", "));
-            builder.setLength(builder.length() - 2);
-        }
-        return builder.append("]}").toString();
+        StringBuilder builder = new StringBuilder(DeserializedElement.class.getSimpleName())
+                .append("{path=").append(this.path)
+                .append(" referenceIdVersion=").append(this.referenceIdVersion);
+        this.elements.appendString(builder, " elements=[", ", ", "]}");
+        return builder.toString();
+    }
+
+    public static DeserializedConcreteElement newDeserializedConcreteElement(String path, int referenceIdVersion, ImmutableList<DeserializedElement> elements)
+    {
+        return new DeserializedConcreteElement(path, referenceIdVersion, elements);
     }
 }

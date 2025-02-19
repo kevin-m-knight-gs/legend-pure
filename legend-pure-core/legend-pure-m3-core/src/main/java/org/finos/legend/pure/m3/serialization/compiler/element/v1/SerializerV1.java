@@ -24,9 +24,11 @@ import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.map.primitive.MutableObjectIntMap;
 import org.eclipse.collections.api.map.primitive.ObjectIntMap;
 import org.eclipse.collections.api.set.MutableSet;
+import org.eclipse.collections.api.set.SetIterable;
 import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.impl.factory.primitive.ObjectIntMaps;
 import org.eclipse.collections.impl.tuple.Tuples;
+import org.finos.legend.pure.m3.coreinstance.helper.AnyStubHelper;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.M3PropertyPaths;
@@ -39,6 +41,8 @@ import org.finos.legend.pure.m3.serialization.compiler.element.SerializationCont
 import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
+import org.finos.legend.pure.m4.coreinstance.compileState.CompileState;
+import org.finos.legend.pure.m4.coreinstance.compileState.CompileStateSet;
 import org.finos.legend.pure.m4.serialization.Writer;
 
 import java.util.ArrayDeque;
@@ -54,6 +58,7 @@ class SerializerV1 extends BaseV1
     private final MutableMap<CoreInstance, String> classifierPathCache = Maps.mutable.empty();
     private final MutableMap<CoreInstance, ListIterable<PropertyInfo>> propertyInfoCache = Maps.mutable.empty();
     private final MapIterable<CoreInstance, BiConsumer<Writer, CoreInstance>> primitiveSerializers;
+    private final SetIterable<CoreInstance> stubClasses;
 
     SerializerV1(CoreInstance element, SerializationContext serializationContext)
     {
@@ -72,6 +77,7 @@ class SerializerV1 extends BaseV1
                 .withKeyValue(this.processorSupport.package_getByUserPath(M3Paths.StrictDate), SerializerV1::serializeStrictDate)
                 .withKeyValue(this.processorSupport.package_getByUserPath(M3Paths.StrictTime), SerializerV1::serializeStrictTime)
                 .withKeyValue(this.processorSupport.package_getByUserPath(M3Paths.String), SerializerV1::serializeString);
+        this.stubClasses = AnyStubHelper.getStubClasses(this.processorSupport, Sets.mutable.ofInitialCapacity(AnyStubHelper.STUB_CLASSES.size()));
     }
 
     void serialize(Writer writer)
@@ -100,8 +106,11 @@ class SerializerV1 extends BaseV1
                 {
                     strings.add(node.instance.getName());
                 }
-                // We treat the classifier as an external reference, even if it's not
-                strings.add(this.serializationContext.getReferenceIdProvider().getReferenceId(node.classifier));
+                strings.add(getClassifierPath(node.classifier));
+                if (hasReferenceId(node))
+                {
+                    strings.add(this.serializationContext.getReferenceIdProvider().getReferenceId(node.instance));
+                }
                 getPropertyInfos(node.classifier).forEach(propertyInfo ->
                 {
                     if (propertyInfo.category == PropertyCategory.ORDINARY)
@@ -169,18 +178,22 @@ class SerializerV1 extends BaseV1
 
     private void serializeNodes(Writer writer)
     {
+        int compileStateBitSetWidth = getIntWidth(CompileStateSet.toBitSet(CompileState.values()));
+        writer.writeByte((byte) compileStateBitSetWidth);
         MutableObjectIntMap<CoreInstance> internalIds = ObjectIntMaps.mutable.ofInitialCapacity(this.nodesToSerialize.size());
         this.nodesToSerialize.forEachWithIndex((node, i) -> internalIds.put(node.instance, i));
         writer.writeInt(this.nodesToSerialize.size());
         int internalIdWidth = getIntWidth(this.nodesToSerialize.size());
-        this.nodesToSerialize.forEach(node -> serializeNode(writer, node, internalIds, internalIdWidth));
+        this.nodesToSerialize.forEach(node -> serializeNode(writer, node, internalIds, internalIdWidth, compileStateBitSetWidth));
     }
 
-    private void serializeNode(Writer writer, NodeToSerialize node, ObjectIntMap<CoreInstance> internalIds, int internalIdWidth)
+    private void serializeNode(Writer writer, NodeToSerialize node, ObjectIntMap<CoreInstance> internalIds, int internalIdWidth, int compileStateBitSetWidth)
     {
         serializeName(writer, node.instance);
         serializeClassifier(writer, node.classifier);
         serializeSourceInfo(writer, node.instance);
+        serializeReferenceId(writer, node);
+        serializeCompileStateBitSet(writer, node.instance, compileStateBitSetWidth);
 
         MutableList<Pair<PropertyInfo, ListIterable<? extends CoreInstance>>> propertiesWithValues = Lists.mutable.empty();
         getPropertyInfos(node.classifier).forEach(propertyInfo ->
@@ -245,8 +258,7 @@ class SerializerV1 extends BaseV1
 
     private void serializeClassifier(Writer writer, CoreInstance classifier)
     {
-        // We treat the classifier as an external reference, even if it's not
-        writer.writeString(this.serializationContext.getReferenceIdProvider().getReferenceId(classifier));
+        writer.writeString(getClassifierPath(classifier));
     }
 
     private void serializeName(Writer writer, CoreInstance instance)
@@ -280,6 +292,20 @@ class SerializerV1 extends BaseV1
             writeIntOfWidth(writer, sourceInfo.getEndLine(), intWidth);
             writeIntOfWidth(writer, sourceInfo.getEndColumn(), intWidth);
         }
+    }
+
+    private void serializeReferenceId(Writer writer, NodeToSerialize node)
+    {
+        if (hasReferenceId(node))
+        {
+            String referenceId = this.serializationContext.getReferenceIdProvider().getReferenceId(node.instance);
+            writer.writeString(referenceId);
+        }
+    }
+
+    private void serializeCompileStateBitSet(Writer writer, CoreInstance instance, int compileStateBitSetWidth)
+    {
+        writeIntOfWidth(writer, instance.getCompileStates().toBitSet(), compileStateBitSetWidth);
     }
 
     private void serializeExternalReference(Writer writer, String id)
@@ -382,6 +408,11 @@ class SerializerV1 extends BaseV1
     private boolean isAnonymousInstance(CoreInstance instance)
     {
         return ModelRepository.isAnonymousInstanceName(instance.getName());
+    }
+
+    private boolean hasReferenceId(NodeToSerialize node)
+    {
+        return (node.instance.getSourceInformation() != null) && !this.stubClasses.contains(node.classifier);
     }
 
     private static class NodeToSerialize

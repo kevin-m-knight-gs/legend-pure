@@ -23,7 +23,7 @@ import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.map.primitive.MutableIntObjectMap;
 import org.eclipse.collections.impl.factory.primitive.IntLists;
 import org.eclipse.collections.impl.factory.primitive.IntObjectMaps;
-import org.finos.legend.pure.m3.coreinstance.Package;
+import org.eclipse.collections.impl.list.primitive.IntInterval;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.M3PropertyPaths;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
@@ -33,7 +33,7 @@ import org.finos.legend.pure.m3.serialization.compiler.reference.AbstractReferen
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProvider;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolver;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIds;
-import org.finos.legend.pure.m3.tools.PackageTreeIterable;
+import org.finos.legend.pure.m3.tools.GraphTools;
 import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
@@ -51,7 +51,6 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
     private ConcreteElementSerializerExtension extension;
     private ConcreteElementSerializer serializer;
     private ReferenceIds referenceIds;
-    private final ByteArrayOutputStream stream = new ByteArrayOutputStream();
 
     @Before
     public void setUpExtension()
@@ -77,9 +76,7 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
     @Test
     public void testSerializeDeserializeAll()
     {
-        repository.getTopLevels().forEach(this::testSerializeDeserialize);
-        PackageTreeIterable.newRootPackageTreeIterable(repository)
-                .flatCollect(Package::_children)
+        GraphTools.getTopLevelAndPackagedElements(processorSupport)
                 .select(c -> c.getSourceInformation() != null)
                 .forEach(this::testSerializeDeserialize);
     }
@@ -87,10 +84,10 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
     private void testSerializeDeserialize(CoreInstance element)
     {
         String path = PackageableElement.getUserPathForPackageableElement(element);
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
         try
         {
-            this.stream.reset();
-            this.serializer.serialize(BinaryWriters.newBinaryWriter(this.stream), element);
+            this.serializer.serialize(BinaryWriters.newBinaryWriter(stream), element);
         }
         catch (Exception e)
         {
@@ -99,14 +96,17 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
         DeserializedConcreteElement deserialized;
         try
         {
-            deserialized = this.serializer.deserialize(BinaryReaders.newBinaryReader(this.stream.toByteArray()));
+            deserialized = this.serializer.deserialize(BinaryReaders.newBinaryReader(stream.toByteArray()));
         }
         catch (Exception e)
         {
             throw new RuntimeException("Error deserializing " + path, e);
         }
         Assert.assertEquals(path, deserialized.getPath());
-        assertDeserialization(deserialized, IntObjectMaps.mutable.<CoreInstance>empty().withKeyValue(0, element), path, element, deserialized);
+        Assert.assertEquals(path, this.referenceIds.getDefaultVersion(), deserialized.getReferenceIdVersion());
+        MutableIntObjectMap<CoreInstance> internalReferences = IntObjectMaps.mutable.<CoreInstance>empty().withKeyValue(0, element);
+        assertDeserialization(deserialized, internalReferences, path, element, deserialized.getConcreteElement());
+        Assert.assertEquals(path, internalReferences.keysView().toSortedList(), IntInterval.zeroTo(deserialized.getElements().size() - 1));
     }
 
     private void assertDeserialization(DeserializedConcreteElement concreteElement, MutableIntObjectMap<CoreInstance> internalReferences, String path, CoreInstance element, DeserializedElement deserialized)
@@ -123,7 +123,7 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
             Assert.assertEquals(path, element.getName(), deserialized.getName());
         }
         Assert.assertEquals(path, element.getSourceInformation(), deserialized.getSourceInformation());
-        Assert.assertEquals(path, referenceIdProvider.getReferenceId(processorSupport.getClassifier(element)), deserialized.getClassifierReferenceId());
+        Assert.assertEquals(path, referenceIdProvider.getReferenceId(processorSupport.getClassifier(element)), deserialized.getClassifierPath());
 
         MutableMap<String, PropertyValues> deserializedPropertyValues = Maps.mutable.empty();
         deserialized.getPropertyValues().forEach(pv ->
@@ -143,7 +143,7 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
             if (values.notEmpty() &&
                     (!M3PropertyPaths.BACK_REFERENCE_PROPERTY_PATHS.contains(realKey) ||
                             M3Properties.referenceUsages.equals(key) &&
-                                    values.anySatisfy(ru -> !refUsageHasExternalOwner(ru, concreteElement.getSourceInformation()))))
+                                    values.anySatisfy(ru -> !refUsageHasExternalOwner(ru, concreteElement.getConcreteElement().getSourceInformation()))))
             {
                 nonEmptyPropertyKeys.add(key);
                 PropertyValues pValues = deserializedPropertyValues.get(key);
@@ -160,7 +160,7 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
             ListIterable<? extends CoreInstance> values = element.getValueForMetaPropertyToMany(key);
             if (M3Properties.referenceUsages.equals(key))
             {
-                values = values.reject(ru -> refUsageHasExternalOwner(ru, concreteElement.getSourceInformation()));
+                values = values.reject(ru -> refUsageHasExternalOwner(ru, concreteElement.getConcreteElement().getSourceInformation()));
             }
             ListIterable<ValueOrReference> pValues = deserializedPropertyValues.get(key).getValues();
             String keyPath = path + "." + key;
@@ -184,7 +184,7 @@ public abstract class AbstractTestConcreteElementSerializerExtension extends Abs
                         CoreInstance visited = internalReferences.get(internalId);
                         if (visited == null)
                         {
-                            DeserializedElement resolved = concreteElement.getInternalElement(internalId);
+                            DeserializedElement resolved = concreteElement.getElement(internalId);
                             Assert.assertNotNull(keyPathWithIndex + "=" + internalId, resolved);
                             internalReferences.put(internalId, value);
                             assertDeserialization(concreteElement, internalReferences, keyPathWithIndex, value, resolved);
