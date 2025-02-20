@@ -31,6 +31,11 @@ public abstract class Value<T> extends ValueOrReference
         this.value = Objects.requireNonNull(value, "value may not be null");
     }
 
+    private Value()
+    {
+        this.value = null;
+    }
+
     @Override
     public boolean equals(Object other)
     {
@@ -44,19 +49,24 @@ public abstract class Value<T> extends ValueOrReference
         }
         Value<?> that = (Value<?>) other;
         return this.getClassifierPath().equals(that.getClassifierPath()) &&
-                this.value.equals(that.value);
+                Objects.equals(this.value, that.value);
     }
 
     @Override
     public int hashCode()
     {
-        return getClassifierPath().hashCode() + 31 * this.value.hashCode();
+        return getClassifierPath().hashCode() + 31 * Objects.hashCode(this.value);
     }
 
     @Override
     public String toString()
     {
-        return "Value{classifier=" + getClassifierPath() + " value=" + getValue() + "}";
+        StringBuilder builder = new StringBuilder("Value{classifier=").append(getClassifierPath());
+        if (this.value != null)
+        {
+            builder.append(" value=").append(this.value);
+        }
+        return builder.append('}').toString();
     }
 
     public abstract String getClassifierPath();
@@ -266,7 +276,7 @@ public abstract class Value<T> extends ValueOrReference
 
         private LatestDateValue()
         {
-            super(null);
+            super();
         }
 
         @Override
