@@ -107,7 +107,7 @@ class SerializerV1 extends BaseV1
                     strings.add(node.instance.getName());
                 }
                 strings.add(getClassifierPath(node.classifier));
-                if (hasReferenceId(node))
+                if (this.serializationContext.getReferenceIdProvider().hasReferenceId(node.instance))
                 {
                     strings.add(this.serializationContext.getReferenceIdProvider().getReferenceId(node.instance));
                 }
@@ -192,7 +192,7 @@ class SerializerV1 extends BaseV1
         serializeName(writer, node.instance);
         serializeClassifier(writer, node.classifier);
         serializeSourceInfo(writer, node.instance);
-        serializeReferenceId(writer, node);
+        serializeReferenceId(writer, node.instance);
         serializeCompileStateBitSet(writer, node.instance, compileStateBitSetWidth);
 
         MutableList<Pair<PropertyInfo, ListIterable<? extends CoreInstance>>> propertiesWithValues = Lists.mutable.empty();
@@ -294,12 +294,17 @@ class SerializerV1 extends BaseV1
         }
     }
 
-    private void serializeReferenceId(Writer writer, NodeToSerialize node)
+    private void serializeReferenceId(Writer writer, CoreInstance instance)
     {
-        if (hasReferenceId(node))
+        if (this.serializationContext.getReferenceIdProvider().hasReferenceId(instance))
         {
-            String referenceId = this.serializationContext.getReferenceIdProvider().getReferenceId(node.instance);
+            String referenceId = this.serializationContext.getReferenceIdProvider().getReferenceId(instance);
+            writer.writeByte((byte) VALUE_PRESENT);
             writer.writeString(referenceId);
+        }
+        else
+        {
+            writer.writeByte((byte) VALUE_NOT_PRESENT);
         }
     }
 
@@ -408,11 +413,6 @@ class SerializerV1 extends BaseV1
     private boolean isAnonymousInstance(CoreInstance instance)
     {
         return ModelRepository.isAnonymousInstanceName(instance.getName());
-    }
-
-    private boolean hasReferenceId(NodeToSerialize node)
-    {
-        return (node.instance.getSourceInformation() != null) && !this.stubClasses.contains(node.classifier);
     }
 
     private static class NodeToSerialize

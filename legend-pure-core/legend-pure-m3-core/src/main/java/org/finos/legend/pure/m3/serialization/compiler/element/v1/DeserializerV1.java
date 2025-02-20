@@ -17,7 +17,6 @@ package org.finos.legend.pure.m3.serialization.compiler.element.v1;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
-import org.finos.legend.pure.m3.coreinstance.helper.AnyStubHelper;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation._package._Package;
 import org.finos.legend.pure.m3.serialization.compiler.element.DeserializedConcreteElement;
@@ -71,7 +70,7 @@ public class DeserializerV1 extends BaseV1
         String name = readName(reader);
         String classifierId = readClassifier(reader);
         SourceInformation sourceInfo = readSourceInfo(reader, sourceId);
-        String referenceId = readReferenceId(reader, sourceInfo, classifierId);
+        String referenceId = readReferenceId(reader);
         int compileStateBitSet = readCompileStateBitSet(reader, compileStateBitSetWidth);
         int propertyCount = reader.readInt();
         MutableList<PropertyValues> propertiesWithValues = Lists.mutable.ofInitialCapacity(propertyCount);
@@ -119,9 +118,24 @@ public class DeserializerV1 extends BaseV1
         }
     }
 
-    private String readReferenceId(Reader reader, SourceInformation sourceInfo, String classifierPath)
+    private String readReferenceId(Reader reader)
     {
-        return (sourceInfo == null) || AnyStubHelper.STUB_CLASSES.contains(classifierPath) ? null : reader.readString();
+        int code = reader.readByte();
+        switch (code & VALUE_PRESENT_MASK)
+        {
+            case VALUE_NOT_PRESENT:
+            {
+                return null;
+            }
+            case VALUE_PRESENT:
+            {
+                return reader.readString();
+            }
+            default:
+            {
+                throw new RuntimeException(String.format("Unknown value present code: %02x", code & NODE_TYPE_MASK));
+            }
+        }
     }
 
     private int readCompileStateBitSet(Reader reader, int compileStateBitSetWidth)
