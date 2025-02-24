@@ -23,6 +23,7 @@ import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.set.SetIterable;
 import org.eclipse.collections.impl.set.mutable.SetAdapter;
+import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorageTools;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -650,12 +651,15 @@ public class ModuleMetadata
 
         private void validateSources()
         {
-            MutableSet<String> sourceIds = Sets.mutable.empty();
-            this.elements.collect(e -> e.getSourceInformation().getSourceId(), sourceIds);
-            this.sources.collect(SourceMetadata::getSourceId, sourceIds);
-            MutableList<String> invalidSourceIds = sourceIds.reject(s -> isSourceInModule(this.name, s), Lists.mutable.empty());
+            MutableList<String> invalidSourceIds = Lists.mutable.empty();
+            this.elements.asLazy().collect(e -> e.getSourceInformation().getSourceId())
+                    .select(s -> !CodeStorageTools.pathStartsWithElement(s, this.name), invalidSourceIds);
+            this.sources.asLazy().collect(SourceMetadata::getSourceId)
+                    .select(s -> !CodeStorageTools.pathStartsWithElement(s, this.name), invalidSourceIds);
             if (invalidSourceIds.notEmpty())
             {
+                MutableSet<String> set = Sets.mutable.empty();
+                invalidSourceIds.removeIf(s -> !set.add(s));
                 StringBuilder builder = new StringBuilder("Invalid source");
                 if (invalidSourceIds.size() > 1)
                 {
@@ -732,7 +736,7 @@ public class ModuleMetadata
         {
             return null;
         }
-        SetIterable<? extends String> set = toSet(toRemove);
+        SetIterable<? extends String> set = toSetIterable(toRemove);
         switch (set.size())
         {
             case 0:
@@ -757,7 +761,7 @@ public class ModuleMetadata
         {
             return null;
         }
-        SetIterable<? extends String> set = toSet(toRemove);
+        SetIterable<? extends String> set = toSetIterable(toRemove);
         switch (set.size())
         {
             case 0:
@@ -776,7 +780,7 @@ public class ModuleMetadata
         }
     }
 
-    private static SetIterable<? extends String> toSet(Iterable<? extends String> iterable)
+    private static SetIterable<? extends String> toSetIterable(Iterable<? extends String> iterable)
     {
         if (iterable instanceof SetIterable)
         {
@@ -787,14 +791,5 @@ public class ModuleMetadata
             return SetAdapter.adapt((Set<? extends String>) iterable);
         }
         return Sets.mutable.withAll(iterable);
-    }
-
-    static boolean isSourceInModule(String moduleName, String sourceId)
-    {
-        return (sourceId != null) &&
-                (sourceId.length() >= (moduleName.length() + 2)) &&
-                (sourceId.charAt(0) == '/') &&
-                (sourceId.charAt(moduleName.length() + 1) == '/') &&
-                sourceId.startsWith(moduleName, 1);
     }
 }
