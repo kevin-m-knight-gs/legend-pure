@@ -304,6 +304,6 @@ public class TestModuleMetadataGenerator extends AbstractReferenceTest
 
     private static ModuleMetadataGenerator newGenerator()
     {
-        return new ModuleMetadataGenerator(runtime);
+        return ModuleMetadataGenerator.fromPureRuntime(runtime);
     }
 }

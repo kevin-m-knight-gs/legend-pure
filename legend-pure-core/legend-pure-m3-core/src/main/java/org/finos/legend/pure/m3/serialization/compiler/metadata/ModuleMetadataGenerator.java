@@ -42,27 +42,12 @@ public class ModuleMetadataGenerator
     private final ConcreteElementMetadataGenerator elementGenerator;
     private final SourceMetadataGenerator sourceGenerator;
 
-    public ModuleMetadataGenerator(ProcessorSupport processorSupport, SourceRegistry sourceRegistry, ReferenceIdProvider referenceIdProvider)
+    private ModuleMetadataGenerator(ProcessorSupport processorSupport, SourceRegistry sourceRegistry, ReferenceIdProvider referenceIdProvider)
     {
-        this.processorSupport = Objects.requireNonNull(processorSupport);
+        this.processorSupport = processorSupport;
         this.sourceRegistry = sourceRegistry;
-        this.elementGenerator = new ConcreteElementMetadataGenerator((referenceIdProvider == null) ? ReferenceIds.builder(processorSupport).withAvailableExtensions().build().provider() : referenceIdProvider, processorSupport);
+        this.elementGenerator = new ConcreteElementMetadataGenerator(referenceIdProvider, processorSupport);
         this.sourceGenerator = (sourceRegistry == null) ? null : new SourceMetadataGenerator();
-    }
-
-    public ModuleMetadataGenerator(ProcessorSupport processorSupport, SourceRegistry sourceRegistry)
-    {
-        this(processorSupport, sourceRegistry, null);
-    }
-
-    public ModuleMetadataGenerator(ProcessorSupport processorSupport)
-    {
-        this(processorSupport, null);
-    }
-
-    public ModuleMetadataGenerator(PureRuntime runtime)
-    {
-        this(runtime.getProcessorSupport(), runtime.getSourceRegistry());
     }
 
     public ModuleMetadata generateModuleMetadata(String name)
@@ -75,7 +60,7 @@ public class ModuleMetadataGenerator
         return builder.build();
     }
 
-    public MutableList<ModuleMetadata> generateModuleMetadata(Iterable<String> moduleNames)
+    public MutableList<ModuleMetadata> generateModuleMetadata(Iterable<? extends String> moduleNames)
     {
         MutableMap<String, ModuleMetadata.Builder> buildersByModule = Maps.mutable.empty();
         moduleNames.forEach(name -> buildersByModule.put(Objects.requireNonNull(name), ModuleMetadata.builder(name)));
@@ -198,7 +183,7 @@ public class ModuleMetadataGenerator
             {
                 sourcesToRemove.add(sourceId);
             }
-            else if (ModuleMetadata.isSourceInModule(metadata.getName(), sourceId))
+            else if (CodeStorageTools.pathStartsWithElement(sourceId, metadata.getName()))
             {
                 newSources.add(this.sourceGenerator.generateSourceMetadata(source));
             }
@@ -306,7 +291,7 @@ public class ModuleMetadataGenerator
     private LazyIterable<SourceMetadata> getModuleSourceMetadata(String moduleName)
     {
         return this.sourceRegistry.getSources().asLazy().collectIf(
-                s -> ModuleMetadata.isSourceInModule(moduleName, s.getId()),
+                s -> CodeStorageTools.pathStartsWithElement(s.getId(), moduleName),
                 this.sourceGenerator::generateSourceMetadata);
     }
 
@@ -322,7 +307,7 @@ public class ModuleMetadataGenerator
 
     private static boolean isSourceInModule(String moduleName, SourceInformation sourceInfo)
     {
-        return (sourceInfo != null) && ModuleMetadata.isSourceInModule(moduleName, sourceInfo.getSourceId());
+        return (sourceInfo != null) && CodeStorageTools.pathStartsWithElement(sourceInfo.getSourceId(), moduleName);
     }
 
     private static String getModule(SourceInformation sourceInfo)
@@ -333,5 +318,64 @@ public class ModuleMetadataGenerator
     private static String getModule(String sourceId)
     {
         return CodeStorageTools.getInitialPathElement(sourceId);
+    }
+
+    public static ModuleMetadataGenerator fromPureRuntime(PureRuntime runtime)
+    {
+        return builder().withPureRuntime(runtime).build();
+    }
+
+    public static ModuleMetadataGenerator fromProcessorSupport(ProcessorSupport processorSupport)
+    {
+        return builder().withProcessorSupport(processorSupport).build();
+    }
+
+    public static Builder builder()
+    {
+        return new Builder();
+    }
+
+    public static class Builder
+    {
+        private ProcessorSupport processorSupport;
+        private SourceRegistry sourceRegistry;
+        private ReferenceIdProvider referenceIdProvider;
+
+        private Builder()
+        {
+        }
+
+        public Builder withProcessorSupport(ProcessorSupport processorSupport)
+        {
+            this.processorSupport = processorSupport;
+            return this;
+        }
+
+        public Builder withSourceRegistry(SourceRegistry sourceRegistry)
+        {
+            this.sourceRegistry = sourceRegistry;
+            return this;
+        }
+
+        public Builder withPureRuntime(PureRuntime pureRuntime)
+        {
+            return withProcessorSupport(pureRuntime.getProcessorSupport())
+                    .withSourceRegistry(pureRuntime.getSourceRegistry());
+        }
+
+        public Builder withReferenceIdProvider(ReferenceIdProvider referenceIdProvider)
+        {
+            this.referenceIdProvider = referenceIdProvider;
+            return this;
+        }
+
+        public ModuleMetadataGenerator build()
+        {
+            Objects.requireNonNull(this.processorSupport);
+            ReferenceIdProvider idProvider = (this.referenceIdProvider == null) ?
+                                             ReferenceIds.builder(this.processorSupport).withAvailableExtensions().build().provider() :
+                                             this.referenceIdProvider;
+            return new ModuleMetadataGenerator(this.processorSupport, this.sourceRegistry, idProvider);
+        }
     }
 }
