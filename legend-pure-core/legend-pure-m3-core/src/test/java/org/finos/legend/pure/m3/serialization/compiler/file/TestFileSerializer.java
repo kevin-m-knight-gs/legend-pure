@@ -49,6 +49,7 @@ public class TestFileSerializer extends AbstractPureTestWithCoreCompiled
 {
     @ClassRule
     public static TemporaryFolder TMP = new TemporaryFolder();
+
     private static FilePathProvider filePathProvider;
     private static ConcreteElementSerializer elementSerializer;
     private static FileSerializer fileSerializer;
@@ -132,7 +133,7 @@ public class TestFileSerializer extends AbstractPureTestWithCoreCompiled
     public void testAllModulesInDirectory() throws IOException
     {
         Path directory = TMP.newFolder().toPath();
-        MutableList<ModuleMetadata> allModuleMetadata = new ModuleMetadataGenerator(runtime).generateAllModuleMetadata();
+        MutableList<ModuleMetadata> allModuleMetadata = ModuleMetadataGenerator.fromPureRuntime(runtime).generateAllModuleMetadata();
         allModuleMetadata.forEach(m -> fileSerializer.serializeModuleMetadata(directory, m));
 
         allModuleMetadata.forEach(m -> Assert.assertTrue(m.getName(), fileSerializer.moduleMetadataExists(directory, m.getName())));
@@ -154,7 +155,7 @@ public class TestFileSerializer extends AbstractPureTestWithCoreCompiled
     {
         Path directory = TMP.newFolder().toPath();
         Path jarPath = directory.resolve("modules_test.jar");
-        MutableList<ModuleMetadata> allModuleMetadata = new ModuleMetadataGenerator(runtime).generateAllModuleMetadata();
+        MutableList<ModuleMetadata> allModuleMetadata = ModuleMetadataGenerator.fromPureRuntime(runtime).generateAllModuleMetadata();
         try (JarOutputStream jarStream = new JarOutputStream(new BufferedOutputStream(Files.newOutputStream(jarPath))))
         {
             allModuleMetadata.forEach(m -> fileSerializer.serializeModuleMetadata(jarStream, m));
