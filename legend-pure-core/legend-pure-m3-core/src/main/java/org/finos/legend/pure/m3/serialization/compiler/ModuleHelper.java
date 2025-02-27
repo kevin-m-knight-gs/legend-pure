@@ -21,7 +21,7 @@ import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 
 public class ModuleHelper
 {
-    public static final String ROOT_MODULE_NAME = "root";
+    static final String ROOT_MODULE_NAME = "root";
 
     public static String resolveModuleName(String moduleName)
     {
