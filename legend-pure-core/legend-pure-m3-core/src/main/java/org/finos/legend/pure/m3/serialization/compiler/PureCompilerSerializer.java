@@ -333,7 +333,7 @@ public class PureCompilerSerializer
     {
         Objects.requireNonNull(moduleFilter);
         long start = System.nanoTime();
-        LOGGER.info("Serializing modules by predicate");
+        LOGGER.info("Serializing selected modules");
         try
         {
             MutableSet<String> moduleNames = Sets.mutable.empty();
@@ -346,18 +346,18 @@ public class PureCompilerSerializer
                     serializer.serializeElement(e);
                 }
             });
-            LOGGER.info("Serializing modules by predicate: {}", moduleNames);
+            LOGGER.info("Serializing metadata for selected modules: {}", moduleNames);
             this.moduleMetadataGenerator.generateModuleMetadata(moduleNames).forEach(serializer::serializeModuleMetadata);
         }
         catch (Throwable t)
         {
-            LOGGER.error("Error serializing modules by predicate", t);
+            LOGGER.error("Error serializing selected modules", t);
             throw t;
         }
         finally
         {
             long end = System.nanoTime();
-            LOGGER.info("Finished serializing modules by predicate in {}s", (end - start) / 1_000_000_000.0);
+            LOGGER.info("Finished serializing selected modules in {}s", (end - start) / 1_000_000_000.0);
         }
     }
 
