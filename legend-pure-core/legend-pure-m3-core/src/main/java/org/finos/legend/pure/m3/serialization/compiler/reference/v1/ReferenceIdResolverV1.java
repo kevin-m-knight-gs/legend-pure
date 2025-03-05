@@ -23,8 +23,6 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
-
 class ReferenceIdResolverV1 implements ReferenceIdResolver
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReferenceIdResolverV1.class);
@@ -58,19 +56,22 @@ class ReferenceIdResolverV1 implements ReferenceIdResolver
         }
         catch (Exception e)
         {
-            LOGGER.error("Error resolving {} in {}", referenceId, Duration.ofNanos(System.nanoTime() - start), e);
+            long end = System.nanoTime();
+            LOGGER.error("Error resolving {} in {}s", referenceId, (end - start) / 1_000_000_000.0, e);
             throw new InvalidReferenceIdException(referenceId, e);
         }
 
         try
         {
             CoreInstance result = graphPath.resolve(this.processorSupport);
-            LOGGER.debug("Resolved {} in {}", referenceId, Duration.ofNanos(System.nanoTime() - start));
+            long end = System.nanoTime();
+            LOGGER.debug("Resolved {} in {}s", referenceId, (end - start) / 1_000_000_000.0);
             return result;
         }
         catch (Exception e)
         {
-            LOGGER.error("Error resolving {} in {}", referenceId, Duration.ofNanos(System.nanoTime() - start), e);
+            long end = System.nanoTime();
+            LOGGER.error("Error resolving {} in {}s", referenceId, (end - start) / 1_000_000_000.0, e);
             throw new UnresolvableReferenceIdException(referenceId, e);
         }
     }

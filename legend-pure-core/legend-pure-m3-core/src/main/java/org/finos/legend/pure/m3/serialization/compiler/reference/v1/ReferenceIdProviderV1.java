@@ -19,14 +19,12 @@ import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
-import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProvisionException;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProvider;
+import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProvisionException;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.time.Duration;
 
 class ReferenceIdProviderV1 implements ReferenceIdProvider
 {
@@ -72,12 +70,14 @@ class ReferenceIdProviderV1 implements ReferenceIdProvider
         try
         {
             String id = getReferenceId_internal(reference);
-            LOGGER.debug("Got reference id {} in {}", id, Duration.ofNanos(System.nanoTime() - start));
+            long end = System.nanoTime();
+            LOGGER.debug("Got reference id {} in {}s", id, (end - start) / 1_000_000_000.0);
             return id;
         }
         catch (Throwable t)
         {
-            LOGGER.error("Failed to get reference id for {} in {}", reference, Duration.ofNanos(System.nanoTime() - start));
+            long end = System.nanoTime();
+            LOGGER.error("Failed to get reference id for {} in {}s", reference, (end - start) / 1_000_000_000.0);
             throw t;
         }
     }

@@ -47,7 +47,6 @@ import org.finos.legend.pure.m4.serialization.grammar.StringEscape;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
@@ -97,13 +96,13 @@ class ReferenceIdGenerator
         {
             MapIterable<CoreInstance, String> result = generateIdsForElementWithPath(element, path);
             long end = System.nanoTime();
-            LOGGER.debug("Finished generating ids for {} ({} ids) in {}", path, result.size(), Duration.ofNanos(end - start));
+            LOGGER.debug("Finished generating ids for {} ({} ids) in {}s", path, result.size(), (end - start) / 1_000_000_000.0);
             return result;
         }
         catch (Throwable t)
         {
             long end = System.nanoTime();
-            LOGGER.error("Generating ids for {} finished with error in {}", path, Duration.ofNanos(end - start), t);
+            LOGGER.error("Generating ids for {} finished with error in {}s", path, (end - start) / 1_000_000_000.0, t);
             throw t;
         }
     }
