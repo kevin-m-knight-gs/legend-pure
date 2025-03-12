@@ -97,7 +97,7 @@ public class GraphSerializer
             return new Primitive(processPrimitiveTypeJava(value, processorSupport));
         }
         String classifierId = classifierCaches.getClassifierId(classifier);
-        return classifierCaches.isEnumeration(classifier) ? new EnumRef(classifierId, value.getName()) : new ObjRef(classifierId, idBuilder.buildId(value));
+        return classifierCaches.isEnumeration(classifier) ? new EnumRef(classifierId, idBuilder.buildId(value)) : new ObjRef(classifierId, idBuilder.buildId(value));
     }
 
     private static Object processPrimitiveTypeJava(CoreInstance instance, ProcessorSupport processorSupport)
@@ -216,13 +216,15 @@ public class GraphSerializer
             {
                 return processPrimitiveTypeJava(value, m3ProcessorSupport);
             }
-            else if (Instance.instanceOf(value.getClassifier(), M3Paths.Enumeration, m3ProcessorSupport))
+            if (Instance.instanceOf(value.getClassifier(), M3Paths.Enumeration, m3ProcessorSupport))
             {
-                return metamodel.getEnum(MetadataJavaPaths.buildMetadataKeyFromType(value.getClassifier()), value.getName());
+                String enumId = PackageableElement.writeUserPathForPackageableElement(new StringBuilder(), value.getClassifier())
+                        .append('.').append(M3Properties.values).append("['").append(value.getName()).append("']").toString();
+                return metamodel.getEnum(MetadataJavaPaths.buildMetadataKeyFromType(value.getClassifier()), enumId);
             }
-            else if (Instance.instanceOf(value, M3Paths.Class, m3ProcessorSupport))
+            if (Instance.instanceOf(value, M3Paths.Class, m3ProcessorSupport))
             {
-                return metamodel.getMetadata(MetadataJavaPaths.Class, PackageableElement.getSystemPathForPackageableElement(value, "::"));
+                return metamodel.getMetadata(MetadataJavaPaths.Class, PackageableElement.getUserPathForPackageableElement(value));
             }
         }
         return value;

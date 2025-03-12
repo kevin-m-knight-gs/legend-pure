@@ -35,13 +35,16 @@ public class ExtractEnumValue extends AbstractNative
     @Override
     public String build(CoreInstance topLevelElement, CoreInstance functionExpression, ListIterable<String> transformedParams, ProcessorContext processorContext)
     {
-        final ListIterable<? extends CoreInstance> parametersValues = Instance.getValueForMetaPropertyToManyResolved(functionExpression, M3Properties.parametersValues, processorContext.getSupport());
-        final ProcessorSupport processorSupport = processorContext.getSupport();
+        ListIterable<? extends CoreInstance> parametersValues = Instance.getValueForMetaPropertyToManyResolved(functionExpression, M3Properties.parametersValues, processorContext.getSupport());
+        ProcessorSupport processorSupport = processorContext.getSupport();
 
         if (processorContext.getSupport().instance_instanceOf(parametersValues.get(0), M3Paths.InstanceValue))
         {
             String type = MetadataJavaPaths.buildMetadataKeyFromType(Instance.getValueForMetaPropertyToOneResolved(parametersValues.get(0), M3Properties.values, processorSupport));
-            return "((" + FullJavaPaths.Enum + ")((CompiledExecutionSupport)es).getMetadata().getEnum(\"" + type + "\"," + transformedParams.get(1) + "))";
+            String enumNameExpr = transformedParams.get(1);
+            boolean isString = (enumNameExpr.length() >= 2) && enumNameExpr.startsWith("\"") && enumNameExpr.endsWith("\"");
+            String enumIdExpr = "\"" + type + "." + M3Properties.values + "['" + (isString ? enumNameExpr.substring(1, enumNameExpr.length() - 1) : ("\" + " + enumNameExpr + " + \"")) + "']\"";
+            return "((" + FullJavaPaths.Enum + ")((CompiledExecutionSupport)es).getMetadata().getEnum(\"" + type + "\"," + enumIdExpr + "))";
         }
         else
         {
@@ -54,13 +57,13 @@ public class ExtractEnumValue extends AbstractNative
     @Override
     public String buildBody()
     {
-        return "new DefendedPureFunction2<"  + FullJavaPaths.Enumeration + ", String, Object>()\n" +
-               "        {\n" +
-               "            @Override\n" +
-               "            public Object value("  + FullJavaPaths.Enumeration + " enumeration, String name, ExecutionSupport es)\n" +
-               "            {\n" +
-               "                return Pure.getEnumByName(enumeration, name);\n" +
-               "            }\n" +
-               "        }";
+        return "new DefendedPureFunction2<" + FullJavaPaths.Enumeration + ", String, Object>()\n" +
+                "        {\n" +
+                "            @Override\n" +
+                "            public Object value(" + FullJavaPaths.Enumeration + " enumeration, String name, ExecutionSupport es)\n" +
+                "            {\n" +
+                "                return Pure.getEnumByName(enumeration, name);\n" +
+                "            }\n" +
+                "        }";
     }
 }
