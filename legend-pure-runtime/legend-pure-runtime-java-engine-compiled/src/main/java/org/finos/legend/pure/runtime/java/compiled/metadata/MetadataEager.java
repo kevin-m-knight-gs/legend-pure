@@ -117,6 +117,11 @@ public final class MetadataEager implements Metadata
     @Override
     public CoreInstance getMetadata(String classifier, String id)
     {
+        // for backward compatibility
+        if (id.startsWith("Root::"))
+        {
+            id = id.substring(6);
+        }
         CoreInstance coreInstance = this.metamodelByClassifier.getMetadata(classifier, id);
         if (coreInstance == null && this.isInTransaction())
         {
