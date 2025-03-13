@@ -85,7 +85,7 @@ public final class MetadataEager implements Metadata
     @Override
     public CoreInstance getEnum(String enumerationName, String enumName)
     {
-        return this.getMetadata(enumerationName, enumName);
+        return getMetadata(enumerationName, enumerationName + "." + M3Properties.values + "['" + enumName + "']");
     }
 
     @Deprecated

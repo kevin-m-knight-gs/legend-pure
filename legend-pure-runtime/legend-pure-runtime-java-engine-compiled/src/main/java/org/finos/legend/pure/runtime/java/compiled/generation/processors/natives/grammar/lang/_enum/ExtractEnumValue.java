@@ -41,10 +41,7 @@ public class ExtractEnumValue extends AbstractNative
         if (processorContext.getSupport().instance_instanceOf(parametersValues.get(0), M3Paths.InstanceValue))
         {
             String type = MetadataJavaPaths.buildMetadataKeyFromType(Instance.getValueForMetaPropertyToOneResolved(parametersValues.get(0), M3Properties.values, processorSupport));
-            String enumNameExpr = transformedParams.get(1);
-            boolean isString = (enumNameExpr.length() >= 2) && enumNameExpr.startsWith("\"") && enumNameExpr.endsWith("\"");
-            String enumIdExpr = "\"" + type + "." + M3Properties.values + "['" + (isString ? enumNameExpr.substring(1, enumNameExpr.length() - 1) : ("\" + " + enumNameExpr + " + \"")) + "']\"";
-            return "((" + FullJavaPaths.Enum + ")((CompiledExecutionSupport)es).getMetadata().getEnum(\"" + type + "\"," + enumIdExpr + "))";
+            return "((" + FullJavaPaths.Enum + ")((CompiledExecutionSupport)es).getMetadata().getEnum(\"" + type + "\"," + transformedParams.get(1) + "))";
         }
         else
         {

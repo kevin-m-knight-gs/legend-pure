@@ -27,26 +27,44 @@ import java.util.Objects;
 
 public class IdBuilder
 {
-    private final ReferenceIdProvider idProvider;
+    private final ProcessorSupport processorSupport;
     private final String defaultIdPrefix;
     private final boolean allowNonReferenceIds;
+    private volatile ReferenceIdProvider idProvider;
 
-    private IdBuilder(ReferenceIdProvider idProvider, String defaultIdPrefix, boolean allowNonReferenceIds)
+    private IdBuilder(ProcessorSupport processorSupport, String defaultIdPrefix, boolean allowNonReferenceIds)
     {
-        this.idProvider = idProvider;
+        this.processorSupport = processorSupport;
         this.defaultIdPrefix = defaultIdPrefix;
         this.allowNonReferenceIds = allowNonReferenceIds;
     }
 
     public String buildId(CoreInstance instance)
     {
-        if (!this.allowNonReferenceIds || this.idProvider.hasReferenceId(instance))
+        ReferenceIdProvider provider = getIdProvider();
+        if (!this.allowNonReferenceIds || provider.hasReferenceId(instance))
         {
-            return this.idProvider.getReferenceId(instance);
+            return provider.getReferenceId(instance);
         }
 
         int syntheticId = instance.getSyntheticId();
         return (this.defaultIdPrefix == null) ? Integer.toString(syntheticId) : (this.defaultIdPrefix + syntheticId);
+    }
+
+    private ReferenceIdProvider getIdProvider()
+    {
+        ReferenceIdProvider local = this.idProvider;
+        if (local == null)
+        {
+            synchronized (this)
+            {
+                if ((local = this.idProvider) == null)
+                {
+                    return this.idProvider = new ReferenceIdExtensionV1().newProvider(this.processorSupport);
+                }
+            }
+        }
+        return local;
     }
 
     public static IdBuilder newIdBuilder(String defaultIdPrefix, ProcessorSupport processorSupport)
@@ -66,7 +84,7 @@ public class IdBuilder
 
     private static IdBuilder newIdBuilder(ProcessorSupport processorSupport, String defaultIdPrefix, boolean allowNonReferenceIds)
     {
-        return new IdBuilder(new ReferenceIdExtensionV1().newProvider(Objects.requireNonNull(processorSupport)), defaultIdPrefix, allowNonReferenceIds);
+        return new IdBuilder(Objects.requireNonNull(processorSupport), defaultIdPrefix, allowNonReferenceIds);
     }
 
     public static String sourceToId(SourceInformation sourceInformation)

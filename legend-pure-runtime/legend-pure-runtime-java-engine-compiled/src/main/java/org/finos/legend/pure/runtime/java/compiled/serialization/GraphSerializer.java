@@ -97,7 +97,7 @@ public class GraphSerializer
             return new Primitive(processPrimitiveTypeJava(value, processorSupport));
         }
         String classifierId = classifierCaches.getClassifierId(classifier);
-        return classifierCaches.isEnumeration(classifier) ? new EnumRef(classifierId, idBuilder.buildId(value)) : new ObjRef(classifierId, idBuilder.buildId(value));
+        return classifierCaches.isEnumeration(classifier) ? new EnumRef(classifierId, value.getName()) : new ObjRef(classifierId, idBuilder.buildId(value));
     }
 
     private static Object processPrimitiveTypeJava(CoreInstance instance, ProcessorSupport processorSupport)
@@ -218,9 +218,7 @@ public class GraphSerializer
             }
             if (Instance.instanceOf(value.getClassifier(), M3Paths.Enumeration, m3ProcessorSupport))
             {
-                String enumId = PackageableElement.writeUserPathForPackageableElement(new StringBuilder(), value.getClassifier())
-                        .append('.').append(M3Properties.values).append("['").append(value.getName()).append("']").toString();
-                return metamodel.getEnum(MetadataJavaPaths.buildMetadataKeyFromType(value.getClassifier()), enumId);
+                return metamodel.getEnum(MetadataJavaPaths.buildMetadataKeyFromType(value.getClassifier()), value.getName());
             }
             if (Instance.instanceOf(value, M3Paths.Class, m3ProcessorSupport))
             {
