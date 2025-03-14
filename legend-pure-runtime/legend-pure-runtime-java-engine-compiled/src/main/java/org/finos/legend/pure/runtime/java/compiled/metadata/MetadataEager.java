@@ -16,14 +16,15 @@ package org.finos.legend.pure.runtime.java.compiled.metadata;
 
 import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.factory.Maps;
-import org.eclipse.collections.api.factory.Stacks;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.finos.legend.pure.m3.coreinstance.Package;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.PackageableElement;
 import org.finos.legend.pure.m3.exception.PureExecutionException;
+import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.navigation.importstub.ImportStub;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.ReflectiveCoreInstance;
@@ -123,14 +124,35 @@ public final class MetadataEager implements Metadata
             id = id.substring(6);
         }
         CoreInstance coreInstance = this.metamodelByClassifier.getMetadata(classifier, id);
-        if (coreInstance == null && this.isInTransaction())
+        if (coreInstance == null)
+        {
+            // for backward compatibility for units
+            int unitDelimiterIndex;
+            if (M3Paths.Unit.equals(classifier) && ((unitDelimiterIndex = id.indexOf(ImportStub.UNIT_STUB_DELIM)) != -1))
+            {
+                String measurePath = id.substring(0, unitDelimiterIndex);
+                String unitName = id.substring(unitDelimiterIndex + 1);
+
+                MapIterable<String, CoreInstance> units = this.metamodelByClassifier.getMetadata(classifier);
+                coreInstance = units.get(measurePath + "." + M3Properties.nonCanonicalUnits + "['" + unitName + "']");
+                if (coreInstance == null)
+                {
+                    CoreInstance canonicalUnit = units.get(measurePath + "." + M3Properties.canonicalUnit);
+                    if ((canonicalUnit != null) && unitName.equals(canonicalUnit.getName()))
+                    {
+                        coreInstance = canonicalUnit;
+                    }
+                }
+            }
+        }
+        if (coreInstance == null && isInTransaction())
         {
             coreInstance = this.added.get().getMetadata(classifier, id);
         }
 
         if (coreInstance == null)
         {
-            throw new PureExecutionException("Element " + id + " of type " + classifier + " does not exist", Stacks.mutable.empty());
+            throw new PureExecutionException("Element " + id + " of type " + classifier + " does not exist");
         }
 
         return coreInstance;

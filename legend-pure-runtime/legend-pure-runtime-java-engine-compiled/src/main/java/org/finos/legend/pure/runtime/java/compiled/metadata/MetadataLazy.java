@@ -26,7 +26,9 @@ import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.Counter;
 import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
+import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation.importstub.ImportStub;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.JavaPackageAndImportBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.EnumProcessor;
@@ -284,7 +286,37 @@ public class MetadataLazy implements Metadata
 
     private CoreInstance toJavaObject(String classifier, String id)
     {
-        return getClassifierInstanceCache(classifier).getIfAbsentPut(id, () -> newInstance(classifier, id));
+        ConcurrentMutableMap<String, CoreInstance> cache = getClassifierInstanceCache(classifier);
+        // for backward compatibility for units
+        int unitDelimiterIndex;
+        if (M3Paths.Unit.equals(classifier) && ((unitDelimiterIndex = id.indexOf(ImportStub.UNIT_STUB_DELIM)) != -1))
+        {
+            String measurePath = id.substring(0, unitDelimiterIndex);
+            String unitName = id.substring(unitDelimiterIndex + 1);
+            try
+            {
+                String nonCanonicalId = measurePath + "." + M3Properties.nonCanonicalUnits + "['" + unitName + "']";
+                return cache.getIfAbsentPut(nonCanonicalId, () -> newInstance(classifier, nonCanonicalId));
+            }
+            catch (DistributedBinaryGraphDeserializer.UnknownInstanceException ignore)
+            {
+                // If it's not a non-canonical unit, then maybe it's a canonical unit?
+            }
+            try
+            {
+                String canonicalId = measurePath + "." + M3Properties.canonicalUnit;
+                CoreInstance result = cache.getIfAbsentPut(canonicalId, () -> newInstance(classifier, canonicalId));
+                if ((result != null) && unitName.equals(result.getName()))
+                {
+                    return result;
+                }
+            }
+            catch (DistributedBinaryGraphDeserializer.UnknownInstanceException ignore)
+            {
+                // No canonical unit? That's strange, but let's not throw here. Fall back to the id as given.
+            }
+        }
+        return cache.getIfAbsentPut(id, () -> newInstance(classifier, id));
     }
 
     private ConcurrentMutableMap<String, CoreInstance> getClassifierInstanceCache(String classifier)
