@@ -20,6 +20,7 @@ import org.finos.legend.pure.m3.serialization.compiler.element.DeserializedConcr
 import org.finos.legend.pure.m3.serialization.compiler.metadata.ModuleMetadata;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.ModuleMetadataSerializer;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.serialization.Reader;
 import org.finos.legend.pure.m4.serialization.Writer;
 import org.finos.legend.pure.m4.serialization.binary.BinaryReaders;
@@ -239,7 +240,13 @@ public class FileSerializer
         catch (Exception e)
         {
             LOGGER.error("Error serializing {} to {}", elementPath, filePath, e);
-            StringBuilder builder = new StringBuilder("Error serializing element ").append(elementPath).append(" to ").append(filePath);
+            StringBuilder builder = new StringBuilder("Error serializing element ").append(elementPath);
+            SourceInformation sourceInfo = element.getSourceInformation();
+            if (sourceInfo != null)
+            {
+                sourceInfo.appendMessage(builder.append(" (")).append(')');
+            }
+            builder.append(" to ").append(filePath);
             String eMessage = e.getMessage();
             if (eMessage != null)
             {
@@ -283,7 +290,13 @@ public class FileSerializer
         catch (Exception e)
         {
             LOGGER.error("Error serializing {} to zip entry '{}'", elementPath, entryName, e);
-            StringBuilder builder = new StringBuilder("Error serializing element ").append(elementPath).append(" to ").append(entryName);
+            StringBuilder builder = new StringBuilder("Error serializing element ").append(elementPath);
+            SourceInformation sourceInfo = element.getSourceInformation();
+            if (sourceInfo != null)
+            {
+                sourceInfo.appendMessage(builder.append(" (")).append(')');
+            }
+            builder.append(" to ").append(entryName);
             String eMessage = e.getMessage();
             if (eMessage != null)
             {
