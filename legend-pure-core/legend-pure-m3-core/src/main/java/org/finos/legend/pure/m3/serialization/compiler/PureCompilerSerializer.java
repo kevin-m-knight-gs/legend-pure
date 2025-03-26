@@ -243,10 +243,44 @@ public class PureCompilerSerializer
         LOGGER.info("Serializing module {}", moduleName);
         try
         {
-            GraphTools.getTopLevelAndPackagedElements(this.processorSupport)
-                    .select(e -> ModuleHelper.isElementInModule(e, moduleName))
-                    .forEach(serializer::serializeElement);
-            serializer.serializeModuleMetadata(this.moduleMetadataGenerator.generateModuleMetadata(ModuleHelper.resolveModuleName(moduleName)));
+            long eltStart = System.nanoTime();
+            LOGGER.info("Starting element serialization");
+            try
+            {
+                GraphTools.getTopLevelAndPackagedElements(this.processorSupport)
+                        .select(e -> ModuleHelper.isElementInModule(e, moduleName))
+                        .forEach(serializer::serializeElement);
+            }
+            finally
+            {
+                long eltEnd = System.nanoTime();
+                LOGGER.info("Finished element serialization in {}s", (eltEnd - eltStart) / 1_000_000_000.0);
+            }
+
+            long modMetaGenStart = System.nanoTime();
+            LOGGER.info("Starting module metadata generation of {}", moduleName);
+            ModuleMetadata moduleMetadata;
+            try
+            {
+                moduleMetadata = this.moduleMetadataGenerator.generateModuleMetadata(ModuleHelper.resolveModuleName(moduleName));
+            }
+            finally
+            {
+                long modMetaGenEnd = System.nanoTime();
+                LOGGER.info("Finished module metadata generation of {} in {}s", moduleName, (modMetaGenEnd - modMetaGenStart) / 1_000_000_000.0);
+            }
+
+            long modMetaSerStart = System.nanoTime();
+            LOGGER.info("Starting serialization of module metadata for {}", moduleName);
+            try
+            {
+                serializer.serializeModuleMetadata(moduleMetadata);
+            }
+            finally
+            {
+                long modMetaSerEnd = System.nanoTime();
+                LOGGER.info("Finished serialization of module metadata for {} in {}s", moduleName, (modMetaSerEnd - modMetaSerStart) / 1_000_000_000.0);
+            }
         }
         catch (Throwable t)
         {
@@ -310,10 +344,21 @@ public class PureCompilerSerializer
                 LOGGER.info("Serializing modules {}", moduleNames);
                 try
                 {
-                    GraphTools.getTopLevelAndPackagedElements(this.processorSupport)
-                            .select(e -> moduleNames.contains(ModuleHelper.getElementModule(e)))
-                            .forEach(serializer::serializeElement);
-                    this.moduleMetadataGenerator.generateModuleMetadata(moduleNames).forEach(serializer::serializeModuleMetadata);
+                    long eltStart = System.nanoTime();
+                    LOGGER.info("Starting element serialization");
+                    try
+                    {
+                        GraphTools.getTopLevelAndPackagedElements(this.processorSupport)
+                                .select(e -> moduleNames.contains(ModuleHelper.getElementModule(e)))
+                                .forEach(serializer::serializeElement);
+                    }
+                    finally
+                    {
+                        long eltEnd = System.nanoTime();
+                        LOGGER.info("Finished element serialization in {}s", (eltEnd - eltStart) / 1_000_000_000.0);
+                    }
+
+                    generateAndSerializeModuleMetadata(serializer, moduleNames);
                 }
                 catch (Throwable t)
                 {
@@ -337,17 +382,27 @@ public class PureCompilerSerializer
         try
         {
             MutableSet<String> moduleNames = Sets.mutable.empty();
-            GraphTools.getTopLevelAndPackagedElements(this.processorSupport).forEach(e ->
+            long eltStart = System.nanoTime();
+            LOGGER.info("Starting element serialization");
+            try
             {
-                String moduleName = ModuleHelper.getElementModule(e);
-                if ((moduleName != null) && moduleFilter.test(moduleName))
+                GraphTools.getTopLevelAndPackagedElements(this.processorSupport).forEach(e ->
                 {
-                    moduleNames.add(moduleName);
-                    serializer.serializeElement(e);
-                }
-            });
-            LOGGER.info("Serializing metadata for selected modules: {}", moduleNames);
-            this.moduleMetadataGenerator.generateModuleMetadata(moduleNames).forEach(serializer::serializeModuleMetadata);
+                    String moduleName = ModuleHelper.getElementModule(e);
+                    if ((moduleName != null) && moduleFilter.test(moduleName))
+                    {
+                        moduleNames.add(moduleName);
+                        serializer.serializeElement(e);
+                    }
+                });
+            }
+            finally
+            {
+                long eltEnd = System.nanoTime();
+                LOGGER.info("Finished element serialization in {}s", (eltEnd - eltStart) / 1_000_000_000.0);
+            }
+
+            generateAndSerializeModuleMetadata(serializer, moduleNames);
         }
         catch (Throwable t)
         {
@@ -359,6 +414,37 @@ public class PureCompilerSerializer
             long end = System.nanoTime();
             LOGGER.info("Finished serializing selected modules in {}s", (end - start) / 1_000_000_000.0);
         }
+    }
+
+    private void generateAndSerializeModuleMetadata(Serializer serializer, SetIterable<? extends String> moduleNames)
+    {
+        long modMetaGenStart = System.nanoTime();
+        MutableList<ModuleMetadata> moduleMetadata;
+        LOGGER.info("Starting module metadata generation");
+        try
+        {
+            moduleMetadata = this.moduleMetadataGenerator.generateModuleMetadata(moduleNames);
+        }
+        finally
+        {
+            long modMetaGenEnd = System.nanoTime();
+            LOGGER.info("Finished module metadata generation in {}s", (modMetaGenEnd - modMetaGenStart) / 1_000_000_000.0);
+        }
+
+        moduleMetadata.forEach(modMeta ->
+        {
+            long modMetaSerStart = System.nanoTime();
+            LOGGER.info("Starting serialization of module metadata for {}", modMeta.getName());
+            try
+            {
+                serializer.serializeModuleMetadata(modMeta);
+            }
+            finally
+            {
+                long modMetaSerEnd = System.nanoTime();
+                LOGGER.info("Finished serialization of module metadata for {} in {}s", modMeta.getName(), (modMetaSerEnd - modMetaSerStart) / 1_000_000_000.0);
+            }
+        });
     }
 
     private void updateModuleMetadata(Path directory, String moduleName, ListIterable<String> elementsToUpdate, SetIterable<String> sourcesToUpdate)
