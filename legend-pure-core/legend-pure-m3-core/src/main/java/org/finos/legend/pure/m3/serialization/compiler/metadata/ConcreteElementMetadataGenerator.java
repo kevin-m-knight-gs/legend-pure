@@ -44,11 +44,15 @@ import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.tools.GraphNodeIterable;
 import org.finos.legend.pure.m4.tools.GraphWalkFilterResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 
 public class ConcreteElementMetadataGenerator
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConcreteElementMetadataGenerator.class);
+
     private final ImmutableMap<String, ImmutableList<String>> BACK_REFERENCE_PROPERTIES = M3PropertyPaths.BACK_REFERENCE_PROPERTY_PATHS.groupByUniqueKey(ImmutableList::getLast);
 
     private final ReferenceIdProvider referenceIdProvider;
@@ -62,31 +66,46 @@ public class ConcreteElementMetadataGenerator
 
     public ConcreteElementMetadata generateMetadata(CoreInstance concreteElement)
     {
+        long start = System.nanoTime();
         if (!PackageableElement.isPackageableElement(concreteElement, this.processorSupport))
         {
             throw new IllegalArgumentException("Not a PackageableElement: " + concreteElement);
         }
 
         String elementPath = PackageableElement.getUserPathForPackageableElement(concreteElement);
-
-        SourceInformation sourceInfo = concreteElement.getSourceInformation();
-        if (sourceInfo == null)
+        LOGGER.debug("Generating metadata for {}", elementPath);
+        try
         {
-            throw new IllegalArgumentException("Missing source information for " + elementPath);
-        }
 
-        CoreInstance classifier = this.processorSupport.getClassifier(concreteElement);
-        if (classifier == null)
+            SourceInformation sourceInfo = concreteElement.getSourceInformation();
+            if (sourceInfo == null)
+            {
+                throw new IllegalArgumentException("Missing source information for " + elementPath);
+            }
+
+            CoreInstance classifier = this.processorSupport.getClassifier(concreteElement);
+            if (classifier == null)
+            {
+                throw new IllegalArgumentException("Cannot get classifier for " + elementPath);
+            }
+
+            ConcreteElementMetadata.Builder builder = ConcreteElementMetadata.builder()
+                    .withPath(elementPath)
+                    .withClassifierPath(PackageableElement.getUserPathForPackageableElement(classifier))
+                    .withSourceInformation(sourceInfo)
+                    .withReferenceIdVersion(this.referenceIdProvider.version());
+            return computeExternalReferences(concreteElement, builder).build();
+        }
+        catch (Throwable t)
         {
-            throw new IllegalArgumentException("Cannot get classifier for " + elementPath);
+            LOGGER.debug("Error generating metadata for {}", elementPath, t);
+            throw t;
         }
-
-        ConcreteElementMetadata.Builder builder = ConcreteElementMetadata.builder()
-                .withPath(elementPath)
-                .withClassifierPath(PackageableElement.getUserPathForPackageableElement(classifier))
-                .withSourceInformation(sourceInfo)
-                .withReferenceIdVersion(this.referenceIdProvider.version());
-        return computeExternalReferences(concreteElement, builder).build();
+        finally
+        {
+            long end = System.nanoTime();
+            LOGGER.debug("Finished generating metadata for {} in {}s", elementPath, (end - start) / 1_000_000_000.0);
+        }
     }
 
     private ConcreteElementMetadata.Builder computeExternalReferences(CoreInstance concreteElement, ConcreteElementMetadata.Builder builder)
@@ -99,6 +118,7 @@ public class ConcreteElementMetadataGenerator
                 .withNodeFilter(node -> isExternal(concreteElement, node) ? GraphWalkFilterResult.get(!Imports.isImportGroup(node, this.processorSupport), false) : GraphWalkFilterResult.ACCEPT_AND_CONTINUE)
                 .build()
                 .forEach(node -> (isExternal(concreteElement, node) ? externalNodes : internalNodes).add(node));
+        LOGGER.debug("{} has {} internal nodes and {} external references", builder.getPath(), internalNodes.size(), externalNodes.size());
         boolean elementIsAssociation = isAssociation(concreteElement);
         externalNodes.forEach(externalNode ->
         {

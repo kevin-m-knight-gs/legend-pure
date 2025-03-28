@@ -130,16 +130,31 @@ public class ConcreteElementMetadata extends PackageableElementMetadata
             this.externalReferences = Lists.mutable.ofInitialCapacity(initExtRefCapacity);
         }
 
+        public String getPath()
+        {
+            return this.path;
+        }
+
         public Builder withPath(String path)
         {
             this.path = path;
             return this;
         }
 
+        public String getClassifierPath()
+        {
+            return this.classifierPath;
+        }
+
         public Builder withClassifierPath(String classifierPath)
         {
             this.classifierPath = classifierPath;
             return this;
+        }
+
+        public SourceInformation getSourceInformation()
+        {
+            return this.sourceInfo;
         }
 
         public Builder withSourceInformation(SourceInformation sourceInfo)
