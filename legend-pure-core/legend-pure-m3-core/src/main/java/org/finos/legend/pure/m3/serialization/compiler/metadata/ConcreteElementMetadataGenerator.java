@@ -15,10 +15,12 @@
 package org.finos.legend.pure.m3.serialization.compiler.metadata;
 
 import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.ImmutableMap;
+import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.Referenceable;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.extension.Annotation;
@@ -115,11 +117,12 @@ public class ConcreteElementMetadataGenerator
         GraphNodeIterable.builder()
                 .withStartingNode(concreteElement)
                 .withKeyFilter(this::propertyFilter)
-                .withNodeFilter(node -> isExternal(concreteElement, node) ? GraphWalkFilterResult.get(!Imports.isImportGroup(node, this.processorSupport), false) : GraphWalkFilterResult.ACCEPT_AND_CONTINUE)
+                .withNodeFilter(node -> isExternal(concreteElement, node) ? GraphWalkFilterResult.stop(!Imports.isImportGroup(node, this.processorSupport)) : GraphWalkFilterResult.ACCEPT_AND_CONTINUE)
                 .build()
                 .forEach(node -> (isExternal(concreteElement, node) ? externalNodes : internalNodes).add(node));
         LOGGER.debug("{} has {} internal nodes and {} external references", builder.getPath(), internalNodes.size(), externalNodes.size());
         boolean elementIsAssociation = isAssociation(concreteElement);
+        MutableMap<CoreInstance, String> idCache = Maps.mutable.empty();
         externalNodes.forEach(externalNode ->
         {
             String externalNodeId = this.referenceIdProvider.getReferenceId(externalNode);
@@ -128,25 +131,25 @@ public class ConcreteElementMetadataGenerator
             {
                 externalNode.getValueForMetaPropertyToMany(M3Properties.applications).asLazy()
                         .select(internalNodes::contains)
-                        .collect(fe -> getReferenceIdForInternalNode(fe, concreteElement, externalNodeId, M3Properties.applications))
+                        .collect(fe -> getReferenceIdForInternalNode(fe, idCache, concreteElement, externalNodeId, M3Properties.applications))
                         .forEach(extRefBuilder::withApplication);
             }
             if (isAnnotation(externalNode))
             {
                 externalNode.getValueForMetaPropertyToMany(M3Properties.modelElements).asLazy()
                         .select(internalNodes::contains)
-                        .collect(e -> getReferenceIdForInternalNode(e, concreteElement, externalNodeId, M3Properties.modelElements))
+                        .collect(e -> getReferenceIdForInternalNode(e, idCache, concreteElement, externalNodeId, M3Properties.modelElements))
                         .forEach(extRefBuilder::withModelElement);
             }
             if (elementIsAssociation && isClass(externalNode))
             {
                 externalNode.getValueForMetaPropertyToMany(M3Properties.propertiesFromAssociations).asLazy()
                         .select(internalNodes::contains)
-                        .collect(p -> getReferenceIdForInternalNode(p, concreteElement, externalNodeId, M3Properties.propertiesFromAssociations))
+                        .collect(p -> getReferenceIdForInternalNode(p, idCache, concreteElement, externalNodeId, M3Properties.propertiesFromAssociations))
                         .forEach(extRefBuilder::withPropertyFromAssociation);
                 externalNode.getValueForMetaPropertyToMany(M3Properties.qualifiedPropertiesFromAssociations).asLazy()
                         .select(internalNodes::contains)
-                        .collect(qp -> getReferenceIdForInternalNode(qp, concreteElement, externalNodeId, M3Properties.qualifiedPropertiesFromAssociations))
+                        .collect(qp -> getReferenceIdForInternalNode(qp, idCache, concreteElement, externalNodeId, M3Properties.qualifiedPropertiesFromAssociations))
                         .forEach(extRefBuilder::withQualifiedPropertyFromAssociation);
             }
             if (isReferenceable(externalNode))
@@ -156,7 +159,7 @@ public class ConcreteElementMetadataGenerator
                     CoreInstance owner = refUsage.getValueForMetaPropertyToOne(M3Properties.owner);
                     if (internalNodes.contains(owner))
                     {
-                        String ownerId = getReferenceIdForInternalNode(owner, concreteElement, externalNodeId, M3Properties.referenceUsages);
+                        String ownerId = getReferenceIdForInternalNode(owner, idCache, concreteElement, externalNodeId, M3Properties.referenceUsages);
                         String propertyName = PrimitiveUtilities.getStringValue(refUsage.getValueForMetaPropertyToOne(M3Properties.propertyName));
                         int offset = PrimitiveUtilities.getIntegerValue(refUsage.getValueForMetaPropertyToOne(M3Properties.offset)).intValue();
                         extRefBuilder.withReferenceUsage(ownerId, propertyName, offset);
@@ -167,7 +170,7 @@ public class ConcreteElementMetadataGenerator
             {
                 externalNode.getValueForMetaPropertyToMany(M3Properties.specializations).asLazy()
                         .select(internalNodes::contains)
-                        .collect(s -> getReferenceIdForInternalNode(s, concreteElement, externalNodeId, M3Properties.specializations))
+                        .collect(s -> getReferenceIdForInternalNode(s, idCache, concreteElement, externalNodeId, M3Properties.specializations))
                         .forEach(extRefBuilder::withSpecialization);
             }
             builder.withExternalReference(extRefBuilder.build());
@@ -226,6 +229,11 @@ public class ConcreteElementMetadataGenerator
     {
         ImmutableList<String> propertyPath = BACK_REFERENCE_PROPERTIES.get(property);
         return (propertyPath == null) || !propertyPath.equals(node.getRealKeyByName(property));
+    }
+
+    private String getReferenceIdForInternalNode(CoreInstance internalNode, MutableMap<CoreInstance, String> cache, CoreInstance concreteElement, String externalNodeId, String backRefProperty)
+    {
+        return cache.getIfAbsentPutWithKey(internalNode, n -> getReferenceIdForInternalNode(n, concreteElement, externalNodeId, backRefProperty));
     }
 
     private String getReferenceIdForInternalNode(CoreInstance internalNode, CoreInstance concreteElement, String externalNodeId, String backRefProperty)
