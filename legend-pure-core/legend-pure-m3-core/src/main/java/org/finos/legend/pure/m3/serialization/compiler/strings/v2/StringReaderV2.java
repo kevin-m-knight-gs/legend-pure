@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.finos.legend.pure.m3.serialization.compiler.strings.v1;
+package org.finos.legend.pure.m3.serialization.compiler.strings.v2;
 
 import org.finos.legend.pure.m3.serialization.compiler.strings.StringReader;
 import org.finos.legend.pure.m4.serialization.Reader;
 
-abstract class StringReaderV1 extends BaseStringIndex implements StringReader
+import java.nio.charset.StandardCharsets;
+
+abstract class StringReaderV2 extends BaseStringIndex implements StringReader
 {
     private final String[] strings;
 
-    private StringReaderV1(String[] strings)
+    private StringReaderV2(String[] strings)
     {
         this.strings = strings;
+    }
+
+    private StringReaderV2(int length)
+    {
+        this(new String[length]);
     }
 
     @Override
@@ -48,11 +55,96 @@ abstract class StringReaderV1 extends BaseStringIndex implements StringReader
         return this.strings[id];
     }
 
-    private static class OneByte extends StringReaderV1
+    private void deserialize(Reader reader)
     {
-        private OneByte(String[] strings)
+        for (int i = 0, len = this.strings.length; i < len; i++)
         {
-            super(strings);
+            int code = reader.readByte();
+            switch (code & STRING_TYPE_MASK)
+            {
+                case SIMPLE_STRING:
+                {
+                    int length = readIntOfWidth(reader, code);
+                    byte[] bytes = reader.readBytes(length);
+                    this.strings[i] = new String(bytes, StandardCharsets.UTF_8);
+                    break;
+                }
+                case DELIMITED_STRING:
+                {
+                    String prefix = readString(reader);
+                    String suffix = readString(reader);
+                    String string;
+                    switch (code & DELIMITER_TYPE_MASK)
+                    {
+                        case PACKAGE_DELIMITER:
+                        {
+                            string = prefix + "::" + suffix;
+                            break;
+                        }
+                        case SLASH_DELIMITER:
+                        {
+                            string = prefix + '/' + suffix;
+                            break;
+                        }
+                        case DOT_DELIMITER:
+                        {
+                            string = prefix + '.' + suffix;
+                            break;
+                        }
+                        default:
+                        {
+                            throw new RuntimeException(String.format("Unknown string delimiter type code: %02x", code & DELIMITER_TYPE_MASK));
+                        }
+                    }
+                    this.strings[i] = string;
+                    break;
+                }
+                case BRACKET_INDEXED_STRING:
+                {
+                    String prefix = readString(reader);
+                    String string;
+                    switch (code & BRACKET_INDEX_TYPE_MASK)
+                    {
+                        case SIMPLE_BRACKET_INDEX:
+                        {
+                            String value = readString(reader);
+                            string = prefix + '[' + value + ']';
+                            break;
+                        }
+                        case QUOTED_BRACKET_INDEX:
+                        {
+                            String value = readString(reader);
+                            string = prefix + "['" + value + "']";
+                            break;
+                        }
+                        case KEYED_BRACKET_INDEX:
+                        {
+                            String key = readString(reader);
+                            String value = readString(reader);
+                            string = prefix + '[' + key + "='" + value + "']";
+                            break;
+                        }
+                        default:
+                        {
+                            throw new RuntimeException(String.format("Unknown bracket indexed string type code: %02x", code & BRACKET_INDEX_TYPE_MASK));
+                        }
+                    }
+                    this.strings[i] = string;
+                    break;
+                }
+                default:
+                {
+                    throw new RuntimeException(String.format("Unknown string type code: %02x", code & STRING_TYPE_MASK));
+                }
+            }
+        }
+    }
+
+    private static class OneByte extends StringReaderV2
+    {
+        private OneByte(int length)
+        {
+            super(length);
         }
 
         @Override
@@ -87,11 +179,11 @@ abstract class StringReaderV1 extends BaseStringIndex implements StringReader
         }
     }
 
-    private static class TwoBytes extends StringReaderV1
+    private static class TwoBytes extends StringReaderV2
     {
-        private TwoBytes(String[] strings)
+        private TwoBytes(int length)
         {
-            super(strings);
+            super(length);
         }
 
         @Override
@@ -126,11 +218,11 @@ abstract class StringReaderV1 extends BaseStringIndex implements StringReader
         }
     }
 
-    private static class ThreeBytes extends StringReaderV1
+    private static class ThreeBytes extends StringReaderV2
     {
-        private ThreeBytes(String[] strings)
+        private ThreeBytes(int length)
         {
-            super(strings);
+            super(length);
         }
 
         @Override
@@ -165,128 +257,11 @@ abstract class StringReaderV1 extends BaseStringIndex implements StringReader
         }
     }
 
-    private static class FourBytes extends StringReaderV1
+    private static class FourBytes extends StringReaderV2
     {
-        private FourBytes(String[] strings)
+        private FourBytes(int length)
         {
-            super(strings);
-        }
-
-        @Override
-        public void skipString(Reader reader)
-        {
-            reader.skipInt();
-        }
-
-        @Override
-        public String[] readStringArray(Reader reader)
-        {
-            int[] ids = reader.readIntArray();
-            int length = ids.length;
-            String[] strings = new String[length];
-            for (int i = 0; i < length; i++)
-            {
-                strings[i] = getString(ids[i]);
-            }
-            return strings;
-        }
-
-        @Override
-        public void skipStringArray(Reader reader)
-        {
-            reader.skipIntArray();
-        }
-
-        @Override
-        protected int readStringId(Reader reader)
-        {
-            return reader.readInt();
-        }
-    }
-
-    private static class ByteId extends StringReaderV1
-    {
-        private ByteId(String[] strings)
-        {
-            super(strings);
-        }
-
-        @Override
-        public void skipString(Reader reader)
-        {
-            reader.skipBytes(Byte.BYTES);
-        }
-
-        @Override
-        public String[] readStringArray(Reader reader)
-        {
-            byte[] ids = reader.readByteArray();
-            int length = ids.length;
-            String[] strings = new String[length];
-            for (int i = 0; i < length; i++)
-            {
-                strings[i] = getString(ids[i]);
-            }
-            return strings;
-        }
-
-        @Override
-        public void skipStringArray(Reader reader)
-        {
-            reader.skipByteArray();
-        }
-
-        @Override
-        protected int readStringId(Reader reader)
-        {
-            return reader.readByte();
-        }
-    }
-
-    private static class ShortId extends StringReaderV1
-    {
-        private ShortId(String[] strings)
-        {
-            super(strings);
-        }
-
-        @Override
-        public void skipString(Reader reader)
-        {
-            reader.skipShort();
-        }
-
-        @Override
-        public String[] readStringArray(Reader reader)
-        {
-            short[] ids = reader.readShortArray();
-            int length = ids.length;
-            String[] strings = new String[length];
-            for (int i = 0; i < length; i++)
-            {
-                strings[i] = getString(ids[i]);
-            }
-            return strings;
-        }
-
-        @Override
-        public void skipStringArray(Reader reader)
-        {
-            reader.skipShortArray();
-        }
-
-        @Override
-        protected int readStringId(Reader reader)
-        {
-            return reader.readShort();
-        }
-    }
-
-    private static class IntId extends StringReaderV1
-    {
-        private IntId(String[] strings)
-        {
-            super(strings);
+            super(length);
         }
 
         @Override
@@ -323,25 +298,32 @@ abstract class StringReaderV1 extends BaseStringIndex implements StringReader
 
     static StringReader readStringIndex(Reader reader)
     {
-        String[] strings = reader.readStringArray();
-        int width = getStringIdByteWidth(strings.length);
+        int count = reader.readInt();
+        StringReaderV2 stringReader = newStringReader(count);
+        stringReader.deserialize(reader);
+        return stringReader;
+    }
+
+    private static StringReaderV2 newStringReader(int count)
+    {
+        int width = getStringIdByteWidth(count);
         switch (width)
         {
             case 1:
             {
-                return new OneByte(strings);
+                return new OneByte(count);
             }
             case 2:
             {
-                return new TwoBytes(strings);
+                return new TwoBytes(count);
             }
             case 3:
             {
-                return new ThreeBytes(strings);
+                return new ThreeBytes(count);
             }
             case 4:
             {
-                return new FourBytes(strings);
+                return new FourBytes(count);
             }
             default:
             {

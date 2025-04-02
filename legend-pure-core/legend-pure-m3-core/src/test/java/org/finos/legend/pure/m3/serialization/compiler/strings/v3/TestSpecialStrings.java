@@ -1,4 +1,4 @@
-// Copyright 2024 Goldman Sachs
+// Copyright 2025 Goldman Sachs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.finos.legend.pure.m3.serialization.compiler.strings.v1;
+package org.finos.legend.pure.m3.serialization.compiler.strings.v3;
 
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Sets;
@@ -113,6 +113,7 @@ public class TestSpecialStrings
         Assert.assertEquals(-84, BaseStringIndex.getSpecialStringId("meta::pure::metamodel::multiplicity::PureZero"));
         Assert.assertEquals(-85, BaseStringIndex.getSpecialStringId("meta::pure::metamodel::multiplicity::ZeroMany"));
         Assert.assertEquals(-86, BaseStringIndex.getSpecialStringId("meta::pure::metamodel::multiplicity::ZeroOne"));
+        Assert.assertEquals(-87, BaseStringIndex.getSpecialStringId("import"));
 
         Assert.assertEquals(0, BaseStringIndex.getSpecialStringId("not a special string"));
         Assert.assertEquals(0, BaseStringIndex.getSpecialStringId("the quick brown fox"));
@@ -208,30 +209,31 @@ public class TestSpecialStrings
         Assert.assertEquals("meta::pure::metamodel::multiplicity::PureZero", BaseStringIndex.getSpecialString(-84));
         Assert.assertEquals("meta::pure::metamodel::multiplicity::ZeroMany", BaseStringIndex.getSpecialString(-85));
         Assert.assertEquals("meta::pure::metamodel::multiplicity::ZeroOne", BaseStringIndex.getSpecialString(-86));
+        Assert.assertEquals("import", BaseStringIndex.getSpecialString(-87));
 
         Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(0));
         Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(1));
         Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(10));
-        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-87));
-        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-89));
-        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-530));
-        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-12920));
+        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-88));
+        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-129));
+        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-130));
+        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-1340));
     }
 
     @Test
     public void testIsSpecialStringId()
     {
-        for (int i = -86; i <= -1; i++)
+        for (int i = -87; i <= -1; i++)
         {
             Assert.assertTrue(Integer.toString(i), BaseStringIndex.isSpecialStringId(i));
         }
 
         Assert.assertFalse(BaseStringIndex.isSpecialStringId(0));
         Assert.assertFalse(BaseStringIndex.isSpecialStringId(1));
-        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-87));
         Assert.assertFalse(BaseStringIndex.isSpecialStringId(-88));
-        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-129));
-        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-13550));
+        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-100));
+        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-200));
+        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-3241));
     }
 
     @Test
@@ -323,8 +325,9 @@ public class TestSpecialStrings
                 "meta::pure::metamodel::multiplicity::PureOne",
                 "meta::pure::metamodel::multiplicity::PureZero",
                 "meta::pure::metamodel::multiplicity::ZeroMany",
-                "meta::pure::metamodel::multiplicity::ZeroOne"
-                );
+                "meta::pure::metamodel::multiplicity::ZeroOne",
+                "import"
+        );
 
         MutableList<String> actual = Lists.mutable.empty();
         BaseStringIndex.forEachSpecialString(actual::add);

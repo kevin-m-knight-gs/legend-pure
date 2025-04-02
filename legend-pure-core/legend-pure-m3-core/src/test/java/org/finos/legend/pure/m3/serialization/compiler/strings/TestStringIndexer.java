@@ -64,7 +64,7 @@ public class TestStringIndexer
     @Test
     public void testLoadingFromClassLoader()
     {
-        testStringIndexerHasVersions(StringIndexer.builder().withLoadedExtensions().build(), 0, 1);
+        testStringIndexerHasVersions(StringIndexer.builder().withLoadedExtensions().build(), 0, 1, 2, 3);
     }
 
     @Test
@@ -76,7 +76,7 @@ public class TestStringIndexer
     @Test
     public void testDefaultStringIndexer()
     {
-        testStringIndexerHasVersions(StringIndexer.defaultStringIndexer(), 0, 1);
+        testStringIndexerHasVersions(StringIndexer.defaultStringIndexer(), 0, 1, 2, 3);
     }
 
     private void testStringIndexerHasVersions(StringIndexer stringIndexer, int... expectedVersions)

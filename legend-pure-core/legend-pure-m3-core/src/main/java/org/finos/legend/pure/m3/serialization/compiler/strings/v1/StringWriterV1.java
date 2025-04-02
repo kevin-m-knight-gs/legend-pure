@@ -24,12 +24,16 @@ import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.m3.serialization.compiler.strings.StringWriter;
 import org.finos.legend.pure.m4.serialization.Writer;
 import org.finos.legend.pure.m4.serialization.grammar.StringEscape;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Comparator;
 
 abstract class StringWriterV1 extends BaseStringIndex implements StringWriter
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(StringWriterV1.class);
+
     private final ObjectIntMap<String> stringIndex;
 
     private StringWriterV1(ObjectIntMap<String> stringIndex)
@@ -65,9 +69,9 @@ abstract class StringWriterV1 extends BaseStringIndex implements StringWriter
         writer.writeStringArray(strings);
     }
 
-    private static class ByteId extends StringWriterV1
+    private static class OneByte extends StringWriterV1
     {
-        private ByteId(ObjectIntMap<String> stringIndex)
+        private OneByte(ObjectIntMap<String> stringIndex)
         {
             super(stringIndex);
         }
@@ -79,7 +83,7 @@ abstract class StringWriterV1 extends BaseStringIndex implements StringWriter
             byte[] ids = new byte[length];
             for (int i = 0; i < length; i++)
             {
-                ids[i] = (byte) getStringId(strings[i]);
+                ids[i] = idToOneByte(getStringId(strings[i]));
             }
             writer.writeByteArray(ids);
         }
@@ -87,13 +91,13 @@ abstract class StringWriterV1 extends BaseStringIndex implements StringWriter
         @Override
         protected void writeStringId(Writer writer, int id)
         {
-            writer.writeByte((byte) id);
+            writer.writeByte(idToOneByte(id));
         }
     }
 
-    private static class ShortId extends StringWriterV1
+    private static class TwoBytes extends StringWriterV1
     {
-        private ShortId(ObjectIntMap<String> stringIndex)
+        private TwoBytes(ObjectIntMap<String> stringIndex)
         {
             super(stringIndex);
         }
@@ -105,7 +109,7 @@ abstract class StringWriterV1 extends BaseStringIndex implements StringWriter
             short[] ids = new short[length];
             for (int i = 0; i < length; i++)
             {
-                ids[i] = (short) getStringId(strings[i]);
+                ids[i] = idToTwoBytes(getStringId(strings[i]));
             }
             writer.writeShortArray(ids);
         }
@@ -113,13 +117,39 @@ abstract class StringWriterV1 extends BaseStringIndex implements StringWriter
         @Override
         protected void writeStringId(Writer writer, int id)
         {
-            writer.writeShort((short) id);
+            writer.writeShort(idToTwoBytes(id));
         }
     }
 
-    private static class IntId extends StringWriterV1
+    private static class ThreeBytes extends StringWriterV1
     {
-        private IntId(ObjectIntMap<String> stringIndex)
+        private ThreeBytes(ObjectIntMap<String> stringIndex)
+        {
+            super(stringIndex);
+        }
+
+        @Override
+        public void writeStringArray(Writer writer, String[] strings)
+        {
+            int length = strings.length;
+            byte[] ids = new byte[length * 3];
+            for (int i = 0, j = 0; i < length; i++, j += 3)
+            {
+                idToThreeBytes(getStringId(strings[i]), ids, j);
+            }
+            writer.writeByteArray(ids);
+        }
+
+        @Override
+        protected void writeStringId(Writer writer, int id)
+        {
+            writer.writeBytes(idToThreeBytes(id));
+        }
+    }
+
+    private static class FourBytes extends StringWriterV1
+    {
+        private FourBytes(ObjectIntMap<String> stringIndex)
         {
             super(stringIndex);
         }
@@ -145,6 +175,9 @@ abstract class StringWriterV1 extends BaseStringIndex implements StringWriter
 
     static StringWriter writeStringIndex(Writer writer, Iterable<String> strings)
     {
+        long start = System.nanoTime();
+        LOGGER.debug("Starting writing string index");
+
         // Prepare string set
         MutableSet<String> stringSet = Iterate.reject(strings, BaseStringIndex::isSpecialString, Sets.mutable.empty());
 
@@ -155,15 +188,46 @@ abstract class StringWriterV1 extends BaseStringIndex implements StringWriter
         // Build string id index
         MutableObjectIntMap<String> stringIndex = ObjectIntMaps.mutable.ofInitialCapacity(stringArray.length);
         ArrayIterate.forEachWithIndex(stringArray, stringIndex::put);
-        StringWriterV1 stringWriter = (stringArray.length <= Byte.MAX_VALUE) ?
-                                      new ByteId(stringIndex) :
-                                      ((stringArray.length <= Short.MAX_VALUE) ?
-                                       new ShortId(stringIndex) :
-                                       new IntId(stringIndex));
+        StringWriterV1 stringWriter = newStringWriter(stringIndex);
+
+        long buildEnd = System.nanoTime();
+        LOGGER.debug("Finished building string index with {} strings in {}s", stringArray.length, (buildEnd - start) / 1_000_000_000.0);
 
         // Serialize string index
         stringWriter.serialize(writer, stringArray);
 
+        long end = System.nanoTime();
+        LOGGER.debug("Finished serializing string index with {} strings in {}s", stringArray.length, (end - buildEnd) / 1_000_000_000.0);
+        LOGGER.debug("Finished writing string index with {} strings in {}s", stringArray.length, (end - start) / 1_000_000_000.0);
         return stringWriter;
+    }
+
+    private static StringWriterV1 newStringWriter(ObjectIntMap<String> stringIndex)
+    {
+        int width = getStringIdByteWidth(stringIndex.size());
+        LOGGER.debug("String id byte width: {}", width);
+        switch (width)
+        {
+            case 1:
+            {
+                return new OneByte(stringIndex);
+            }
+            case 2:
+            {
+                return new TwoBytes(stringIndex);
+            }
+            case 3:
+            {
+                return new ThreeBytes(stringIndex);
+            }
+            case 4:
+            {
+                return new FourBytes(stringIndex);
+            }
+            default:
+            {
+                throw new RuntimeException("Unsupported id byte width: " + width);
+            }
+        }
     }
 }

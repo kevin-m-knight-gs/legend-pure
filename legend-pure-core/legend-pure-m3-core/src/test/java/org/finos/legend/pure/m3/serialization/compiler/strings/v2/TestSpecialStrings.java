@@ -1,4 +1,4 @@
-// Copyright 2024 Goldman Sachs
+// Copyright 2025 Goldman Sachs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.finos.legend.pure.m3.serialization.compiler.strings.v1;
+package org.finos.legend.pure.m3.serialization.compiler.strings.v2;
 
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Sets;
@@ -213,9 +213,9 @@ public class TestSpecialStrings
         Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(1));
         Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(10));
         Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-87));
-        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-89));
-        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-530));
-        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-12920));
+        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-129));
+        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-130));
+        Assert.assertThrows(ArrayIndexOutOfBoundsException.class, () -> BaseStringIndex.getSpecialString(-1340));
     }
 
     @Test
@@ -229,9 +229,9 @@ public class TestSpecialStrings
         Assert.assertFalse(BaseStringIndex.isSpecialStringId(0));
         Assert.assertFalse(BaseStringIndex.isSpecialStringId(1));
         Assert.assertFalse(BaseStringIndex.isSpecialStringId(-87));
-        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-88));
-        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-129));
-        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-13550));
+        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-100));
+        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-200));
+        Assert.assertFalse(BaseStringIndex.isSpecialStringId(-3241));
     }
 
     @Test
@@ -324,7 +324,7 @@ public class TestSpecialStrings
                 "meta::pure::metamodel::multiplicity::PureZero",
                 "meta::pure::metamodel::multiplicity::ZeroMany",
                 "meta::pure::metamodel::multiplicity::ZeroOne"
-                );
+        );
 
         MutableList<String> actual = Lists.mutable.empty();
         BaseStringIndex.forEachSpecialString(actual::add);

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package org.finos.legend.pure.m3.serialization.compiler.strings.v1;
+package org.finos.legend.pure.m3.serialization.compiler.strings.v3;
 
 import org.eclipse.collections.api.map.primitive.MutableObjectIntMap;
 import org.eclipse.collections.api.map.primitive.ObjectIntMap;
@@ -21,11 +21,31 @@ import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.RepositoryCodeStorage;
+import org.finos.legend.pure.m4.serialization.Reader;
+import org.finos.legend.pure.m4.serialization.Writer;
 
 import java.util.function.Consumer;
 
 abstract class BaseStringIndex
 {
+    static final int STRING_TYPE_MASK = 0b1110_0000;
+    static final int SIMPLE_STRING = 0b0000_0000;
+    static final int SOURCE_PATH_STRING = 0b1000_0000;
+    static final int PACKAGE_PATH_STRING = 0b0100_0000;
+    static final int DOT_DELIMITED_STRING = 0b0010_0000;
+    static final int BRACKET_INDEXED_STRING = 0b1100_0000;
+    static final int IMPORT_GROUP_STRING = 0b0110_0000;
+
+    static final int BRACKET_INDEX_TYPE_MASK = 0b0000_1100;
+    static final int SIMPLE_BRACKET_INDEX = 0b0000_0000;
+    static final int QUOTED_BRACKET_INDEX = 0b0000_1000;
+    static final int KEYED_BRACKET_INDEX = 0b0000_0100;
+
+    static final int INT_WIDTH_MASK = 0b0000_0011;
+    static final int INT_INT = 0b0000_0000;
+    static final int SHORT_INT = 0b0000_0001;
+    static final int BYTE_INT = 0b0000_0010;
+
     private static final String[] SPECIAL_STRINGS = {
             // null and empty string
             null, "",
@@ -56,7 +76,9 @@ abstract class BaseStringIndex
             // M3 Pure parser name
             "Pure",
             // name multiplicities
-            M3Paths.OneMany, M3Paths.PureOne, M3Paths.PureZero, M3Paths.ZeroMany, M3Paths.ZeroOne
+            M3Paths.OneMany, M3Paths.PureOne, M3Paths.PureZero, M3Paths.ZeroMany, M3Paths.ZeroOne,
+            // import group names
+            "import"
     };
     private static final ObjectIntMap<String> SPECIAL_STRING_IDS = buildSpecialStringsToIdMap();
 
@@ -65,6 +87,8 @@ abstract class BaseStringIndex
     private static final int MAX_1BYTE_ID = 0xff - SPECIAL_STRINGS.length;
     private static final int MAX_2BYTE_ID = 0xffff - SPECIAL_STRINGS.length;
     private static final int MAX_3BYTE_ID = 0xffffff - SPECIAL_STRINGS.length;
+
+    // Special strings
 
     /**
      * Return whether the given id is a special string id. Special string ids are always negative.
@@ -141,7 +165,6 @@ abstract class BaseStringIndex
         return map;
     }
 
-
     static int getStringIdByteWidth(int count)
     {
         return (count <= MAX_1BYTE_ID) ? 1 :
@@ -198,5 +221,63 @@ abstract class BaseStringIndex
         return (Byte.toUnsignedInt(b1) |
                 (Byte.toUnsignedInt(b2) << 8) |
                 (Byte.toUnsignedInt(b3) << 16)) - SPECIAL_STRINGS.length;
+    }
+
+    // int width
+
+    static int getIntWidth(int i)
+    {
+        return (i < 0) ?
+               (i >= Byte.MIN_VALUE) ? BYTE_INT : ((i >= Short.MIN_VALUE) ? SHORT_INT : INT_INT) :
+               (i <= Byte.MAX_VALUE) ? BYTE_INT : ((i <= Short.MAX_VALUE) ? SHORT_INT : INT_INT);
+    }
+
+    static void writeIntOfWidth(Writer writer, int i, int intWidth)
+    {
+        switch (intWidth & INT_WIDTH_MASK)
+        {
+            case BYTE_INT:
+            {
+                writer.writeByte((byte) i);
+                return;
+            }
+            case SHORT_INT:
+            {
+                writer.writeShort((short) i);
+                return;
+            }
+            case INT_INT:
+            {
+                writer.writeInt(i);
+                return;
+            }
+            default:
+            {
+                throw new RuntimeException(String.format("Unknown int type code: %02x", intWidth & INT_WIDTH_MASK));
+            }
+        }
+    }
+
+    static int readIntOfWidth(Reader reader, int intType)
+    {
+        switch (intType & INT_WIDTH_MASK)
+        {
+            case BYTE_INT:
+            {
+                return reader.readByte();
+            }
+            case SHORT_INT:
+            {
+                return reader.readShort();
+            }
+            case INT_INT:
+            {
+                return reader.readInt();
+            }
+            default:
+            {
+                throw new RuntimeException(String.format("Unknown int type code: %02x", intType & INT_WIDTH_MASK));
+            }
+        }
     }
 }
