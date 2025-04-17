@@ -25,7 +25,9 @@ public class FilePathTools
 
     /**
      * Convert the given string to a file path by splitting on the given delimiter and using the given file system
-     * separator. If provided, the file extension will be appended at the end.
+     * separator. If provided, the file extension will be appended at the end. See
+     * {@link #appendFilePathName(Appendable, String, int, int, String)} for more details on how file names are
+     * processed.
      *
      * @param string      string
      * @param delimiter   delimiter to split string on
@@ -40,7 +42,9 @@ public class FilePathTools
 
     /**
      * Convert the given string to a file path by splitting on the given delimiter and using the given file system
-     * separator. If provided, the file extension will be appended at the end.
+     * separator. If provided, the file extension will be appended at the end. See
+     * {@link #appendFilePathName(Appendable, String, int, int, String)} for more details on how file names are
+     * processed.
      *
      * @param appendable  appendable
      * @param string      string
@@ -145,8 +149,8 @@ public class FilePathTools
      * @param end        end index (exclusive)
      * @param extension  optional file extension
      * @param <T>        appendable type
-     * @throws IllegalArgumentException if the extension is too long
      * @return given appendable
+     * @throws IllegalArgumentException if the extension is too long
      */
     public static <T extends Appendable> T appendFilePathName(T appendable, String string, int start, int end, String extension)
     {
