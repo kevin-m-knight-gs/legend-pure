@@ -78,7 +78,7 @@ public class MetadataEagerCompilerEventHandler implements CompilerEventHandlerMe
     @Override
     public void buildMetadata(RichIterable<CoreInstance> newInstances)
     {
-        this.metadataEager = new MetadataEager(new M3ProcessorSupport(this.repository));
+        this.metadataEager.addInstances(newInstances);
     }
 
     @Override
@@ -111,7 +111,7 @@ public class MetadataEagerCompilerEventHandler implements CompilerEventHandlerMe
     @Override
     public void invalidate(RichIterable<? extends CoreInstance> consolidatedCoreInstances)
     {
-        this.metadataEager.clear();
+        this.metadataEager.invalidateCoreInstances(consolidatedCoreInstances);
     }
 
     @Override

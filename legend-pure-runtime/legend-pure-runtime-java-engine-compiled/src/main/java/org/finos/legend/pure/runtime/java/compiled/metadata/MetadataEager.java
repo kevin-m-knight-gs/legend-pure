@@ -17,13 +17,16 @@ package org.finos.legend.pure.runtime.java.compiled.metadata;
 import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
+import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ImmutableList;
+import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.ConcurrentMutableMap;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
 import org.finos.legend.pure.m3.exception.PureExecutionException;
 import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolver;
 import org.finos.legend.pure.m3.serialization.compiler.reference.v1.ReferenceIdExtensionV1;
@@ -49,7 +52,7 @@ public final class MetadataEager implements Metadata
     @Override
     public void startTransaction()
     {
-        this.transaction.set(new Cache());
+        this.transaction.set(new Cache(this.cache));
     }
 
     @Override
@@ -69,31 +72,6 @@ public final class MetadataEager implements Metadata
         this.transaction.remove();
     }
 
-    public void clear()
-    {
-        Cache transactionCache = this.transaction.get();
-        if (transactionCache == null)
-        {
-            this.cache.clear();
-        }
-        else
-        {
-            this.transaction.set(new Cache());
-        }
-    }
-
-    public void reset()
-    {
-        this.transaction.remove();
-        this.cache.clear();
-    }
-
-    @Deprecated
-    public void addChild(String packageClassifier, String packageId, String objectClassifier, String instanceId)
-    {
-        // nothing to do
-    }
-
     @Override
     public CoreInstance getEnum(String enumerationName, String enumName)
     {
@@ -106,19 +84,6 @@ public final class MetadataEager implements Metadata
             throw new PureExecutionException("Enum " + enumName + " of Enumeration " + enumerationName + " does not exist", e);
         }
     }
-
-    @Deprecated
-    public void invalidateCoreInstances(RichIterable<? extends CoreInstance> instances, ProcessorSupport processorSupport)
-    {
-        clear();
-    }
-
-    @Deprecated
-    public void add(String classifier, String id, CoreInstance instance)
-    {
-        // nothing to do
-    }
-
 
     @Override
     public CoreInstance getMetadata(String classifier, String id)
@@ -138,16 +103,32 @@ public final class MetadataEager implements Metadata
     @Override
     public MapIterable<String, CoreInstance> getMetadata(String classifier)
     {
+        ImmutableList<CoreInstance> instances = getCache().getClassifierInstances(classifier);
+        if (instances.isEmpty())
+        {
+            return Maps.immutable.empty();
+        }
+
         IdBuilder idBuilder = IdBuilder.newIdBuilder(this.processorSupport, true);
-        MutableMap<String, CoreInstance> instances = Maps.mutable.empty();
-        getClassifierInstances(classifier).forEach(inst -> instances.put(idBuilder.buildId(inst), inst));
-        return instances;
+        MutableMap<String, CoreInstance> byId = Maps.mutable.ofInitialCapacity(instances.size());
+        instances.forEach(inst -> byId.put(idBuilder.buildId(inst), inst));
+        return byId;
     }
 
     @Override
     public RichIterable<CoreInstance> getClassifierInstances(String classifier)
     {
         return getCache().getClassifierInstances(classifier);
+    }
+
+    public void addInstances(RichIterable<? extends CoreInstance> instances)
+    {
+        getCache().addInstances(instances);
+    }
+
+    public void invalidateCoreInstances(RichIterable<? extends CoreInstance> instances)
+    {
+        getCache().invalidateInstances(instances);
     }
 
     @Deprecated
@@ -167,8 +148,20 @@ public final class MetadataEager implements Metadata
 
     private class Cache
     {
-        private final ConcurrentMutableMap<String, CoreInstance> idCache = ConcurrentHashMap.newMap();
-        private final ConcurrentMutableMap<String, ImmutableList<CoreInstance>> classifierCache = ConcurrentHashMap.newMap();
+        private final ConcurrentMutableMap<String, CoreInstance> idCache;
+        private final ConcurrentMutableMap<String, ImmutableList<CoreInstance>> classifierCache;
+
+        Cache()
+        {
+            this.idCache = ConcurrentHashMap.newMap();
+            this.classifierCache = ConcurrentHashMap.newMap();
+        }
+
+        Cache(Cache source)
+        {
+            this.idCache = ConcurrentHashMap.newMap(source.idCache);
+            this.classifierCache = ConcurrentHashMap.newMap(source.classifierCache);
+        }
 
         CoreInstance getById(String id)
         {
@@ -182,8 +175,48 @@ public final class MetadataEager implements Metadata
 
         void clear()
         {
+            clearIdCache();
+            clearClassifierCache();
+        }
+
+        void clearIdCache()
+        {
             this.idCache.clear();
+        }
+
+        void clearClassifierCache()
+        {
             this.classifierCache.clear();
+        }
+
+        void clearClassifierCache(String classifierId)
+        {
+            this.classifierCache.remove(classifierId);
+        }
+
+        void addInstances(Iterable<? extends CoreInstance> newInstances)
+        {
+            MutableMap<CoreInstance, MutableList<CoreInstance>> byClassifier = Maps.mutable.empty();
+            newInstances.forEach(i -> byClassifier.getIfAbsentPut(getClassifier(i), Lists.mutable::empty).add(i));
+            byClassifier.forEachKeyValue((classifier, classifierInstances) ->
+            {
+                String classifierId = PackageableElement.getUserPathForPackageableElement(classifier);
+                ImmutableList<CoreInstance> cachedInstances = this.classifierCache.get(classifierId);
+                if (cachedInstances != null)
+                {
+                    this.classifierCache.put(classifierId, cachedInstances.newWithAll(classifierInstances));
+                }
+            });
+        }
+
+        void invalidateInstances(RichIterable<? extends CoreInstance> toRemove)
+        {
+            clearIdCache();
+            toRemove.collect(this::getClassifier, Sets.mutable.empty()).forEach(classifier ->
+            {
+                String classifierId = PackageableElement.getUserPathForPackageableElement(classifier);
+                clearClassifierCache(classifierId);
+            });
         }
 
         private CoreInstance resolveId(String id)
@@ -206,10 +239,15 @@ public final class MetadataEager implements Metadata
 
             return GraphNodeIterable.builder()
                     .withStartingNodes(GraphTools.getTopLevels(MetadataEager.this.processorSupport))
-                    .withNodeFilter(node -> GraphWalkFilterResult.cont(classifierInstance == MetadataEager.this.processorSupport.getClassifier(node)))
+                    .withNodeFilter(node -> GraphWalkFilterResult.cont(classifierInstance == getClassifier(node)))
                     .build()
                     .toList()
                     .toImmutable();
+        }
+
+        private CoreInstance getClassifier(CoreInstance instance)
+        {
+            return MetadataEager.this.processorSupport.getClassifier(instance);
         }
     }
 }
