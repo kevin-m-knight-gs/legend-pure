@@ -229,9 +229,18 @@ public class MetadataIndex
 
     // Builder
 
+    public static Builder builder()
+    {
+        return new Builder();
+    }
+
     public static class Builder
     {
         private final MutableList<ModuleMetadata> modules = Lists.mutable.empty();
+
+        private Builder()
+        {
+        }
 
         public Builder withModule(ModuleMetadata module)
         {
