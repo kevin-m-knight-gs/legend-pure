@@ -53,12 +53,6 @@ public abstract class Reference extends ValueOrReference
             return this.id.hashCode();
         }
 
-        @Override
-        public String toString()
-        {
-            return getClass().getSimpleName() + "{id=" + this.id + "}";
-        }
-
         public String getId()
         {
             return this.id;
@@ -68,6 +62,12 @@ public abstract class Reference extends ValueOrReference
         public <V> V visit(ValueOrReferenceVisitor<V> visitor)
         {
             return visitor.visit(this);
+        }
+
+        @Override
+        StringBuilder appendString(StringBuilder builder)
+        {
+            return builder.append("ExternalReference{id=").append(this.id).append('}');
         }
     }
 
@@ -92,12 +92,6 @@ public abstract class Reference extends ValueOrReference
             return this.id;
         }
 
-        @Override
-        public String toString()
-        {
-            return getClass().getSimpleName() + "{id=" + this.id + "}";
-        }
-
         public int getId()
         {
             return this.id;
@@ -107,6 +101,12 @@ public abstract class Reference extends ValueOrReference
         public <V> V visit(ValueOrReferenceVisitor<V> visitor)
         {
             return visitor.visit(this);
+        }
+
+        @Override
+        StringBuilder appendString(StringBuilder builder)
+        {
+            return builder.append("InternalReference{id=").append(this.id).append('}');
         }
     }
 }

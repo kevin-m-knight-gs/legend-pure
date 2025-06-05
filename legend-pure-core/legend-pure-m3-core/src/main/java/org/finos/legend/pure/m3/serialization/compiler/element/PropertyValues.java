@@ -55,11 +55,22 @@ public abstract class PropertyValues
     @Override
     public String toString()
     {
-        StringBuilder builder = new StringBuilder(PropertyValues.class.getSimpleName())
-                .append("{property=").append(getPropertyName());
+        return appendString(new StringBuilder(128)).toString();
+    }
+
+    StringBuilder appendString(StringBuilder builder)
+    {
+        builder.append("PropertyValues{property=").append(getPropertyName());
         getRealKey().appendString(builder, " realKey=[", ", ", "]");
-        getValues().appendString(builder, " values=[", ", ", "]}");
-        return builder.toString();
+        builder.append(" values=[");
+        getValues().forEach(v -> v.appendString(builder).append(", "));
+        builder.setLength(builder.length() - 2);
+        return builder.append("]}");
+    }
+
+    public static PropertyValues newPropertyValues(String propertyName, ListIterable<String> realKey, ValueOrReference value)
+    {
+        return newPropertyValues(propertyName, realKey, Lists.immutable.with(value));
     }
 
     public static PropertyValues newPropertyValues(String propertyName, ListIterable<String> realKey, ValueOrReference... values)
@@ -69,6 +80,9 @@ public abstract class PropertyValues
 
     public static PropertyValues newPropertyValues(String propertyName, ListIterable<String> realKey, ListIterable<ValueOrReference> values)
     {
+        Objects.requireNonNull(propertyName);
+        Objects.requireNonNull(realKey);
+        Objects.requireNonNull(values);
         return new PropertyValues()
         {
             @Override
