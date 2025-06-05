@@ -59,14 +59,19 @@ public abstract class Value<T> extends ValueOrReference
     }
 
     @Override
-    public String toString()
+    StringBuilder appendString(StringBuilder builder)
     {
-        StringBuilder builder = new StringBuilder("Value{classifier=").append(getClassifierPath());
+        builder.append("Value{classifier=").append(getClassifierPath());
         if (this.value != null)
         {
-            builder.append(" value=").append(this.value);
+            appendValueString(builder.append(" value="));
         }
-        return builder.append('}').toString();
+        return builder.append('}');
+    }
+
+    void appendValueString(StringBuilder builder)
+    {
+        builder.append(this.value);
     }
 
     public abstract String getClassifierPath();
@@ -228,6 +233,12 @@ public abstract class Value<T> extends ValueOrReference
         {
             return visitor.visit(this);
         }
+
+        @Override
+        void appendValueString(StringBuilder builder)
+        {
+            getValue().appendString(builder);
+        }
     }
 
     public static class DateTimeValue extends Value<PureDate>
@@ -248,6 +259,12 @@ public abstract class Value<T> extends ValueOrReference
         {
             return visitor.visit(this);
         }
+
+        @Override
+        void appendValueString(StringBuilder builder)
+        {
+            getValue().appendString(builder);
+        }
     }
 
     public static class StrictDateValue extends Value<PureDate>
@@ -267,6 +284,12 @@ public abstract class Value<T> extends ValueOrReference
         public <V> V visit(ValueOrReferenceVisitor<V> visitor)
         {
             return visitor.visit(this);
+        }
+
+        @Override
+        void appendValueString(StringBuilder builder)
+        {
+            getValue().appendString(builder);
         }
     }
 
@@ -370,6 +393,12 @@ public abstract class Value<T> extends ValueOrReference
         {
             return visitor.visit(this);
         }
+
+        @Override
+        void appendValueString(StringBuilder builder)
+        {
+            getValue().writeString(builder);
+        }
     }
 
     public static class StringValue extends Value<String>
@@ -389,6 +418,12 @@ public abstract class Value<T> extends ValueOrReference
         public <V> V visit(ValueOrReferenceVisitor<V> visitor)
         {
             return visitor.visit(this);
+        }
+
+        @Override
+        void appendValueString(StringBuilder builder)
+        {
+            builder.append('\'').append(getValue()).append('\'');
         }
     }
 }

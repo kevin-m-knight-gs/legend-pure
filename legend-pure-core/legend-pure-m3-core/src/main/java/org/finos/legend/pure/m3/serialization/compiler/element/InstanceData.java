@@ -98,7 +98,7 @@ public class InstanceData
     @Override
     public String toString()
     {
-        return appendString(new StringBuilder()).toString();
+        return appendString(new StringBuilder(128)).toString();
     }
 
     StringBuilder appendString(StringBuilder builder)
@@ -120,7 +120,32 @@ public class InstanceData
                 .append(" propertyValues=[");
         if (this.propertyValues.notEmpty())
         {
-            this.propertyValues.forEach(pv -> pv.getValues().appendString(builder.append(pv.getPropertyName()), "=[", ", ", "], "));
+            this.propertyValues.forEach(pv ->
+            {
+                builder.append(pv.getPropertyName());
+                ListIterable<ValueOrReference> values = pv.getValues();
+                switch (values.size())
+                {
+                    case 0:
+                    {
+                        builder.append("=[]");
+                        break;
+                    }
+                    case 1:
+                    {
+                        values.get(0).appendString(builder.append('='));
+                        break;
+                    }
+                    default:
+                    {
+                        builder.append("=[");
+                        values.forEach(v -> v.appendString(builder).append(", "));
+                        builder.setLength(builder.length() - 2);
+                        builder.append(']');
+                    }
+                }
+                builder.append(", ");
+            });
             builder.setLength(builder.length() - 2);
         }
         return builder.append("]}");
