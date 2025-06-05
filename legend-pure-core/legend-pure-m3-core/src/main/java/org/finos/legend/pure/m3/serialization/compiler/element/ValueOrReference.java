@@ -20,5 +20,13 @@ public abstract class ValueOrReference
     {
     }
 
+    @Override
+    public String toString()
+    {
+        return appendString(new StringBuilder(64)).toString();
+    }
+
     public abstract <V> V visit(ValueOrReferenceVisitor<V> visitor);
+
+    abstract StringBuilder appendString(StringBuilder builder);
 }
