@@ -21,7 +21,7 @@ public class FilePathTools
     // UTF-16 uses 2 bytes per Java char, possibly plus a byte order marker of 2 bytes
     // To be conservative, file names should be no more than 255 bytes in UTF-16; so 126 is the length limit for names (126 * 2 + 2 = 254)
     private static final int NAME_LEN_LIMIT = 126;
-    private static final int SUFFIX_LEN = 16;
+    private static final int SUFFIX_LEN = 13;
 
     /**
      * Convert the given string to a file path by splitting on the given delimiter and using the given file system
@@ -197,6 +197,6 @@ public class FilePathTools
         {
             value = (31 * value) + (cp = string.codePointAt(i));
         }
-        return Long.toHexString(value);
+        return Long.toUnsignedString(value, 32);
     }
 }
