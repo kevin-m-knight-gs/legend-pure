@@ -66,6 +66,7 @@ public class ClassProcessor
             if (isLazy(_class))
             {
                 processorContext.addJavaSource(ClassLazyImplProcessor.buildImplementation(_package, imports, classGenericType, processorContext, processorSupport));
+                ClassNewLazyImplProcessor.buildImplementation(_package, classGenericType, processorContext, processorSupport, processorContext::addJavaSource);
             }
         }
 
