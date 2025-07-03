@@ -26,6 +26,7 @@ import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.impl.Counter;
 import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
+import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.JavaPackageAndImportBuilder;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
@@ -102,8 +103,17 @@ public class MetadataLazy implements Metadata
     @Override
     public CoreInstance getMetadata(String classifier, String id)
     {
+        if (!hasClassifier(classifier))
+        {
+            return null;
+        }
+        // for backward compatibility
+        if (id.startsWith("Root::"))
+        {
+            id = id.substring(6);
+        }
         String hashedId = IdBuilder.hashToBase64String(id);
-        return hasClassifier(classifier) ? toJavaObject(classifier, hashedId) : null;
+        return toJavaObject(classifier, hashedId);
     }
 
     @Override
@@ -121,19 +131,20 @@ public class MetadataLazy implements Metadata
     @Override
     public CoreInstance getEnum(String enumerationName, String enumName)
     {
-        String hashedEnumName = IdBuilder.hashToBase64String(enumName);
         if (!hasClassifier(enumerationName))
         {
             throw new RuntimeException("Cannot find enum '" + enumName + "' in enumeration '" + enumerationName + "': unknown enumeration");
         }
 
+        String enumId = enumerationName + "." + M3Properties.values + "['" + enumName + "']";
+        String hashedEnumId = IdBuilder.hashToBase64String(enumId);
         ConcurrentMutableMap<String, CoreInstance> cache = getClassifierInstanceCache(enumerationName);
-        CoreInstance result = cache.get(hashedEnumName);
+        CoreInstance result = cache.get(hashedEnumId);
         if (result == null)
         {
             //might not have loaded yet, so request full load and try again:
             loadAllClassifierInstances(enumerationName);
-            result = cache.get(hashedEnumName);
+            result = cache.get(hashedEnumId);
             if (result == null)
             {
                 StringBuilder builder = new StringBuilder("Cannot find enum '").append(enumName).append("' in enumeration '").append(enumerationName).append("' unknown enum value");
