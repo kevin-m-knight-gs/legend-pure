@@ -96,6 +96,11 @@ public abstract class ElementLoader
         return value;
     }
 
+    public ReferenceIdResolvers getReferenceIdResolvers()
+    {
+        return this.referenceIds;
+    }
+
     private boolean elementPresentInMetadata(String path)
     {
         return this.index.hasElement(path) || this.index.hasPackage(path);
@@ -258,6 +263,12 @@ public abstract class ElementLoader
         public Builder withAvailableReferenceIdExtensions(ClassLoader classLoader)
         {
             this.referenceIdsBuilder.loadExtensions(classLoader);
+            return this;
+        }
+
+        public Builder withDefaultReferenceIdVersion(Integer version)
+        {
+            this.referenceIdsBuilder.setDefaultVersion(version);
             return this;
         }
 
