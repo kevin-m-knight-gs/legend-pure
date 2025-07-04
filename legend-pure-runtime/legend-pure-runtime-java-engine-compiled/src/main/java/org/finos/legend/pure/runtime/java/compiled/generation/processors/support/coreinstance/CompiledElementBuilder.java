@@ -235,12 +235,12 @@ public class CompiledElementBuilder implements ElementBuilder
         return (Class<? extends T>) this.classLoader.loadClass(javaClassName);
     }
 
-    static ElementBuilder newElementBuilder(ClassLoader classLoader, PrimitiveValueResolver primitiveValueResolver)
+    public static ElementBuilder newElementBuilder(ClassLoader classLoader, PrimitiveValueResolver primitiveValueResolver)
     {
         return new CompiledElementBuilder(classLoader, primitiveValueResolver);
     }
 
-    static ElementBuilder newElementBuilder(ClassLoader classLoader)
+    public static ElementBuilder newElementBuilder(ClassLoader classLoader)
     {
         return newElementBuilder(classLoader, null);
     }
