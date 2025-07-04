@@ -1,0 +1,208 @@
+// Copyright 2025 Goldman Sachs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package org.finos.legend.pure.runtime.java.compiled.metadata;
+
+import org.eclipse.collections.api.RichIterable;
+import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Maps;
+import org.eclipse.collections.api.factory.Sets;
+import org.eclipse.collections.api.list.ImmutableList;
+import org.eclipse.collections.api.map.MapIterable;
+import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.set.MutableSet;
+import org.eclipse.collections.impl.utility.LazyIterate;
+import org.finos.legend.pure.m3.navigation.M3Paths;
+import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.serialization.compiler.element.ConcreteElementDeserializer;
+import org.finos.legend.pure.m3.serialization.compiler.element.ElementLoader;
+import org.finos.legend.pure.m3.serialization.compiler.file.FileDeserializer;
+import org.finos.legend.pure.m3.serialization.compiler.file.FilePathProvider;
+import org.finos.legend.pure.m3.serialization.compiler.metadata.ConcreteElementMetadata;
+import org.finos.legend.pure.m3.serialization.compiler.metadata.MetadataIndex;
+import org.finos.legend.pure.m3.serialization.compiler.metadata.ModuleMetadataSerializer;
+import org.finos.legend.pure.m3.serialization.compiler.strings.StringIndexer;
+import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.CompiledElementBuilder;
+
+import java.nio.file.Path;
+import java.util.Objects;
+
+public class MetadataNewLazy implements Metadata
+{
+    private final MetadataIndex metadataIndex;
+    private final ElementLoader elementLoader;
+
+    private MetadataNewLazy(MetadataIndex metadataIndex, ElementLoader elementLoader)
+    {
+        this.metadataIndex = metadataIndex;
+        this.elementLoader = elementLoader;
+    }
+
+    @Override
+    public void startTransaction()
+    {
+        throw new UnsupportedOperationException("Not supported");
+    }
+
+    @Override
+    public void commitTransaction()
+    {
+        throw new UnsupportedOperationException("Not supported");
+    }
+
+    @Override
+    public void rollbackTransaction()
+    {
+        throw new UnsupportedOperationException("Not supported");
+    }
+
+    @Override
+    public CoreInstance getMetadata(String classifier, String id)
+    {
+        // TODO should we validate the classifier?
+        return getElement(id);
+    }
+
+    @Override
+    public MapIterable<String, CoreInstance> getMetadata(String classifier)
+    {
+        if (M3Paths.Package.equals(classifier))
+        {
+            MutableMap<String, CoreInstance> elements = Maps.mutable.empty();
+            this.metadataIndex.forEachPackage(p -> elements.put(p.getPath(), this.elementLoader.loadElement(p.getPath())));
+            return elements;
+        }
+        ImmutableList<ConcreteElementMetadata> metadata = this.metadataIndex.getClassifierElements(classifier);
+        if ((metadata == null) || metadata.isEmpty())
+        {
+            return Maps.immutable.empty();
+        }
+        MutableMap<String, CoreInstance> elements = Maps.mutable.ofInitialCapacity(metadata.size());
+        metadata.forEach(md -> elements.put(md.getPath(), this.elementLoader.loadElement(md.getPath())));
+        return elements;
+    }
+
+    @Override
+    public RichIterable<CoreInstance> getClassifierInstances(String classifier)
+    {
+        if (M3Paths.Package.equals(classifier))
+        {
+            return LazyIterate.collect(this.metadataIndex.getAllPackagePaths(), this.elementLoader::loadElement);
+        }
+        ImmutableList<ConcreteElementMetadata> metadata = this.metadataIndex.getClassifierElements(classifier);
+        return ((metadata == null) || metadata.isEmpty()) ?
+               Lists.immutable.empty() :
+               metadata.asLazy().collect(md -> this.elementLoader.loadElement(md.getPath()));
+    }
+
+    @Override
+    public CoreInstance getEnum(String enumerationName, String enumName)
+    {
+        String enumId = enumerationName + "." + M3Properties.values + "['" + enumName + "']";
+        return getElement(enumId);
+    }
+
+    public CoreInstance getElement(String id)
+    {
+        return this.elementLoader.getReferenceIdResolvers().resolver().resolveReference(id);
+    }
+
+    public static Builder builder()
+    {
+        return new Builder();
+    }
+
+    public static class Builder
+    {
+        private final MutableSet<String> repositories = Sets.mutable.empty();
+        private ClassLoader classLoader;
+        private Path directory;
+
+        private Builder()
+        {
+        }
+
+        public Builder withClassLoader(ClassLoader classLoader)
+        {
+            this.classLoader = classLoader;
+            return this;
+        }
+
+        public Builder withDirectory(Path directory)
+        {
+            this.directory = directory;
+            return this;
+        }
+
+        public Builder withRepository(String repository)
+        {
+            this.repositories.add(Objects.requireNonNull(repository));
+            return this;
+        }
+
+        public Builder withRepositories(Iterable<String> repositories)
+        {
+            repositories.forEach(this::withRepository);
+            return this;
+        }
+
+        public MetadataNewLazy build()
+        {
+            Objects.requireNonNull(this.classLoader, "class loader must be provided");
+            if (this.repositories.isEmpty())
+            {
+                throw new IllegalStateException("At least one repository must be provided");
+            }
+
+            StringIndexer stringIndexer = StringIndexer.builder()
+                    .withLoadedExtensions(this.classLoader)
+                    .build();
+            ConcreteElementDeserializer elementDeserializer = ConcreteElementDeserializer.builder()
+                    .withLoadedExtensions(this.classLoader)
+                    .withStringIndexer(stringIndexer)
+                    .build();
+            ModuleMetadataSerializer moduleMetadataSerializer = ModuleMetadataSerializer.builder()
+                    .withLoadedExtensions(this.classLoader)
+                    .withStringIndexer(stringIndexer)
+                    .build();
+            FileDeserializer fileDeserializer = FileDeserializer.builder()
+                    .withFilePathProvider(FilePathProvider.builder().withLoadedExtensions(this.classLoader).build())
+                    .withSerializers(elementDeserializer, moduleMetadataSerializer)
+                    .build();
+
+            MetadataIndex metadataIndex = MetadataIndex.builder()
+                    .withModules(this.repositories.asLazy().collect(repo -> (this.directory == null) ?
+                                                                            fileDeserializer.deserializeModuleMetadata(this.classLoader, repo) :
+                                                                            fileDeserializer.deserializeModuleMetadata(this.directory, repo)))
+                    .build();
+            ElementLoader.Builder elementLoaderBuilder = ElementLoader.builder()
+                    .withMetadataIndex(metadataIndex)
+                    .withFileDeserializer(fileDeserializer)
+                    .withElementBuilder(CompiledElementBuilder.newElementBuilder(this.classLoader))
+                    .withAvailableReferenceIdExtensions(this.classLoader)
+                    .withDefaultReferenceIdVersion(1);
+            if (this.directory == null)
+            {
+                elementLoaderBuilder.withClassLoader(this.classLoader);
+            }
+            else
+            {
+                elementLoaderBuilder.withDirectory(this.directory);
+            }
+
+            return new MetadataNewLazy(metadataIndex, elementLoaderBuilder.build());
+        }
+    }
+}
