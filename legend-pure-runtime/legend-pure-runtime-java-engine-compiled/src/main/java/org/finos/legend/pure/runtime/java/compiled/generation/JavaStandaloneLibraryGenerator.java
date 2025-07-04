@@ -23,6 +23,14 @@ import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.impl.utility.Iterate;
+import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.serialization.compiler.PureCompilerSerializer;
+import org.finos.legend.pure.m3.serialization.compiler.element.ConcreteElementSerializer;
+import org.finos.legend.pure.m3.serialization.compiler.file.FilePathProvider;
+import org.finos.legend.pure.m3.serialization.compiler.file.FileSerializer;
+import org.finos.legend.pure.m3.serialization.compiler.metadata.ModuleMetadataGenerator;
+import org.finos.legend.pure.m3.serialization.compiler.metadata.ModuleMetadataSerializer;
+import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProviders;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.composite.CompositeCodeStorage;
 import org.finos.legend.pure.m3.serialization.runtime.Message;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
@@ -141,6 +149,52 @@ public class JavaStandaloneLibraryGenerator
     {
         PureJavaCompiler compiler = compile();
         compiler.writeClassJavaSourcesToJar(jarOutputStream);
+    }
+
+    public void serializeAndWriteMetadata(Path directory)
+    {
+        buildMetadataSerializer().serializeAll(directory);
+    }
+
+    public void serializeAndWriteMetadata(Path directory, String... repositories)
+    {
+        buildMetadataSerializer().serializeModules(directory, repositories);
+    }
+
+    public void serializeAndWriteMetadata(Path directory, Iterable<? extends String> repositories)
+    {
+        buildMetadataSerializer().serializeModules(directory, repositories);
+    }
+
+    public void serializeAndWriteMetadata(JarOutputStream jarOutputStream)
+    {
+        buildMetadataSerializer().serializeAll(jarOutputStream);
+    }
+
+    public void serializeAndWriteMetadata(JarOutputStream jarOutputStream, String... repositories)
+    {
+        buildMetadataSerializer().serializeModules(jarOutputStream, repositories);
+    }
+
+    public void serializeAndWriteMetadata(JarOutputStream jarOutputStream, Iterable<? extends String> repositories)
+    {
+        buildMetadataSerializer().serializeModules(jarOutputStream, repositories);
+    }
+
+    private PureCompilerSerializer buildMetadataSerializer()
+    {
+        ProcessorSupport processorSupport = this.runtime.getProcessorSupport();
+        ReferenceIdProviders referenceIds = ReferenceIdProviders.builder().withProcessorSupport(processorSupport).withAvailableExtensions().build();
+        FileSerializer fileSerializer = FileSerializer.builder()
+                .withFilePathProvider(FilePathProvider.builder().withLoadedExtensions().build())
+                .withConcreteElementSerializer(ConcreteElementSerializer.builder(processorSupport).withLoadedExtensions().withReferenceIdProviders(referenceIds).build())
+                .withModuleMetadataSerializer(ModuleMetadataSerializer.builder().withLoadedExtensions().build())
+                .build();
+        return PureCompilerSerializer.builder()
+                .withFileSerializer(fileSerializer)
+                .withModuleMetadataGenerator(ModuleMetadataGenerator.fromProcessorSupport(processorSupport))
+                .withProcessorSupport(processorSupport)
+                .build();
     }
 
     public void serializeAndWriteDistributedMetadata(Path directory) throws IOException
