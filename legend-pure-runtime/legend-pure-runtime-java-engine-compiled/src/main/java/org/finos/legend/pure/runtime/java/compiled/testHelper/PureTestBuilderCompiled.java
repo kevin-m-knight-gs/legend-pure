@@ -17,7 +17,6 @@ package org.finos.legend.pure.runtime.java.compiled.testHelper;
 import io.opentracing.noop.NoopTracerFactory;
 import io.opentracing.util.GlobalTracer;
 import junit.framework.TestSuite;
-import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.factory.Sets;
@@ -49,7 +48,8 @@ import org.finos.legend.pure.runtime.java.compiled.execution.ConsoleCompiled;
 import org.finos.legend.pure.runtime.java.compiled.extension.CompiledExtensionLoader;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.FunctionProcessor;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
-import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataLazy;
+import org.finos.legend.pure.runtime.java.compiled.metadata.Metadata;
+import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataPelt;
 import org.junit.Assert;
 
 import java.lang.reflect.Field;
@@ -177,15 +177,17 @@ public class PureTestBuilderCompiled extends TestSuite
 
     public static CompiledExecutionSupport getClassLoaderExecutionSupport()
     {
-        return getClassLoaderExecutionSupport(PureTestBuilderCompiled.class.getClassLoader());
+        return getClassLoaderExecutionSupport(Thread.currentThread().getContextClassLoader());
     }
 
     public static CompiledExecutionSupport getClassLoaderExecutionSupport(ClassLoader classLoader)
     {
-        RichIterable<CodeRepository> codeRepos = CodeRepositoryProviderHelper.findCodeRepositories().select(r -> !r.getName().equals("test_generic_repository") && !r.getName().equals("other_test_generic_repository"));
+        MutableList<CodeRepository> codeRepos = CodeRepositoryProviderHelper.findCodeRepositories(classLoader)
+                .reject(r -> "test_generic_repository".equals(r.getName()) || "other_test_generic_repository".equals(r.getName()), Lists.mutable.empty());
+        Metadata metadata = MetadataPelt.fromClassLoader(classLoader, codeRepos.asLazy().collect(CodeRepository::getName));
         return new CompiledExecutionSupport(
                 new JavaCompilerState(null, classLoader),
-                new CompiledProcessorSupport(classLoader, MetadataLazy.fromClassLoader(classLoader, codeRepos.collect(CodeRepository::getName)), Sets.mutable.empty()),
+                new CompiledProcessorSupport(classLoader, metadata, Sets.mutable.empty()),
                 null,
                 new CompositeCodeStorage(new ClassLoaderCodeStorage(classLoader, codeRepos)),
                 null,
