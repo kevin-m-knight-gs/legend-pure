@@ -43,6 +43,7 @@ import org.finos.legend.pure.m3.navigation._class._Class;
 import org.finos.legend.pure.m3.navigation.function.Function;
 import org.finos.legend.pure.m3.navigation.property.Property;
 import org.finos.legend.pure.m3.navigation.type.Type;
+import org.finos.legend.pure.m3.tools.GraphTools;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.coreinstance.primitive.PrimitiveCoreInstance;
@@ -58,6 +59,7 @@ import org.finos.legend.pure.runtime.java.compiled.metadata.ClassCache;
 import org.finos.legend.pure.runtime.java.compiled.metadata.Metadata;
 import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataAccessor;
 import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataHolder;
+import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataNewLazy;
 
 import java.lang.reflect.Method;
 
@@ -262,6 +264,11 @@ public class CompiledProcessorSupport implements ProcessorSupport
     @Override
     public CoreInstance package_getByUserPath(String path)
     {
+        if (this.metadata instanceof MetadataNewLazy)
+        {
+            return ((MetadataNewLazy) this.metadata).getElementByPath(path);
+        }
+
         // Check top level elements
         if (path.isEmpty() || M3Paths.Root.equals(path) || "::".equals(path))
         {
@@ -340,6 +347,11 @@ public class CompiledProcessorSupport implements ProcessorSupport
     @Override
     public CoreInstance repository_getTopLevel(String name)
     {
+        if ((this.metadata instanceof MetadataNewLazy) && GraphTools.isTopLevelName(name))
+        {
+            return ((MetadataNewLazy) this.metadata).getElementByPath(name);
+        }
+
         if (M3Paths.Root.equals(name))
         {
             return this.metadataAccessor.getPackage(M3Paths.Root);
