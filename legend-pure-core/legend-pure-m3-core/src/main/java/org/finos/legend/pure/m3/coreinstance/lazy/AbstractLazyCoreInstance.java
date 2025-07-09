@@ -70,8 +70,8 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
 
     protected final ModelRepository repository;
     protected final int internalSyntheticId;
-    protected final String name;
-    protected final SourceInformation sourceInformation;
+    protected volatile String name;
+    protected volatile SourceInformation sourceInformation;
     protected final OneValue<CoreInstance> classifier;
 
     private AbstractLazyCoreInstance(ModelRepository repository, int internalSyntheticId, String name, SourceInformation sourceInformation, int compileStateBitSet, OneValue<CoreInstance> classifier)
@@ -135,7 +135,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
     @Override
     public void setName(String name)
     {
-        throw new UnsupportedOperationException();
+        this.name = name;
     }
 
     @Override
@@ -147,7 +147,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
     @Override
     public void setSourceInformation(SourceInformation sourceInformation)
     {
-        throw new UnsupportedOperationException();
+        this.sourceInformation = sourceInformation;
     }
 
     @Override
@@ -159,7 +159,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
     @Override
     public void setClassifier(CoreInstance classifier)
     {
-        throw new UnsupportedOperationException();
+        this.classifier.setValue(classifier);
     }
 
     @Override
@@ -844,6 +844,12 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
         }
 
         @Override
+        public boolean hasValue()
+        {
+            return getValue() != null;
+        }
+
+        @Override
         public int size()
         {
             return hasValue() ? 1 : 0;
@@ -973,10 +979,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
         }
 
         @Override
-        public OneValue<T> copy()
-        {
-            return new SimpleOneValue<>(getValue());
-        }
+        public abstract OneValue<T> copy();
 
         abstract void init();
     }
@@ -986,12 +989,6 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
         private SimpleOneValue(T value)
         {
             this.value = value;
-        }
-
-        @Override
-        public boolean hasValue()
-        {
-            return this.value != null;
         }
 
         @Override
@@ -1005,6 +1002,12 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
         {
             // nothing to do
         }
+
+        @Override
+        public OneValue<T> copy()
+        {
+            return new SimpleOneValue<>(this.value);
+        }
     }
 
     private static class LazyOneValue<T> extends OneValue<T>
@@ -1014,12 +1017,6 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
         private LazyOneValue(Supplier<? extends T> initializer)
         {
             this.initializer = initializer;
-        }
-
-        @Override
-        public boolean hasValue()
-        {
-            return (this.value != null) || (this.initializer != null);
         }
 
         @Override
@@ -1054,6 +1051,37 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
                     }
                 }
             }
+        }
+
+        @Override
+        public OneValue<T> copy()
+        {
+            Supplier<? extends T> local = this.initializer;
+            if (local != null)
+            {
+                synchronized (this)
+                {
+                    if ((local = this.initializer) != null)
+                    {
+                        if (local instanceof SharedSupplier)
+                        {
+                            SharedSupplier<? extends T> sharedSupplier = (SharedSupplier<? extends T>) local;
+                            if (sharedSupplier.isResolved())
+                            {
+                                T v = this.value = sharedSupplier.getResolvedValue();
+                                this.initializer = null;
+                                return new SimpleOneValue<>(v);
+                            }
+                        }
+                        else
+                        {
+                            this.initializer = local = new SharedSupplier<>(local);
+                        }
+                        return new LazyOneValue<>(local);
+                    }
+                }
+            }
+            return new SimpleOneValue<>(this.value);
         }
     }
 
@@ -1224,11 +1252,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
         }
 
         @Override
-        public ManyValues<T> copy()
-        {
-            init();
-            return new SimpleManyValues<>(this.values);
-        }
+        public abstract ManyValues<T> copy();
 
         protected abstract void init();
 
@@ -1264,6 +1288,13 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
         protected void setValues(ImmutableList<T> values)
         {
             this.values = values;
+        }
+
+
+        @Override
+        public ManyValues<T> copy()
+        {
+            return new SimpleManyValues<>(this.values);
         }
     }
 
@@ -1341,6 +1372,77 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
             {
                 this.values = values;
             }
+        }
+
+        @Override
+        public ManyValues<T> copy()
+        {
+            ImmutableList<T> local = this.values;
+            if (local == null)
+            {
+                synchronized (this)
+                {
+                    if ((local = this.values) == null)
+                    {
+                        if (this.initializers.isEmpty())
+                        {
+                            return new SimpleManyValues<>(Lists.immutable.empty());
+                        }
+                        if (!(this.initializers.get(0) instanceof SharedSupplier))
+                        {
+                            this.initializers = this.initializers.collect(SharedSupplier::new, Lists.mutable.<Supplier<? extends T>>ofInitialCapacity(this.initializers.size()));
+                        }
+                        else if (((SharedSupplier<?>) this.initializers.get(0)).isResolved())
+                        {
+                            // if one is resolved, then all are resolved (or are being resolved): get the values
+                            this.values = local = this.initializers.collect(Supplier::get, Lists.mutable.<T>ofInitialCapacity(this.initializers.size())).toImmutable();
+                            this.initializers = null;
+                            return new SimpleManyValues<>(local);
+                        }
+                        return new LazyManyValues<>(this.initializers);
+                    }
+                }
+            }
+            return new SimpleManyValues<>(local);
+        }
+    }
+
+    private static class SharedSupplier<T> implements Supplier<T>
+    {
+        private volatile Supplier<T> supplier;
+        private volatile T value;
+
+        private SharedSupplier(Supplier<T> supplier)
+        {
+            this.supplier = supplier;
+        }
+
+        @Override
+        public T get()
+        {
+            if (this.supplier != null)
+            {
+                synchronized (this)
+                {
+                    Supplier<T> local = this.supplier;
+                    if (local != null)
+                    {
+                        this.value = local.get();
+                        this.supplier = null;
+                    }
+                }
+            }
+            return this.value;
+        }
+
+        boolean isResolved()
+        {
+            return this.supplier == null;
+        }
+
+        T getResolvedValue()
+        {
+            return this.value;
         }
     }
 }
