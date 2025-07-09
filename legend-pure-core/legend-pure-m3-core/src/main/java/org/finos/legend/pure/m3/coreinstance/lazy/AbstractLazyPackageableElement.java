@@ -62,19 +62,20 @@ public abstract class AbstractLazyPackageableElement extends AbstractLazyCoreIns
     @Override
     public String _name()
     {
-        return this.name;
+        return getName();
     }
 
     @Override
     public PackageableElement _name(String name)
     {
-        throw new UnsupportedOperationException();
+        setName(name);
+        return this;
     }
 
     @Override
     public PackageableElement _nameRemove()
     {
-        throw new UnsupportedOperationException();
+        return _name(null);
     }
 
     @Override
@@ -86,13 +87,15 @@ public abstract class AbstractLazyPackageableElement extends AbstractLazyCoreIns
     @Override
     public PackageableElement _package(Package value)
     {
-        throw new UnsupportedOperationException();
+        this._package.setValue(value);
+        return this;
     }
 
     @Override
     public PackageableElement _packageRemove()
     {
-        throw new UnsupportedOperationException();
+        this._package.removeAllValues();
+        return this;
     }
 
     // Package children
