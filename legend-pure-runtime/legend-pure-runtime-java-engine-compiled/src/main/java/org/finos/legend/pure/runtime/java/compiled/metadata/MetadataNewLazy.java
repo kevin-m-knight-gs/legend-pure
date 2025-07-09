@@ -85,7 +85,7 @@ public class MetadataNewLazy implements Metadata
         if (M3Paths.Package.equals(classifier))
         {
             MutableMap<String, CoreInstance> elements = Maps.mutable.empty();
-            this.metadataIndex.forEachPackage(p -> elements.put(p.getPath(), this.elementLoader.loadElement(p.getPath())));
+            this.metadataIndex.forEachPackage(p -> elements.put(p.getPath(), getElementByPath(p.getPath())));
             return elements;
         }
         ImmutableList<ConcreteElementMetadata> metadata = this.metadataIndex.getClassifierElements(classifier);
@@ -94,7 +94,7 @@ public class MetadataNewLazy implements Metadata
             return Maps.immutable.empty();
         }
         MutableMap<String, CoreInstance> elements = Maps.mutable.ofInitialCapacity(metadata.size());
-        metadata.forEach(md -> elements.put(md.getPath(), this.elementLoader.loadElement(md.getPath())));
+        metadata.forEach(md -> elements.put(md.getPath(), getElementByPath(md.getPath())));
         return elements;
     }
 
@@ -103,12 +103,12 @@ public class MetadataNewLazy implements Metadata
     {
         if (M3Paths.Package.equals(classifier))
         {
-            return LazyIterate.collect(this.metadataIndex.getAllPackagePaths(), this.elementLoader::loadElement);
+            return LazyIterate.collect(this.metadataIndex.getAllPackagePaths(), this::getElementByPath);
         }
         ImmutableList<ConcreteElementMetadata> metadata = this.metadataIndex.getClassifierElements(classifier);
         return ((metadata == null) || metadata.isEmpty()) ?
                Lists.immutable.empty() :
-               metadata.asLazy().collect(md -> this.elementLoader.loadElement(md.getPath()));
+               metadata.asLazy().collect(md -> getElementByPath(md.getPath()));
     }
 
     @Override
@@ -118,9 +118,26 @@ public class MetadataNewLazy implements Metadata
         return getElement(enumId);
     }
 
+    /**
+     * Get an element by its metadata id. An exception will be thrown if the id is not valid or cannot be resolved.
+     *
+     * @param id metadata id
+     * @return the element with the given id
+     */
     public CoreInstance getElement(String id)
     {
         return this.elementLoader.getReferenceIdResolvers().resolver().resolveReference(id);
+    }
+
+    /**
+     * Get an element by its package path. Returns null if there is no such element.
+     *
+     * @param path package path of the element
+     * @return element with the given path, or null if there is no such element
+     */
+    public CoreInstance getElementByPath(String path)
+    {
+        return this.elementLoader.loadElement(path);
     }
 
     public static Builder builder()
