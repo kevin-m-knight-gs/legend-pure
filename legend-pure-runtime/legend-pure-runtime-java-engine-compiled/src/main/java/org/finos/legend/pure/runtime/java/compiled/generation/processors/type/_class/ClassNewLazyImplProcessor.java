@@ -123,7 +123,7 @@ public class ClassNewLazyImplProcessor
                 Supplier.class);
         StringBuilder builder = initClass(javaPackage, additionalImports, qualifiedProperties.notEmpty(), classNamePlusTypeParams, superClass, interfaceNamePlusTypeParams, _class, processorContext, processorSupport).append('\n');
         appendSimplePropertyFields(builder, simpleProperties, superClass).append('\n');
-        appendConcreteElementConstructor(builder, className).append('\n');
+        appendConcreteElementConstructor(builder, className, simpleProperties).append('\n');
         appendCopyConstructor(builder, className, classNamePlusTypeParams, simpleProperties, superClass).append('\n');
         appendStandardMethods(builder, simpleProperties, superClass).append('\n');
         appendCopy(builder, classNamePlusTypeParams, interfaceNamePlusTypeParams, true);
@@ -161,7 +161,7 @@ public class ClassNewLazyImplProcessor
                 PropertyValues.class,
                 ReferenceIdResolvers.class,
                 ReferenceIdResolver.class);
-        if (simpleProperties.anySatisfy(p -> p.backRef))
+        if (simpleProperties.anySatisfy(PropertyInfo::isBackRef))
         {
             additionalImports.add(Supplier.class);
         }
@@ -262,12 +262,17 @@ public class ClassNewLazyImplProcessor
         return appendAddKeyValue(builder, simpleProperties, isConcreteElement, isPackageableElement);
     }
 
-    private static StringBuilder appendConcreteElementConstructor(StringBuilder builder, String className)
+    private static StringBuilder appendConcreteElementConstructor(StringBuilder builder, String className, ListIterable<PropertyInfo> simpleProperties)
     {
-        return builder.append("    public ").append(className).append("(ConcreteElementMetadata metadata, MetadataIndex index, ElementBuilder elementBuilder, ReferenceIdResolvers referenceIds, PrimitiveValueResolver primitiveValueResolver, Supplier<? extends DeserializedConcreteElement> deserializer)\n")
-                .append("    {\n")
-                .append("        super(metadata, index, elementBuilder, referenceIds, primitiveValueResolver, deserializer);\n")
-                .append("    }\n");
+        builder.append("    public ").append(className).append("(ConcreteElementMetadata metadata, MetadataIndex index, ElementBuilder elementBuilder, ReferenceIdResolvers referenceIds, PrimitiveValueResolver primitiveValueResolver, Supplier<? extends DeserializedConcreteElement> deserializer)\n");
+        builder.append("    {\n");
+        builder.append("        super(metadata, index, elementBuilder, referenceIds, primitiveValueResolver, deserializer);\n");
+        if (simpleProperties.anySatisfy(PropertyInfo::isPackageChildren))
+        {
+            builder.append("        this._children = computePackageChildren(metadata.getPath(), index, referenceIds);\n");
+        }
+        builder.append("    }\n");
+        return builder;
     }
 
     private static StringBuilder appendComponentInstanceConstructor(StringBuilder builder, String className, ListIterable<PropertyInfo> simpleProperties)
@@ -280,7 +285,7 @@ public class ClassNewLazyImplProcessor
             MutableSet<String> backRefProperties = Sets.mutable.empty();
             simpleProperties.forEach(propertyInfo ->
             {
-                if (propertyInfo.backRef)
+                if (propertyInfo.isBackRef())
                 {
                     backRefProperties.add(propertyInfo.name);
                     builder.append("        MutableList<Supplier<? extends ").append(propertyInfo.holderTypeJava).append(">> ").append(propertyInfo.name).append(" = Lists.mutable.empty();\n");
@@ -300,7 +305,7 @@ public class ClassNewLazyImplProcessor
                 builder.append("        this._").append(propertyInfo.name).append(" = ")
                         .append(propertyInfo.toOne ? "newToOnePropertyValue" : "newToManyPropertyValue")
                         .append("(propertyValuesByName.get(\"").append(propertyInfo.name).append("\"), referenceIdResolver, internalIdResolver, primitiveValueResolver");
-                if (propertyInfo.backRef)
+                if (propertyInfo.isBackRef())
                 {
                     builder.append(", ").append(propertyInfo.name);
                 }
@@ -318,7 +323,7 @@ public class ClassNewLazyImplProcessor
         MutableSet<String> backRefProperties = Sets.mutable.empty();
         simpleProperties.forEach(propertyInfo ->
         {
-            if (propertyInfo.backRef)
+            if (propertyInfo.isBackRef())
             {
                 backRefProperties.add(propertyInfo.name);
                 builder.append("        MutableList<Supplier<? extends ").append(propertyInfo.holderTypeJava).append(">> ").append(propertyInfo.name).append(" = Lists.mutable.empty();\n");
@@ -350,7 +355,7 @@ public class ClassNewLazyImplProcessor
                 default:
                 {
                     builder.append("        this._").append(propertyInfo.name).append(" = ");
-                    if (propertyInfo.backRef)
+                    if (propertyInfo.isBackRef())
                     {
                         builder.append("fromSuppliers(").append(propertyInfo.name).append(");\n");
                     }
@@ -435,7 +440,7 @@ public class ClassNewLazyImplProcessor
             case 1:
             {
                 PropertyInfo propertyInfo = simpleProperties.get(0);
-                if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                 {
                     builder.append("        if (\"").append(propertyInfo.name).append("\".equals(propertyName))\n");
                     builder.append("        {\n");
@@ -482,7 +487,7 @@ public class ClassNewLazyImplProcessor
                 {
                     builder.append("            case \"").append(propertyInfo.name).append("\":\n");
                     builder.append("            {\n");
-                    if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                    if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                     {
                         builder.append("                initialize();\n");
                     }
@@ -525,7 +530,7 @@ public class ClassNewLazyImplProcessor
             case 1:
             {
                 PropertyInfo propertyInfo = simpleProperties.get(0);
-                if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                 {
                     builder.append("        if (\"").append(propertyInfo.name).append("\".equals(propertyName))\n");
                     builder.append("        {\n");
@@ -572,7 +577,7 @@ public class ClassNewLazyImplProcessor
                 {
                     builder.append("            case \"").append(propertyInfo.name).append("\":\n");
                     builder.append("            {\n");
-                    if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                    if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                     {
                         builder.append("                initialize();\n");
                     }
@@ -615,7 +620,7 @@ public class ClassNewLazyImplProcessor
             case 1:
             {
                 PropertyInfo propertyInfo = simpleProperties.get(0);
-                if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                 {
                     builder.append("        if (\"").append(propertyInfo.name).append("\".equals(propertyName))\n");
                     builder.append("        {\n");
@@ -662,7 +667,7 @@ public class ClassNewLazyImplProcessor
                 {
                     builder.append("            case \"").append(propertyInfo.name).append("\":\n");
                     builder.append("            {\n");
-                    if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                    if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                     {
                         builder.append("                initialize();\n");
                     }
@@ -708,7 +713,7 @@ public class ClassNewLazyImplProcessor
             case 1:
             {
                 PropertyInfo propertyInfo = simpleProperties.get(0);
-                if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                 {
                     builder.append("    if (\"").append(propertyInfo.name).append("\".equals(propertyName))\n");
                     builder.append("    {\n");
@@ -755,7 +760,7 @@ public class ClassNewLazyImplProcessor
                 {
                     builder.append("            case \"").append(propertyInfo.name).append("\":\n");
                     builder.append("            {\n");
-                    if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                    if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                     {
                         builder.append("                initialize();\n");
                     }
@@ -800,7 +805,7 @@ public class ClassNewLazyImplProcessor
             case 1:
             {
                 PropertyInfo propertyInfo = simpleProperties.get(0);
-                if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                 {
                     builder.append("        if (\"").append(propertyInfo.name).append("\".equals(keyName))\n");
                     builder.append("        {\n");
@@ -827,7 +832,7 @@ public class ClassNewLazyImplProcessor
                 {
                     builder.append("            case \"").append(propertyInfo.name).append("\":\n");
                     builder.append("            {\n");
-                    if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                    if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                     {
                         builder.append("                initialize();\n");
                     }
@@ -874,7 +879,7 @@ public class ClassNewLazyImplProcessor
                 }
                 else
                 {
-                    if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                    if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                     {
                         builder.append("            initialize();\n");
                     }
@@ -897,7 +902,7 @@ public class ClassNewLazyImplProcessor
                     }
                     else
                     {
-                        if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                        if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                         {
                             builder.append("                initialize();\n");
                         }
@@ -937,7 +942,7 @@ public class ClassNewLazyImplProcessor
                 }
                 else
                 {
-                    if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                    if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                     {
                         builder.append("        initialize();\n");
                     }
@@ -971,7 +976,7 @@ public class ClassNewLazyImplProcessor
                     }
                     else
                     {
-                        if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                        if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                         {
                             builder.append("                initialize();\n");
                         }
@@ -1027,7 +1032,7 @@ public class ClassNewLazyImplProcessor
                 }
                 else
                 {
-                    if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                    if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                     {
                         builder.append("        initialize();\n");
                     }
@@ -1071,7 +1076,7 @@ public class ClassNewLazyImplProcessor
                     }
                     else
                     {
-                        if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                        if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                         {
                             builder.append("                initialize();\n");
                         }
@@ -1138,7 +1143,7 @@ public class ClassNewLazyImplProcessor
                 }
                 else
                 {
-                    if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                    if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                     {
                         builder.append("        initialize();\n");
                     }
@@ -1172,7 +1177,7 @@ public class ClassNewLazyImplProcessor
                     }
                     else
                     {
-                        if (isConcreteElement && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+                        if (isConcreteElement && !propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
                         {
                             builder.append("                initialize();\n");
                         }
@@ -1211,7 +1216,7 @@ public class ClassNewLazyImplProcessor
             if (!isPackageableElement || (!M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name)))
             {
                 builder.append("    private ");
-                if (!isConcreteElement)
+                if (!isConcreteElement || propertyInfo.isPackageChildren())
                 {
                     builder.append("final ");
                 }
@@ -1238,7 +1243,7 @@ public class ClassNewLazyImplProcessor
             {
                 builder.append("    public ").append(propertyInfo.returnTypeJava).append(" _").append(propertyInfo.name).append("()\n");
                 builder.append("    {\n");
-                if (isConcreteElement)
+                if (isConcreteElement && !propertyInfo.isPackageChildren())
                 {
                     builder.append("        initialize();\n");
                 }
@@ -1254,7 +1259,7 @@ public class ClassNewLazyImplProcessor
             }
             else
             {
-                if (isConcreteElement)
+                if (isConcreteElement && !propertyInfo.isPackageChildren())
                 {
                     builder.append("        initialize();\n");
                 }
@@ -1289,7 +1294,7 @@ public class ClassNewLazyImplProcessor
             {
                 builder.append("    public RichIterable<? extends ").append(propertyInfo.returnTypeJava).append("> _").append(propertyInfo.name).append("()\n");
                 builder.append("    {\n");
-                if (isConcreteElement)
+                if (isConcreteElement && !propertyInfo.isPackageChildren())
                 {
                     builder.append("        initialize();\n");
                 }
@@ -1305,7 +1310,7 @@ public class ClassNewLazyImplProcessor
             }
             else
             {
-                if (isConcreteElement)
+                if (isConcreteElement && !propertyInfo.isPackageChildren())
                 {
                     builder.append("        initialize();\n");
                 }
@@ -1336,7 +1341,7 @@ public class ClassNewLazyImplProcessor
             }
             else
             {
-                if (isConcreteElement)
+                if (isConcreteElement && !propertyInfo.isPackageChildren())
                 {
                     builder.append("        initialize();\n");
                 }
@@ -1357,7 +1362,7 @@ public class ClassNewLazyImplProcessor
             }
             else
             {
-                if (isConcreteElement)
+                if (isConcreteElement && !propertyInfo.isPackageChildren())
                 {
                     builder.append("        initialize();\n");
                 }
@@ -1381,7 +1386,7 @@ public class ClassNewLazyImplProcessor
             }
             else
             {
-                if (isConcreteElement)
+                if (isConcreteElement && !propertyInfo.isPackageChildren())
                 {
                     builder.append("        initialize();\n");
                 }
@@ -1409,7 +1414,7 @@ public class ClassNewLazyImplProcessor
         }
         else
         {
-            if (isConcreteElement)
+            if (isConcreteElement && !propertyInfo.isPackageChildren())
             {
                 builder.append("        initialize();\n");
             }
@@ -1429,7 +1434,7 @@ public class ClassNewLazyImplProcessor
             builder.append('\n');
             builder.append("    public void _reverse_").append(propertyInfo.name).append("(").append(propertyInfo.returnTypeJava).append(" value)\n");
             builder.append("    {\n");
-            if (isConcreteElement)
+            if (isConcreteElement && !propertyInfo.isPackageChildren())
             {
                 builder.append("        initialize();\n");
             }
@@ -1438,7 +1443,7 @@ public class ClassNewLazyImplProcessor
             builder.append('\n');
             builder.append("    public void _sever_reverse_").append(propertyInfo.name).append("(").append(propertyInfo.returnTypeJava).append(" value)\n");
             builder.append("    {\n");
-            if (isConcreteElement)
+            if (isConcreteElement && !propertyInfo.isPackageChildren())
             {
                 builder.append("        initialize();\n");
             }
@@ -1527,7 +1532,7 @@ public class ClassNewLazyImplProcessor
         MutableSet<String> backRefProperties = Sets.mutable.empty();
         simpleProperties.forEach(propertyInfo ->
         {
-            if (propertyInfo.backRef)
+            if (propertyInfo.isBackRef())
             {
                 backRefProperties.add(propertyInfo.name);
                 builder.append("        MutableList<Supplier<? extends ").append(propertyInfo.holderTypeJava).append(">> ").append(propertyInfo.name).append(" = Lists.mutable.empty();\n");
@@ -1544,12 +1549,12 @@ public class ClassNewLazyImplProcessor
         builder.append("        MutableMap<String, PropertyValues> propertyValuesByName = indexPropertyValues(instanceData);\n");
         simpleProperties.forEach(propertyInfo ->
         {
-            if (!M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
+            if (!propertyInfo.isPackageChildren() && !M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name))
             {
                 builder.append("        this._").append(propertyInfo.name).append(" = ")
                         .append(propertyInfo.toOne ? "newToOnePropertyValue" : "newToManyPropertyValue")
                         .append("(propertyValuesByName.get(\"").append(propertyInfo.name).append("\"), referenceIdResolver, internalIdResolver, primitiveValueResolver");
-                if (propertyInfo.backRef)
+                if (propertyInfo.isBackRef())
                 {
                     builder.append(", ").append(propertyInfo.name);
                 }
@@ -1604,11 +1609,26 @@ public class ClassNewLazyImplProcessor
                 reversePropertyName = null;
             }
             boolean toOne = Multiplicity.isToOne(multiplicity, false);
-            ImmutableList<String> backRefRealKey = backRefProperties.get(name);
-            boolean backRef = (backRefRealKey != null) && backRefRealKey.equals(Property.calculatePropertyPath(property, processorSupport));
-            result.add(new PropertyInfo(name, property, returnType, holderTypeJava, returnTypeJava, reversePropertyName, anyOrNilType, primitiveType, toOne, backRef));
+            PropertyCategory category = getPropertyCategory(name, property, propertyOwner, backRefProperties, processorSupport);
+            result.add(new PropertyInfo(name, property, returnType, holderTypeJava, returnTypeJava, reversePropertyName, anyOrNilType, primitiveType, toOne, category));
         });
         return result.sortThis();
+    }
+
+    private static PropertyCategory getPropertyCategory(String name, CoreInstance property, CoreInstance propertyOwner, MapIterable<String, ImmutableList<String>> backRefProperties, ProcessorSupport processorSupport)
+    {
+        if (M3Properties.children.equals(name) && (propertyOwner == processorSupport.package_getByUserPath(M3Paths.Package)))
+        {
+            return PropertyCategory.PACKAGE_CHILDREN;
+        }
+
+        ImmutableList<String> backRefRealKey = backRefProperties.get(name);
+        if ((backRefRealKey != null) && backRefRealKey.equals(Property.calculatePropertyPath(property, processorSupport)))
+        {
+            return PropertyCategory.BACK_REF;
+        }
+
+        return PropertyCategory.ORDINARY;
     }
 
     private static class PropertyInfo implements Comparable<PropertyInfo>
@@ -1622,9 +1642,9 @@ public class ClassNewLazyImplProcessor
         private final boolean anyOrNilType;
         private final boolean primitiveType;
         private final boolean toOne;
-        private final boolean backRef;
+        private final PropertyCategory category;
 
-        private PropertyInfo(String name, CoreInstance property, CoreInstance resolvedType, String holderTypeJava, String returnTypeJava, String reversePropertyName, boolean anyOrNilType, boolean primitiveType, boolean toOne, boolean backRef)
+        private PropertyInfo(String name, CoreInstance property, CoreInstance resolvedType, String holderTypeJava, String returnTypeJava, String reversePropertyName, boolean anyOrNilType, boolean primitiveType, boolean toOne, PropertyCategory category)
         {
             this.name = name;
             this.property = property;
@@ -1635,7 +1655,7 @@ public class ClassNewLazyImplProcessor
             this.anyOrNilType = anyOrNilType;
             this.primitiveType = primitiveType;
             this.toOne = toOne;
-            this.backRef = backRef;
+            this.category = category;
         }
 
         @Override
@@ -1653,5 +1673,20 @@ public class ClassNewLazyImplProcessor
         {
             return this.primitiveType || this.anyOrNilType;
         }
+
+        boolean isBackRef()
+        {
+            return this.category == PropertyCategory.BACK_REF;
+        }
+
+        boolean isPackageChildren()
+        {
+            return this.category == PropertyCategory.PACKAGE_CHILDREN;
+        }
+    }
+
+    private enum PropertyCategory
+    {
+        ORDINARY, BACK_REF, PACKAGE_CHILDREN
     }
 }
