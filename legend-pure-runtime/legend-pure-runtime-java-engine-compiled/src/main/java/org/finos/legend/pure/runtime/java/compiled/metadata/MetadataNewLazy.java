@@ -208,9 +208,9 @@ public class MetadataNewLazy implements Metadata
                         .build();
 
                 MetadataIndex metadataIndex = MetadataIndex.builder()
-                        .withModules(this.repositories.asLazy().collect(repo -> (this.directory == null) ?
-                                                                                fileDeserializer.deserializeModuleMetadata(this.classLoader, repo) :
-                                                                                fileDeserializer.deserializeModuleMetadata(this.directory, repo)))
+                        .withModules(this.repositories.asLazy().collect((this.directory == null) ?
+                                                                        r -> fileDeserializer.deserializeModuleMetadata(this.classLoader, r) :
+                                                                        r -> fileDeserializer.deserializeModuleMetadata(this.directory, r)))
                         .build();
                 ElementLoader.Builder elementLoaderBuilder = ElementLoader.builder()
                         .withMetadataIndex(metadataIndex)
