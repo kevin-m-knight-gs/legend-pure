@@ -35,8 +35,10 @@ import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.M3PropertyPaths;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.navigation._class._Class;
 import org.finos.legend.pure.m3.navigation.generictype.GenericType;
 import org.finos.legend.pure.m3.navigation.multiplicity.Multiplicity;
+import org.finos.legend.pure.m3.navigation.profile.Profile;
 import org.finos.legend.pure.m3.navigation.property.Property;
 import org.finos.legend.pure.m3.serialization.compiler.element.DeserializedConcreteElement;
 import org.finos.legend.pure.m3.serialization.compiler.element.ElementBuilder;
@@ -126,6 +128,7 @@ public class ClassNewLazyImplProcessor
         appendConcreteElementConstructor(builder, className, simpleProperties).append('\n');
         appendCopyConstructor(builder, className, classNamePlusTypeParams, simpleProperties, superClass).append('\n');
         appendStandardMethods(builder, simpleProperties, superClass).append('\n');
+        appendEquals(builder, simpleProperties, classInterfaceName);
         appendCopy(builder, classNamePlusTypeParams, interfaceNamePlusTypeParams, true);
         appendSimpleProperties(builder, simpleProperties, interfaceNamePlusTypeParams, superClass, processorContext).append('\n');
         if (qualifiedProperties.notEmpty())
@@ -171,6 +174,7 @@ public class ClassNewLazyImplProcessor
         appendCopyConstructor(builder, className, classNamePlusTypeParams, simpleProperties, superClass).append('\n');
 
         appendStandardMethods(builder, simpleProperties, superClass).append('\n');
+        appendEquals(builder, simpleProperties, classInterfaceName);
         appendCopy(builder, classNamePlusTypeParams, interfaceNamePlusTypeParams, false);
         appendSimpleProperties(builder, simpleProperties, interfaceNamePlusTypeParams, superClass, processorContext).append('\n');
         if (qualifiedProperties.notEmpty())
@@ -203,6 +207,7 @@ public class ClassNewLazyImplProcessor
         appendVirtualPackageConstructor(builder, className, simpleProperties).append('\n');
         appendCopyConstructor(builder, className, className, simpleProperties, superClass).append('\n');
         appendStandardMethods(builder, simpleProperties, superClass);
+        appendEquals(builder, simpleProperties, classInterfaceName);
         appendCopy(builder, className, classInterfaceName, false);
         appendSimpleProperties(builder, simpleProperties, classInterfaceName, superClass, processorContext).append('\n');
         if (qualifiedProperties.notEmpty())
@@ -1511,6 +1516,59 @@ public class ClassNewLazyImplProcessor
         }
     }
 
+    private static void appendEquals(StringBuilder builder, ListIterable<PropertyInfo> simpleProperties, String interfaceName)
+    {
+        ListIterable<PropertyInfo> equalityProperties = simpleProperties.select(p -> p.equalityKey);
+        if (equalityProperties.isEmpty())
+        {
+            return;
+        }
+
+        builder.append("    @Override\n");
+        builder.append("    public boolean pureEquals(Object obj)\n");
+        builder.append("    {\n");
+        builder.append("        if (this == obj)\n");
+        builder.append("        {\n");
+        builder.append("            return true;\n");
+        builder.append("        }\n");
+        builder.append("        if (!(obj instanceof ").append(interfaceName).append("))\n");
+        builder.append("        {\n");
+        builder.append("            return false;\n");
+        builder.append("        }\n");
+        builder.append("        ").append(interfaceName).append(" that = (").append(interfaceName).append(") obj;\n");
+        builder.append("        return CompiledSupport.equal(this._").append(equalityProperties.get(0).name).append("(), that._").append(equalityProperties.get(0).name).append("())");
+        if (equalityProperties.size() > 1)
+        {
+            equalityProperties.forEach(1, equalityProperties.size() - 1,
+                    p -> builder.append(" &&\n                CompiledSupport.equal(this._").append(p.name).append("(), that._").append(p.name).append("())"));
+        }
+        builder.append(";\n");
+        builder.append("    }\n\n");
+        builder.append("    @Override\n");
+        builder.append("    public int pureHashCode()\n");
+        builder.append("    {\n");
+        switch (equalityProperties.size())
+        {
+            case 1:
+            {
+                builder.append("        return CompiledSupport.safeHashCode(_").append(equalityProperties.get(0).name).append("());\n");
+                break;
+            }
+            case 2:
+            {
+                builder.append("        return 31 * CompiledSupport.safeHashCode(_").append(equalityProperties.get(0).name).append("()) + CompiledSupport.safeHashCode(_").append(equalityProperties.get(1).name).append("());\n");
+                break;
+            }
+            default:
+            {
+                builder.append("        int hash = CompiledSupport.safeHashCode(_").append(equalityProperties.get(0).name).append("());\n");
+                equalityProperties.forEach(1, equalityProperties.size() - 1, p -> builder.append("        hash = 31 * hash + CompiledSupport.safeHashCode(_").append(p.name).append("());\n"));
+                builder.append("        return hash;\n");
+            }
+        }
+        builder.append("    }\n\n");
+    }
+
     private static void appendCopy(StringBuilder builder, String classNamePlusTypeParams, String interfaceNamePlusTypeParams, boolean isConcreteElement)
     {
         builder.append("    @Override\n");
@@ -1584,6 +1642,7 @@ public class ClassNewLazyImplProcessor
         MutableList<PropertyInfo> result = Lists.mutable.ofInitialCapacity(properties.size());
         CoreInstance any = processorSupport.type_TopType();
         CoreInstance nil = processorSupport.type_BottomType();
+        CoreInstance equalityKeyStereotype = Profile.findStereotype(processorSupport.package_getByUserPath(M3Paths.equality), _Class.KEY_STEREOTYPE);
         MutableMap<String, ImmutableList<String>> backRefProperties = M3PropertyPaths.BACK_REFERENCE_PROPERTY_PATHS.groupByUniqueKey(ImmutableList::getLast, Maps.mutable.ofInitialCapacity(M3PropertyPaths.BACK_REFERENCE_PROPERTY_PATHS.size()));
         properties.forEachKeyValue((name, property) ->
         {
@@ -1609,8 +1668,9 @@ public class ClassNewLazyImplProcessor
                 reversePropertyName = null;
             }
             boolean toOne = Multiplicity.isToOne(multiplicity, false);
+            boolean equalityKey = Instance.getValueForMetaPropertyToManyResolved(property, M3Properties.stereotypes, processorSupport).anySatisfy(st -> st == equalityKeyStereotype);
             PropertyCategory category = getPropertyCategory(name, property, propertyOwner, backRefProperties, processorSupport);
-            result.add(new PropertyInfo(name, property, returnType, holderTypeJava, returnTypeJava, reversePropertyName, anyOrNilType, primitiveType, toOne, category));
+            result.add(new PropertyInfo(name, property, returnType, holderTypeJava, returnTypeJava, reversePropertyName, anyOrNilType, primitiveType, toOne, equalityKey, category));
         });
         return result.sortThis();
     }
@@ -1642,9 +1702,10 @@ public class ClassNewLazyImplProcessor
         private final boolean anyOrNilType;
         private final boolean primitiveType;
         private final boolean toOne;
+        private final boolean equalityKey;
         private final PropertyCategory category;
 
-        private PropertyInfo(String name, CoreInstance property, CoreInstance resolvedType, String holderTypeJava, String returnTypeJava, String reversePropertyName, boolean anyOrNilType, boolean primitiveType, boolean toOne, PropertyCategory category)
+        private PropertyInfo(String name, CoreInstance property, CoreInstance resolvedType, String holderTypeJava, String returnTypeJava, String reversePropertyName, boolean anyOrNilType, boolean primitiveType, boolean toOne, boolean equalityKey, PropertyCategory category)
         {
             this.name = name;
             this.property = property;
@@ -1655,6 +1716,7 @@ public class ClassNewLazyImplProcessor
             this.anyOrNilType = anyOrNilType;
             this.primitiveType = primitiveType;
             this.toOne = toOne;
+            this.equalityKey = equalityKey;
             this.category = category;
         }
 

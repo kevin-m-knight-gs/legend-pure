@@ -25,7 +25,7 @@ import org.finos.legend.pure.runtime.java.compiled.execution.ConsoleCompiled;
 
 import java.util.function.Function;
 
-public abstract class AbstractCompiledLazyComponentInstance extends AbstractLazyCoreInstance
+public abstract class AbstractCompiledLazyComponentInstance extends AbstractLazyCoreInstance implements JavaCompiledCoreInstance
 {
     protected AbstractCompiledLazyComponentInstance(InstanceData instanceData, ReferenceIdResolver referenceIdResolver)
     {
@@ -52,6 +52,30 @@ public abstract class AbstractCompiledLazyComponentInstance extends AbstractLazy
     public String toString(ExecutionSupport executionSupport)
     {
         return ModelRepository.possiblyReplaceAnonymousId(getName());
+    }
+
+    @Override
+    public boolean equals(Object obj)
+    {
+        return pureEquals(obj);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return pureHashCode();
+    }
+
+    @Override
+    public boolean pureEquals(Object obj)
+    {
+        return super.equals(obj);
+    }
+
+    @Override
+    public int pureHashCode()
+    {
+        return super.hashCode();
     }
 
     protected Function<Object, CoreInstance> getToCoreInstanceFunction()

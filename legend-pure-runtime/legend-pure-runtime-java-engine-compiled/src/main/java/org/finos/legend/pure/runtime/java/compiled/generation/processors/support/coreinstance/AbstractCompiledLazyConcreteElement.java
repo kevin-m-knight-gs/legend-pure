@@ -36,7 +36,7 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
-public abstract class AbstractCompiledLazyConcreteElement extends AbstractLazyConcreteElement
+public abstract class AbstractCompiledLazyConcreteElement extends AbstractLazyConcreteElement implements JavaCompiledCoreInstance
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractCompiledLazyConcreteElement.class);
 
@@ -65,6 +65,30 @@ public abstract class AbstractCompiledLazyConcreteElement extends AbstractLazyCo
     public String toString(ExecutionSupport executionSupport)
     {
         return getName();
+    }
+
+    @Override
+    public boolean equals(Object obj)
+    {
+        return pureEquals(obj);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return pureHashCode();
+    }
+
+    @Override
+    public boolean pureEquals(Object obj)
+    {
+        return super.equals(obj);
+    }
+
+    @Override
+    public int pureHashCode()
+    {
+        return super.hashCode();
     }
 
     @Override

@@ -22,7 +22,7 @@ import org.finos.legend.pure.m4.coreinstance.compileState.CompileStateSet;
 import org.finos.legend.pure.m4.tools.SafeAppendable;
 import org.finos.legend.pure.runtime.java.compiled.execution.ConsoleCompiled;
 
-public abstract class AbstractCompiledLazyVirtualPackage extends AbstractLazyPackageableElement
+public abstract class AbstractCompiledLazyVirtualPackage extends AbstractLazyPackageableElement implements JavaCompiledCoreInstance
 {
     protected AbstractCompiledLazyVirtualPackage(VirtualPackageMetadata metadata, ReferenceIdResolvers referenceIds)
     {
@@ -49,5 +49,29 @@ public abstract class AbstractCompiledLazyVirtualPackage extends AbstractLazyPac
     public String toString(ExecutionSupport executionSupport)
     {
         return getName();
+    }
+
+    @Override
+    public boolean equals(Object obj)
+    {
+        return pureEquals(obj);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return pureHashCode();
+    }
+
+    @Override
+    public boolean pureEquals(Object obj)
+    {
+        return super.equals(obj);
+    }
+
+    @Override
+    public int pureHashCode()
+    {
+        return super.hashCode();
     }
 }
