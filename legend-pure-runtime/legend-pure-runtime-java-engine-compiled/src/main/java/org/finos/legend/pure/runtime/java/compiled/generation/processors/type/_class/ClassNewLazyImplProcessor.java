@@ -106,7 +106,7 @@ public class ClassNewLazyImplProcessor
         String typeParamsString = typeParams.isEmpty() ? "" : ("<" + typeParams + ">");
         String classNamePlusTypeParams = className + typeParamsString;
         String interfaceNamePlusTypeParams = classInterfaceName + typeParamsString;
-        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorSupport);
+        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorContext);
         MapIterable<String, CoreInstance> qualifiedProperties = processorSupport.class_getQualifiedPropertiesByName(_class);
 
         processorContext.setClassImplSuffix(CLASS_LAZY_CONCRETE_SUFFIX);
@@ -136,6 +136,7 @@ public class ClassNewLazyImplProcessor
             ClassImplProcessor.appendQualifiedProperties(builder, _class, qualifiedProperties, processorContext);
         }
         appendValidate(builder, classGenericType, _class, interfaceNamePlusTypeParams, simpleProperties, processorContext);
+        appendDefaultValues(builder, simpleProperties);
         appendConcreteInitialize(builder, simpleProperties);
         return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
     }
@@ -150,7 +151,7 @@ public class ClassNewLazyImplProcessor
         String typeParamsString = typeParams.isEmpty() ? "" : ("<" + typeParams + ">");
         String classNamePlusTypeParams = className + typeParamsString;
         String interfaceNamePlusTypeParams = classInterfaceName + typeParamsString;
-        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorSupport);
+        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorContext);
         MapIterable<String, CoreInstance> qualifiedProperties = processorSupport.class_getQualifiedPropertiesByName(_class);
 
         processorContext.setClassImplSuffix(CLASS_LAZY_COMPONENT_SUFFIX);
@@ -182,6 +183,7 @@ public class ClassNewLazyImplProcessor
             ClassImplProcessor.appendQualifiedProperties(builder, _class, qualifiedProperties, processorContext);
         }
         appendValidate(builder, classGenericType, _class, interfaceNamePlusTypeParams, simpleProperties, processorContext);
+        appendDefaultValues(builder, simpleProperties);
         return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
     }
 
@@ -191,7 +193,7 @@ public class ClassNewLazyImplProcessor
         String className = JavaPackageAndImportBuilder.buildLazyVirtualPackageClassName();
         Class<AbstractCompiledLazyVirtualPackage> superClass = AbstractCompiledLazyVirtualPackage.class;
 
-        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorSupport);
+        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorContext);
         MapIterable<String, CoreInstance> qualifiedProperties = processorSupport.class_getQualifiedPropertiesByName(_class);
 
         processorContext.setClassImplSuffix(CLASS_VIRTUAL_PACKAGE_SUFFIX);
@@ -215,6 +217,7 @@ public class ClassNewLazyImplProcessor
             ClassImplProcessor.appendQualifiedProperties(builder, _class, qualifiedProperties, processorContext);
         }
         appendValidate(builder, classGenericType, _class, classInterfaceName, simpleProperties, processorContext);
+        appendDefaultValues(builder, simpleProperties);
         return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
     }
 
@@ -1636,8 +1639,55 @@ public class ClassNewLazyImplProcessor
         builder.append(ClassImplProcessor.validate(true, _class, interfaceNamePlusTypeParams, classGenericType, processorContext, simpleProperties.collect(p -> p.property), null, validateExtraValues));
     }
 
-    private static ListIterable<PropertyInfo> getSimplePropertiesSortedByName(CoreInstance classGenericType, CoreInstance _class, ProcessorSupport processorSupport)
+    private static void appendDefaultValues(StringBuilder builder, ListIterable<PropertyInfo> simpleProperties)
     {
+        ListIterable<PropertyInfo> simplePropsWithDefaultValues = simpleProperties.select(p -> p.defaultValueJava != null);
+        if (simplePropsWithDefaultValues.isEmpty())
+        {
+            return;
+        }
+
+        builder.append('\n');
+        builder.append("    @Override\n");
+        builder.append("    public ListIterable<String> getDefaultValueKeys()\n");
+        builder.append("    {\n");
+        builder.append("        return Lists.immutable.with(");
+        simplePropsWithDefaultValues.forEach(p -> builder.append('"').append(p.name).append("\", "));
+        builder.setLength(builder.length() - 2);
+        builder.append(");\n");
+        builder.append("    }\n");
+        builder.append('\n');
+        builder.append("    @Override\n");
+        builder.append("    public RichIterable<?> getDefaultValue(String property, ExecutionSupport es)\n");
+        builder.append("    {\n");
+        if (simplePropsWithDefaultValues.size() == 1)
+        {
+            PropertyInfo propInfo = simplePropsWithDefaultValues.get(0);
+            builder.append("        return \"").append(propInfo.name).append("\".equals(property) ? ").append(propInfo.defaultValueJava).append(" : Lists.immutable.empty();\n");
+        }
+        else
+        {
+            builder.append("        switch (property)\n");
+            builder.append("        {\n");
+            simplePropsWithDefaultValues.forEach(p ->
+            {
+                builder.append("            case \"").append(p.name).append("\":\n");
+                builder.append("            {\n");
+                builder.append("                return ").append(p.defaultValueJava).append(";\n");
+                builder.append("            }\n");
+            });
+            builder.append("            default:\n");
+            builder.append("            {\n");
+            builder.append("                return Lists.immutable.empty();\n");
+            builder.append("            }\n");
+            builder.append("        }\n");
+        }
+        builder.append("    }\n");
+    }
+
+    private static ListIterable<PropertyInfo> getSimplePropertiesSortedByName(CoreInstance classGenericType, CoreInstance _class, ProcessorContext processorContext)
+    {
+        ProcessorSupport processorSupport = processorContext.getSupport();
         MapIterable<String, CoreInstance> properties = processorSupport.class_getSimplePropertiesByName(_class);
         MutableList<PropertyInfo> result = Lists.mutable.ofInitialCapacity(properties.size());
         CoreInstance any = processorSupport.type_TopType();
@@ -1653,6 +1703,7 @@ public class ClassNewLazyImplProcessor
             String returnTypeJava = (Multiplicity.isToOne(multiplicity, true) && GenericType.isGenericTypeConcrete(ClassProcessor.getPropertyUnresolvedReturnType(property, processorSupport))) ?
                                     TypeProcessor.pureTypeToJava(returnType, true, true, processorSupport) :
                                     holderTypeJava;
+            String defaultValueJava = DefaultValue.getDefaultValueJavaExpression(property, true, processorContext);
             boolean anyOrNilType = (returnRawType == null) || (returnRawType == any) || (returnRawType == nil);
             boolean primitiveType = !anyOrNilType && processorSupport.instance_instanceOf(returnRawType, M3Paths.PrimitiveType);
             CoreInstance propertyOwner = Instance.getValueForMetaPropertyToOneResolved(property, M3Properties.owner, processorSupport);
@@ -1670,7 +1721,7 @@ public class ClassNewLazyImplProcessor
             boolean toOne = Multiplicity.isToOne(multiplicity, false);
             boolean equalityKey = Instance.getValueForMetaPropertyToManyResolved(property, M3Properties.stereotypes, processorSupport).anySatisfy(st -> st == equalityKeyStereotype);
             PropertyCategory category = getPropertyCategory(name, property, propertyOwner, backRefProperties, processorSupport);
-            result.add(new PropertyInfo(name, property, returnType, holderTypeJava, returnTypeJava, reversePropertyName, anyOrNilType, primitiveType, toOne, equalityKey, category));
+            result.add(new PropertyInfo(name, property, returnType, holderTypeJava, returnTypeJava, defaultValueJava, reversePropertyName, anyOrNilType, primitiveType, toOne, equalityKey, category));
         });
         return result.sortThis();
     }
@@ -1698,6 +1749,7 @@ public class ClassNewLazyImplProcessor
         private final CoreInstance resolvedType;
         private final String holderTypeJava;
         private final String returnTypeJava;
+        private final String defaultValueJava;
         private final String reversePropertyName;
         private final boolean anyOrNilType;
         private final boolean primitiveType;
@@ -1705,13 +1757,14 @@ public class ClassNewLazyImplProcessor
         private final boolean equalityKey;
         private final PropertyCategory category;
 
-        private PropertyInfo(String name, CoreInstance property, CoreInstance resolvedType, String holderTypeJava, String returnTypeJava, String reversePropertyName, boolean anyOrNilType, boolean primitiveType, boolean toOne, boolean equalityKey, PropertyCategory category)
+        private PropertyInfo(String name, CoreInstance property, CoreInstance resolvedType, String holderTypeJava, String returnTypeJava, String defaultValueJava, String reversePropertyName, boolean anyOrNilType, boolean primitiveType, boolean toOne, boolean equalityKey, PropertyCategory category)
         {
             this.name = name;
             this.property = property;
             this.resolvedType = resolvedType;
             this.holderTypeJava = holderTypeJava;
             this.returnTypeJava = returnTypeJava;
+            this.defaultValueJava = defaultValueJava;
             this.reversePropertyName = reversePropertyName;
             this.anyOrNilType = anyOrNilType;
             this.primitiveType = primitiveType;
