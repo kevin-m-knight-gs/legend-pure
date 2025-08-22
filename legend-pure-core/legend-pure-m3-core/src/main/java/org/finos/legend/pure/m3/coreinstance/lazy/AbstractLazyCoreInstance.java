@@ -40,7 +40,6 @@ import org.finos.legend.pure.m3.serialization.compiler.element.ValueOrReference;
 import org.finos.legend.pure.m3.serialization.compiler.element.ValueOrReferenceVisitor;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.BackReference;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.BackReferenceConsumer;
-import org.finos.legend.pure.m3.serialization.compiler.metadata.BackReferenceVisitor;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.MetadataIndex;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolver;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolvers;
@@ -673,7 +672,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
                                                      Collection<? super Supplier<? extends Generalization>> specializations)
     {
         IntFunction<? extends CoreInstance> intIdResolver = (internalIdResolver == null) ? getVacuousInternalIdResolver() : internalIdResolver;
-        metadataIndex.getBackReferences(id).toSortedList(AbstractLazyCoreInstance::compareBackReferences).forEach(new BackReferenceConsumer()
+        metadataIndex.getBackReferences(id).toSortedList().forEach(new BackReferenceConsumer()
         {
             @Override
             protected void accept(BackReference.Application application)
@@ -727,62 +726,6 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
                 {
                     specializations.add(getSpecializationSupplier(specialization, refIdResolver));
                 }
-            }
-        });
-    }
-
-    private static int compareBackReferences(BackReference br1, BackReference br2)
-    {
-        if (br1.getClass() != br2.getClass())
-        {
-            return br1.getClass().getSimpleName().compareTo(br2.getClass().getSimpleName());
-        }
-        return br1.visit(new BackReferenceVisitor<Integer>()
-        {
-            @Override
-            public Integer visit(BackReference.Application application)
-            {
-                return application.getFunctionExpression().compareTo(((BackReference.Application) br2).getFunctionExpression());
-            }
-
-            @Override
-            public Integer visit(BackReference.ModelElement modelElement)
-            {
-                return modelElement.getElement().compareTo(((BackReference.ModelElement) br2).getElement());
-            }
-
-            @Override
-            public Integer visit(BackReference.PropertyFromAssociation propertyFromAssociation)
-            {
-                return propertyFromAssociation.getProperty().compareTo(((BackReference.PropertyFromAssociation) br2).getProperty());
-            }
-
-            @Override
-            public Integer visit(BackReference.QualifiedPropertyFromAssociation qualifiedPropertyFromAssociation)
-            {
-                return qualifiedPropertyFromAssociation.getQualifiedProperty().compareTo(((BackReference.QualifiedPropertyFromAssociation) br2).getQualifiedProperty());
-            }
-
-            @Override
-            public Integer visit(BackReference.ReferenceUsage referenceUsage)
-            {
-                BackReference.ReferenceUsage referenceUsage2 = (BackReference.ReferenceUsage) br2;
-                int cmp = referenceUsage.getOwner().compareTo(referenceUsage2.getOwner());
-                if (cmp == 0)
-                {
-                    cmp = referenceUsage.getProperty().compareTo(referenceUsage2.getProperty());
-                    if (cmp == 0)
-                    {
-                        cmp = Integer.compare(referenceUsage.getOffset(), referenceUsage2.getOffset());
-                    }
-                }
-                return cmp;
-            }
-
-            @Override
-            public Integer visit(BackReference.Specialization specialization)
-            {
-                return specialization.getGeneralization().compareTo(((BackReference.Specialization) br2).getGeneralization());
             }
         });
     }
