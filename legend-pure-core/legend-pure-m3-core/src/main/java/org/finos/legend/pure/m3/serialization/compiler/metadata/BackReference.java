@@ -48,37 +48,37 @@ public abstract class BackReference implements Comparable<BackReference>
         return (thisClass == otherClass) ? 0 : thisClass.getSimpleName().compareTo(otherClass.getSimpleName());
     }
 
-    static Application newApplication(String functionExpression)
+    public static Application newApplication(String functionExpression)
     {
         return new Application(functionExpression);
     }
 
-    static ModelElement newModelElement(String element)
+    public static ModelElement newModelElement(String element)
     {
         return new ModelElement(element);
     }
 
-    static PropertyFromAssociation newPropertyFromAssociation(String property)
+    public static PropertyFromAssociation newPropertyFromAssociation(String property)
     {
         return new PropertyFromAssociation(property);
     }
 
-    static QualifiedPropertyFromAssociation newQualifiedPropertyFromAssociation(String qualifiedProperty)
+    public static QualifiedPropertyFromAssociation newQualifiedPropertyFromAssociation(String qualifiedProperty)
     {
         return new QualifiedPropertyFromAssociation(qualifiedProperty);
     }
 
-    static ReferenceUsage newReferenceUsage(String owner, String property, int offset)
+    public static ReferenceUsage newReferenceUsage(String owner, String property, int offset)
     {
         return newReferenceUsage(owner, property, offset, null);
     }
 
-    static ReferenceUsage newReferenceUsage(String owner, String property, int offset, SourceInformation sourceInfo)
+    public static ReferenceUsage newReferenceUsage(String owner, String property, int offset, SourceInformation sourceInfo)
     {
         return new ReferenceUsage(owner, property, offset, sourceInfo);
     }
 
-    static Specialization newSpecialization(String generalization)
+    public static Specialization newSpecialization(String generalization)
     {
         return new Specialization(generalization);
     }
