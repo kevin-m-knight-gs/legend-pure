@@ -23,11 +23,10 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
-import org.eclipse.collections.api.set.ImmutableSet;
 import org.eclipse.collections.api.set.MutableSet;
 import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyConcreteElement;
 import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyCoreInstance;
-import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyPackageableElement;
+import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyVirtualPackage;
 import org.finos.legend.pure.m3.coreinstance.lazy.PrimitiveValueResolver;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Paths;
@@ -258,8 +257,8 @@ public class ClassNewLazyImplProcessor
 
     private static StringBuilder appendStandardMethods(StringBuilder builder, ListIterable<PropertyInfo> simpleProperties, Class<? extends AbstractLazyCoreInstance> superClass)
     {
-        boolean isConcreteElement = AbstractLazyConcreteElement.class.isAssignableFrom(superClass);
-        boolean isPackageableElement = AbstractLazyPackageableElement.class.isAssignableFrom(superClass);
+        boolean isConcreteElement = isConcreteElement(superClass);
+        boolean isPackageableElement = isPackageableElement(superClass, isConcreteElement);
         builder.append(ClassImplProcessor.buildGetKeys());
         builder.append(ClassImplProcessor.buildGetRealGetKeyByName());
         builder.append(ClassImplProcessor.buildGetFullSystemPath()).append('\n');
@@ -280,6 +279,7 @@ public class ClassNewLazyImplProcessor
         builder.append("    public ").append(className).append("(ConcreteElementMetadata metadata, MetadataIndex index, ElementBuilder elementBuilder, ReferenceIdResolvers referenceIds, PrimitiveValueResolver primitiveValueResolver, Supplier<? extends DeserializedConcreteElement> deserializer, Supplier<? extends BackReferenceProvider> backRefProviderDeserializer)\n");
         builder.append("    {\n");
         builder.append("        super(metadata, elementBuilder, referenceIds, primitiveValueResolver, deserializer, backRefProviderDeserializer);\n");
+        builder.append("        this._package = computePackage(metadata.getPath(), referenceIds);\n");
         if (simpleProperties.anySatisfy(PropertyInfo::isPackageChildren))
         {
             builder.append("        this._children = computePackageChildren(metadata.getPath(), index, referenceIds);\n");
@@ -354,15 +354,19 @@ public class ClassNewLazyImplProcessor
         {
             switch (propertyInfo.name)
             {
-                case M3Properties.name:
-                case M3Properties._package:
-                {
-                    // These properties are handled by the super constructor
-                    break;
-                }
                 case M3Properties.children:
                 {
                     builder.append("        this._").append(propertyInfo.name).append(" = computePackageChildren(metadata.getPath(), index, referenceIds);\n");
+                    break;
+                }
+                case M3Properties.name:
+                {
+                    // This property is handled by the super constructor
+                    break;
+                }
+                case M3Properties._package:
+                {
+                    builder.append("        this._").append(propertyInfo.name).append(" = computePackage(metadata.getPath(), referenceIds);\n");
                     break;
                 }
                 default:
@@ -388,10 +392,10 @@ public class ClassNewLazyImplProcessor
         builder.append("    public ").append(className).append('(').append(classNamePlusTypeParams).append(" source)\n");
         builder.append("    {\n");
         builder.append("        super(source);\n");
-        ImmutableSet<String> skipProperties = AbstractLazyPackageableElement.class.isAssignableFrom(superClass) ? Sets.immutable.with(M3Properties.name, M3Properties._package) : Sets.immutable.empty();
+        boolean isPackageableElement = isPackageableElement(superClass);
         simpleProperties.forEach(propertyInfo ->
         {
-            if (!skipProperties.contains(propertyInfo.name))
+            if (!isPackageableElement || !M3Properties.name.equals(propertyInfo.name))
             {
                 builder.append("        this._").append(propertyInfo.name).append(" = source._").append(propertyInfo.name).append(".copy();\n");
             }
@@ -1222,14 +1226,14 @@ public class ClassNewLazyImplProcessor
 
     private static StringBuilder appendSimplePropertyFields(StringBuilder builder, ListIterable<PropertyInfo> simpleProperties, Class<? extends AbstractLazyCoreInstance> superClass)
     {
-        boolean isConcreteElement = AbstractLazyConcreteElement.class.isAssignableFrom(superClass);
-        boolean isPackageableElement = AbstractLazyPackageableElement.class.isAssignableFrom(superClass);
+        boolean isConcreteElement = isConcreteElement(superClass);
+        boolean isPackageableElement = isPackageableElement(superClass, isConcreteElement);
         simpleProperties.forEach(propertyInfo ->
         {
-            if (!isPackageableElement || (!M3Properties.name.equals(propertyInfo.name) && !M3Properties._package.equals(propertyInfo.name)))
+            if (!isPackageableElement || !M3Properties.name.equals(propertyInfo.name))
             {
                 builder.append("    private ");
-                if (!isConcreteElement || propertyInfo.isPackageChildren())
+                if (!isConcreteElement || propertyInfo.isPackageChildren() || M3Properties._package.equals(propertyInfo.name))
                 {
                     builder.append("final ");
                 }
@@ -1241,34 +1245,38 @@ public class ClassNewLazyImplProcessor
 
     private static StringBuilder appendSimpleProperties(StringBuilder builder, ListIterable<PropertyInfo> simpleProperties, String interfaceNamePlusTypeParams, Class<? extends AbstractLazyCoreInstance> superClass, ProcessorContext processorContext)
     {
-        boolean isConcreteElement = AbstractLazyConcreteElement.class.isAssignableFrom(superClass);
-        boolean isPackageableElement = AbstractLazyPackageableElement.class.isAssignableFrom(superClass);
+        boolean isConcreteElement = isConcreteElement(superClass);
+        boolean isPackageableElement = isPackageableElement(superClass, isConcreteElement);
         simpleProperties.forEach(propertyInfo -> appendSimpleProperty(builder.append('\n'), propertyInfo, interfaceNamePlusTypeParams, isConcreteElement, isPackageableElement, processorContext));
         return builder;
     }
 
     private static void appendSimpleProperty(StringBuilder builder, PropertyInfo propertyInfo, String interfaceNamePlusTypeParams, boolean isConcreteElement, boolean isPackageableElement, ProcessorContext processorContext)
     {
-        boolean delegateToSuperMethod = isPackageableElement && (M3Properties.name.equals(propertyInfo.name) || M3Properties._package.equals(propertyInfo.name));
+        boolean isPackageableName = isPackageableElement && M3Properties.name.equals(propertyInfo.name);
         if (propertyInfo.toOne)
         {
-            if (!delegateToSuperMethod)
+            builder.append("    public ").append(propertyInfo.returnTypeJava).append(" _").append(propertyInfo.name).append("()\n");
+            builder.append("    {\n");
+            if (isPackageableName)
             {
-                builder.append("    public ").append(propertyInfo.returnTypeJava).append(" _").append(propertyInfo.name).append("()\n");
-                builder.append("    {\n");
+                builder.append("        return getName();\n");
+            }
+            else
+            {
                 if (isConcreteElement && !propertyInfo.isPackageChildren())
                 {
                     builder.append("        initialize();\n");
                 }
                 builder.append("        return this._").append(propertyInfo.name).append(".getValue();\n");
-                builder.append("    }\n");
-                builder.append('\n');
             }
+            builder.append("    }\n");
+            builder.append('\n');
             builder.append("    public ").append(interfaceNamePlusTypeParams).append(" _").append(propertyInfo.name).append("(").append(propertyInfo.returnTypeJava).append(" value)\n");
             builder.append("    {\n");
-            if (delegateToSuperMethod)
+            if (isPackageableName)
             {
-                builder.append("        super._").append(propertyInfo.name).append("(value);\n");
+                builder.append("        setName(value);\n");
             }
             else
             {
@@ -1303,117 +1311,86 @@ public class ClassNewLazyImplProcessor
         }
         else
         {
-            if (!delegateToSuperMethod)
+            builder.append("    public RichIterable<? extends ").append(propertyInfo.returnTypeJava).append("> _").append(propertyInfo.name).append("()\n");
+            builder.append("    {\n");
+            if (isConcreteElement && !propertyInfo.isPackageChildren())
             {
-                builder.append("    public RichIterable<? extends ").append(propertyInfo.returnTypeJava).append("> _").append(propertyInfo.name).append("()\n");
-                builder.append("    {\n");
-                if (isConcreteElement && !propertyInfo.isPackageChildren())
-                {
-                    builder.append("        initialize();\n");
-                }
-                builder.append("        return this._").append(propertyInfo.name).append(".getValues();\n");
-                builder.append("    }\n");
-                builder.append('\n');
+                builder.append("        initialize();\n");
             }
+            builder.append("        return this._").append(propertyInfo.name).append(".getValues();\n");
+            builder.append("    }\n");
+            builder.append('\n');
             builder.append("    public ").append(interfaceNamePlusTypeParams).append(" _").append(propertyInfo.name).append("(RichIterable<? extends ").append(propertyInfo.returnTypeJava).append("> values)\n");
             builder.append("    {\n");
-            if (delegateToSuperMethod)
+            if (isConcreteElement && !propertyInfo.isPackageChildren())
             {
-                builder.append("        super._").append(propertyInfo.name).append("(values);\n");
+                builder.append("        initialize();\n");
             }
-            else
+            if (propertyInfo.isFromAssociation())
             {
-                if (isConcreteElement && !propertyInfo.isPackageChildren())
-                {
-                    builder.append("        initialize();\n");
-                }
-                if (propertyInfo.isFromAssociation())
-                {
-                    builder.append("        for (").append(propertyInfo.returnTypeJava).append(" value : this._").append(propertyInfo.name).append(".getValues())\n");
-                    builder.append("        {\n");
-                    builder.append("            value._sever_reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
-                    builder.append("        }\n");
-                }
-                builder.append("        this._").append(propertyInfo.name).append(".setValues(values);\n");
-                if (propertyInfo.isFromAssociation())
-                {
-                    builder.append("        for (").append(propertyInfo.returnTypeJava).append(" value : this._").append(propertyInfo.name).append(".getValues())\n");
-                    builder.append("        {\n");
-                    builder.append("            value._reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
-                    builder.append("        }\n");
-                }
+                builder.append("        for (").append(propertyInfo.returnTypeJava).append(" value : this._").append(propertyInfo.name).append(".getValues())\n");
+                builder.append("        {\n");
+                builder.append("            value._sever_reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
+                builder.append("        }\n");
+            }
+            builder.append("        this._").append(propertyInfo.name).append(".setValues(values);\n");
+            if (propertyInfo.isFromAssociation())
+            {
+                builder.append("        for (").append(propertyInfo.returnTypeJava).append(" value : this._").append(propertyInfo.name).append(".getValues())\n");
+                builder.append("        {\n");
+                builder.append("            value._reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
+                builder.append("        }\n");
             }
             builder.append("        return this;\n");
             builder.append("    }\n");
             builder.append('\n');
             builder.append("    public ").append(interfaceNamePlusTypeParams).append(" _").append(propertyInfo.name).append("Add(").append(propertyInfo.returnTypeJava).append(" value)\n");
             builder.append("    {\n");
-            if (delegateToSuperMethod)
+            if (isConcreteElement && !propertyInfo.isPackageChildren())
             {
-                builder.append("        super._").append(propertyInfo.name).append("Add(value);\n");
+                builder.append("        initialize();\n");
             }
-            else
+            builder.append("        this._").append(propertyInfo.name).append(".addValue(value);\n");
+            if (propertyInfo.isFromAssociation())
             {
-                if (isConcreteElement && !propertyInfo.isPackageChildren())
-                {
-                    builder.append("        initialize();\n");
-                }
-                builder.append("        this._").append(propertyInfo.name).append(".addValue(value);\n");
-                if (propertyInfo.isFromAssociation())
-                {
-                    builder.append("        value._reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
-                }
+                builder.append("        value._reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
             }
             builder.append("        return this;\n");
             builder.append("    }\n");
             builder.append('\n');
             builder.append("    public ").append(interfaceNamePlusTypeParams).append(" _").append(propertyInfo.name).append("AddAll(RichIterable<? extends ").append(propertyInfo.returnTypeJava).append("> values)\n");
             builder.append("    {\n");
-            if (delegateToSuperMethod)
+            if (isConcreteElement && !propertyInfo.isPackageChildren())
             {
-                builder.append("        super._").append(propertyInfo.name).append("AddAll(values);\n");
+                builder.append("        initialize();\n");
             }
-            else
+            builder.append("        this._").append(propertyInfo.name).append(".addValues(values);\n");
+            if (propertyInfo.isFromAssociation())
             {
-                if (isConcreteElement && !propertyInfo.isPackageChildren())
-                {
-                    builder.append("        initialize();\n");
-                }
-                builder.append("        this._").append(propertyInfo.name).append(".addValues(values);\n");
-                if (propertyInfo.isFromAssociation())
-                {
-                    builder.append("        for (").append(propertyInfo.returnTypeJava).append(" value : values)\n");
-                    builder.append("        {\n");
-                    builder.append("            value._reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
-                    builder.append("        }\n");
-                }
+                builder.append("        for (").append(propertyInfo.returnTypeJava).append(" value : values)\n");
+                builder.append("        {\n");
+                builder.append("            value._reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
+                builder.append("        }\n");
             }
             builder.append("        return this;\n");
             builder.append("    }\n");
             builder.append('\n');
             builder.append("    public ").append(interfaceNamePlusTypeParams).append(" _").append(propertyInfo.name).append("Remove(").append(propertyInfo.returnTypeJava).append(" value)\n");
             builder.append("    {\n");
-            if (delegateToSuperMethod)
+            if (isConcreteElement && !propertyInfo.isPackageChildren())
             {
-                builder.append("        super._").append(propertyInfo.name).append("Remove(value);\n");
+                builder.append("        initialize();\n");
+            }
+            if (propertyInfo.isFromAssociation())
+            {
+                builder.append("        if (this._").append(propertyInfo.name).append(".removeValue(value))\n");
+                builder.append("        {\n");
+                builder.append("            value._sever_reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
+                builder.append("        }\n");
             }
             else
             {
-                if (isConcreteElement && !propertyInfo.isPackageChildren())
-                {
-                    builder.append("        initialize();\n");
-                }
-                if (propertyInfo.isFromAssociation())
-                {
-                    builder.append("        if (this._").append(propertyInfo.name).append(".removeValue(value))\n");
-                    builder.append("        {\n");
-                    builder.append("            value._sever_reverse_").append(propertyInfo.reversePropertyName).append("(this);\n");
-                    builder.append("        }\n");
-                }
-                else
-                {
-                    builder.append("        this._").append(propertyInfo.name).append(".removeValue(value);\n");
-                }
+                builder.append("        this._").append(propertyInfo.name).append(".removeValue(value);\n");
             }
             builder.append("        return this;\n");
             builder.append("    }\n");
@@ -1421,9 +1398,9 @@ public class ClassNewLazyImplProcessor
         builder.append('\n');
         builder.append("    public ").append(interfaceNamePlusTypeParams).append(" _").append(propertyInfo.name).append("Remove()\n");
         builder.append("    {\n");
-        if (delegateToSuperMethod)
+        if (isPackageableName)
         {
-            builder.append("        super._").append(propertyInfo.name).append("Remove();\n");
+            builder.append("        setName(null);\n");
         }
         else
         {
@@ -1442,7 +1419,7 @@ public class ClassNewLazyImplProcessor
         }
         builder.append("        return this;\n");
         builder.append("    }\n");
-        if (!delegateToSuperMethod)
+        if (!isPackageableName)
         {
             builder.append('\n');
             builder.append("    public void _reverse_").append(propertyInfo.name).append("(").append(propertyInfo.returnTypeJava).append(" value)\n");
@@ -1688,6 +1665,21 @@ public class ClassNewLazyImplProcessor
             builder.append("        }\n");
         }
         builder.append("    }\n");
+    }
+
+    private static boolean isConcreteElement(Class<? extends AbstractLazyCoreInstance> superClass)
+    {
+        return AbstractLazyConcreteElement.class.isAssignableFrom(superClass);
+    }
+
+    private static boolean isPackageableElement(Class<? extends AbstractLazyCoreInstance> superClass)
+    {
+        return isPackageableElement(superClass, isConcreteElement(superClass));
+    }
+
+    private static boolean isPackageableElement(Class<? extends AbstractLazyCoreInstance> superClass, boolean isConcreteElement)
+    {
+        return isConcreteElement || AbstractLazyVirtualPackage.class.isAssignableFrom(superClass);
     }
 
     private static ListIterable<PropertyInfo> getSimplePropertiesSortedByName(CoreInstance classGenericType, CoreInstance _class, ProcessorContext processorContext)

@@ -14,22 +14,21 @@
 
 package org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance;
 
-import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyPackageableElement;
+import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyVirtualPackage;
 import org.finos.legend.pure.m3.execution.ExecutionSupport;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.VirtualPackageMetadata;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolvers;
-import org.finos.legend.pure.m4.coreinstance.compileState.CompileStateSet;
 import org.finos.legend.pure.m4.tools.SafeAppendable;
 import org.finos.legend.pure.runtime.java.compiled.execution.ConsoleCompiled;
 
-public abstract class AbstractCompiledLazyVirtualPackage extends AbstractLazyPackageableElement implements JavaCompiledCoreInstance
+public abstract class AbstractCompiledLazyVirtualPackage extends AbstractLazyVirtualPackage implements JavaCompiledCoreInstance
 {
     protected AbstractCompiledLazyVirtualPackage(VirtualPackageMetadata metadata, ReferenceIdResolvers referenceIds)
     {
-        super(null, -1, null, CompileStateSet.PROCESSED_VALIDATED.toBitSet(), metadata, referenceIds);
+        super(null, -1, metadata, referenceIds);
     }
 
-    protected AbstractCompiledLazyVirtualPackage(AbstractLazyPackageableElement source)
+    protected AbstractCompiledLazyVirtualPackage(AbstractCompiledLazyVirtualPackage source)
     {
         super(source);
     }
