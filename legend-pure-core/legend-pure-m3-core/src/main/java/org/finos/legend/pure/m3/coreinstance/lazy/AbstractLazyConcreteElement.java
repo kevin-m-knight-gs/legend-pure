@@ -34,15 +34,17 @@ import org.slf4j.LoggerFactory;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
-public abstract class AbstractLazyConcreteElement extends AbstractLazyPackageableElement
+public abstract class AbstractLazyConcreteElement extends AbstractLazyCoreInstance
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractLazyConcreteElement.class);
 
+    protected final String path;
     private volatile Init init;
 
     protected AbstractLazyConcreteElement(ModelRepository repository, int internalSyntheticId, ConcreteElementMetadata metadata, ElementBuilder elementBuilder, ReferenceIdResolvers referenceIds, PrimitiveValueResolver primitiveValueResolver, Supplier<? extends DeserializedConcreteElement> deserializer, Supplier<? extends BackReferenceProvider> backRefProviderDeserializer)
     {
-        super(repository, internalSyntheticId, metadata.getSourceInformation(), 0, metadata, referenceIds);
+        super(repository, internalSyntheticId, getNameFromPath(metadata.getPath()), metadata.getSourceInformation(), 0, metadata.getClassifierPath(), referenceIds.packagePathResolver());
+        this.path = metadata.getPath();
         this.init = new Init(elementBuilder, referenceIds, primitiveValueResolver, deserializer, backRefProviderDeserializer);
     }
 
@@ -50,6 +52,7 @@ public abstract class AbstractLazyConcreteElement extends AbstractLazyPackageabl
     {
         super(source);
         source.initialize();
+        this.path = source.path;
         this.init = null;
     }
 

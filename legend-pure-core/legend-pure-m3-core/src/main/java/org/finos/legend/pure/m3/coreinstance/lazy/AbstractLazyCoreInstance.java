@@ -22,15 +22,9 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.MutableSet;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.ReferenceUsage;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.extension.AnnotatedElement;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.property.Property;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.property.QualifiedProperty;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.relationship.Generalization;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Any;
-import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.FunctionExpression;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation._package._Package;
 import org.finos.legend.pure.m3.serialization.compiler.element.ElementBuilder;
 import org.finos.legend.pure.m3.serialization.compiler.element.InstanceData;
 import org.finos.legend.pure.m3.serialization.compiler.element.PropertyValues;
@@ -40,6 +34,8 @@ import org.finos.legend.pure.m3.serialization.compiler.element.ValueOrReference;
 import org.finos.legend.pure.m3.serialization.compiler.element.ValueOrReferenceVisitor;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.BackReference;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.BackReferenceConsumer;
+import org.finos.legend.pure.m3.serialization.compiler.metadata.MetadataIndex;
+import org.finos.legend.pure.m3.serialization.compiler.metadata.PackageableElementMetadata;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolver;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolvers;
 import org.finos.legend.pure.m4.ModelRepository;
@@ -61,7 +57,7 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
-public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance implements Any
+public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
 {
     private static final AtomicIntegerFieldUpdater<AbstractLazyCoreInstance> UPDATER = AtomicIntegerFieldUpdater.newUpdater(AbstractLazyCoreInstance.class, "compileStateBitSet");
 
@@ -101,6 +97,11 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
     protected AbstractLazyCoreInstance(ModelRepository repository, int internalSyntheticId, String name, SourceInformation sourceInformation, int compileStateBitSet, String classifierPath, Function<? super String, ? extends CoreInstance> packagePathResolver)
     {
         this(repository, internalSyntheticId, name, sourceInformation, compileStateBitSet, packageableElementSupplier(packagePathResolver, classifierPath));
+    }
+
+    protected AbstractLazyCoreInstance(ModelRepository repository, int internalSyntheticId, String name, SourceInformation sourceInformation, int compileStateBitSet, String classifierPath, ReferenceIdResolvers referenceIdResolvers)
+    {
+        this(repository, internalSyntheticId, name, sourceInformation, compileStateBitSet, classifierPath, referenceIdResolvers.packagePathResolver());
     }
 
     protected AbstractLazyCoreInstance(ModelRepository repository, int internalSyntheticId, String name, SourceInformation sourceInformation, int compileStateBitSet, String classifierPath, ReferenceIdResolver referenceIdResolver)
@@ -649,26 +650,73 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
         };
     }
 
+    protected static String getNameFromPath(String path)
+    {
+        int lastColon = path.lastIndexOf(':');
+        return (lastColon == -1) ? path : path.substring(lastColon + 1);
+    }
+
+    protected static String getPackageFromPath(String path)
+    {
+        if (M3Paths.Root.equals(path) || _Package.SPECIAL_TYPES.contains(path))
+        {
+            return null;
+        }
+        int lastColon = path.lastIndexOf(':');
+        return (lastColon == -1) ? M3Paths.Root : path.substring(0, lastColon - 1);
+    }
+
+    protected static <T extends CoreInstance> OneValue<T> computePackage(String path, ReferenceIdResolvers referenceIds)
+    {
+        return computePackage(path, referenceIds.packagePathResolver());
+    }
+
+    protected static <T extends CoreInstance> OneValue<T> computePackage(String path, Function<? super String, ? extends CoreInstance> packagePathResolver)
+    {
+        String pkg = getPackageFromPath(path);
+        return (pkg == null) ? fromValue(null) : fromSupplier(packageableElementSupplier(packagePathResolver, pkg));
+    }
+
+    protected static <T extends CoreInstance> ManyValues<T> computePackageChildren(String path, MetadataIndex metadataIndex, ReferenceIdResolvers referenceIds)
+    {
+        return computePackageChildren(path, metadataIndex, referenceIds.packagePathResolver());
+    }
+
+    protected static <T extends CoreInstance> ManyValues<T> computePackageChildren(String path, MetadataIndex metadataIndex, Function<? super String, ? extends CoreInstance> packagePathResolver)
+    {
+        ImmutableList<PackageableElementMetadata> children = metadataIndex.getPackageChildren(path);
+        return children.isEmpty() ?
+               fromValues(null) :
+               fromSuppliers(children.collect(child -> packageableElementSupplier(packagePathResolver, child.getPath()), Lists.mutable.ofInitialCapacity(children.size())));
+    }
+
     // Back references
 
-    protected static <PS> void collectBackReferences(ListIterable<? extends BackReference> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder,
-                                                     Collection<? super Supplier<? extends FunctionExpression>> applications,
-                                                     Collection<? super Supplier<? extends AnnotatedElement>> modelElements,
-                                                     Collection<? super Supplier<? extends Property<? extends PS, ?>>> propertiesFromAssociations,
-                                                     Collection<? super Supplier<? extends QualifiedProperty<?>>> qualifiedPropertiesFromAssociations,
-                                                     Collection<? super Supplier<? extends ReferenceUsage>> refUsages,
-                                                     Collection<? super Supplier<? extends Generalization>> specializations)
+    protected static <FE extends CoreInstance, AE extends CoreInstance, P extends CoreInstance, QP extends CoreInstance, RU extends CoreInstance, G extends CoreInstance>
+    void collectBackReferences(ListIterable<? extends BackReference> backReferences,
+                               ReferenceIdResolvers referenceIds,
+                               ElementBuilder elementBuilder,
+                               Collection<? super Supplier<? extends FE>> applications,
+                               Collection<? super Supplier<? extends AE>> modelElements,
+                               Collection<? super Supplier<? extends P>> propertiesFromAssociations,
+                               Collection<? super Supplier<? extends QP>> qualifiedPropertiesFromAssociations,
+                               Collection<? super Supplier<? extends RU>> refUsages,
+                               Collection<? super Supplier<? extends G>> specializations)
     {
         collectBackReferences(backReferences, referenceIds.resolver(), null, elementBuilder, applications, modelElements, propertiesFromAssociations, qualifiedPropertiesFromAssociations, refUsages, specializations);
     }
 
-    protected static <PS> void collectBackReferences(ListIterable<? extends BackReference> backReferences, ReferenceIdResolver refIdResolver, IntFunction<? extends CoreInstance> internalIdResolver, ElementBuilder elementBuilder,
-                                                     Collection<? super Supplier<? extends FunctionExpression>> applications,
-                                                     Collection<? super Supplier<? extends AnnotatedElement>> modelElements,
-                                                     Collection<? super Supplier<? extends Property<? extends PS, ?>>> propertiesFromAssociations,
-                                                     Collection<? super Supplier<? extends QualifiedProperty<?>>> qualifiedPropertiesFromAssociations,
-                                                     Collection<? super Supplier<? extends ReferenceUsage>> refUsages,
-                                                     Collection<? super Supplier<? extends Generalization>> specializations)
+    protected static <FE extends CoreInstance, AE extends CoreInstance, P extends CoreInstance, QP extends CoreInstance, RU extends CoreInstance, G extends CoreInstance>
+    void collectBackReferences(ListIterable<? extends BackReference> backReferences,
+                               ReferenceIdResolver refIdResolver,
+                               IntFunction<? extends CoreInstance> internalIdResolver,
+                               ElementBuilder elementBuilder,
+                               Collection<? super Supplier<? extends FE>> applications,
+                               Collection<? super Supplier<? extends AE>> modelElements,
+                               Collection<? super Supplier<? extends P>> propertiesFromAssociations,
+                               Collection<? super Supplier<? extends QP>> qualifiedPropertiesFromAssociations,
+                               Collection<? super Supplier<? extends RU>> refUsages,
+                               Collection<? super Supplier<? extends G>> specializations)
     {
         IntFunction<? extends CoreInstance> intIdResolver = (internalIdResolver == null) ? getVacuousInternalIdResolver() : internalIdResolver;
         backReferences.forEach(new BackReferenceConsumer()
@@ -729,45 +777,50 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
         });
     }
 
-    protected static Supplier<FunctionExpression> getApplicationSupplier(BackReference.Application application, ReferenceIdResolver idResolver)
+    @SuppressWarnings("unchecked")
+    protected static <FE extends CoreInstance> Supplier<FE> getApplicationSupplier(BackReference.Application application, ReferenceIdResolver idResolver)
     {
         String funcExprId = application.getFunctionExpression();
-        return () -> (FunctionExpression) idResolver.resolveReference(funcExprId);
-    }
-
-    protected static Supplier<AnnotatedElement> getModelElementSupplier(BackReference.ModelElement modelElement, ReferenceIdResolver idResolver)
-    {
-        String elementId = modelElement.getElement();
-        return () -> (AnnotatedElement) idResolver.resolveReference(elementId);
+        return () -> (FE) idResolver.resolveReference(funcExprId);
     }
 
     @SuppressWarnings("unchecked")
-    protected static <U, V> Supplier<Property<U, V>> getPropertyFromAssociationSupplier(BackReference.PropertyFromAssociation propertyFromAssociation, ReferenceIdResolver idResolver)
+    protected static <AE extends CoreInstance> Supplier<AE> getModelElementSupplier(BackReference.ModelElement modelElement, ReferenceIdResolver idResolver)
+    {
+        String elementId = modelElement.getElement();
+        return () -> (AE) idResolver.resolveReference(elementId);
+    }
+
+    @SuppressWarnings("unchecked")
+    protected static <P extends CoreInstance> Supplier<P> getPropertyFromAssociationSupplier(BackReference.PropertyFromAssociation propertyFromAssociation, ReferenceIdResolver idResolver)
     {
         String propertyId = propertyFromAssociation.getProperty();
-        return () -> (Property<U, V>) idResolver.resolveReference(propertyId);
+        return () -> (P) idResolver.resolveReference(propertyId);
     }
 
-    protected static Supplier<QualifiedProperty<?>> getQualifiedPropertyFromAssociationSupplier(BackReference.QualifiedPropertyFromAssociation propertyFromAssociation, ReferenceIdResolver idResolver)
+    @SuppressWarnings("unchecked")
+    protected static <QP extends CoreInstance> Supplier<QP> getQualifiedPropertyFromAssociationSupplier(BackReference.QualifiedPropertyFromAssociation propertyFromAssociation, ReferenceIdResolver idResolver)
     {
         String propertyId = propertyFromAssociation.getQualifiedProperty();
-        return () -> (QualifiedProperty<?>) idResolver.resolveReference(propertyId);
+        return () -> (QP) idResolver.resolveReference(propertyId);
     }
 
-    protected static Supplier<ReferenceUsage> getRefUsageSupplier(BackReference.ReferenceUsage referenceUsage, ElementBuilder elementBuilder, ReferenceIdResolver idResolver, IntFunction<? extends CoreInstance> internalIdResolver)
+    @SuppressWarnings("unchecked")
+    protected static <RU extends CoreInstance> Supplier<RU> getRefUsageSupplier(BackReference.ReferenceUsage referenceUsage, ElementBuilder elementBuilder, ReferenceIdResolver idResolver, IntFunction<? extends CoreInstance> internalIdResolver)
     {
         PropertyValues offset = PropertyValues.newPropertyValues(M3Properties.offset, M3Paths.ReferenceUsage, Value.newIntegerValue(referenceUsage.getOffset()));
         PropertyValues owner = PropertyValues.newPropertyValues(M3Properties.owner, M3Paths.ReferenceUsage, Reference.newExternalReference(referenceUsage.getOwner()));
         PropertyValues property = PropertyValues.newPropertyValues(M3Properties.propertyName, M3Paths.ReferenceUsage, Value.newStringValue(referenceUsage.getProperty()));
 
         InstanceData instanceData = InstanceData.newInstanceData(null, M3Paths.ReferenceUsage, referenceUsage.getSourceInformation(), null, CompileStateSet.PROCESSED_VALIDATED.toBitSet(), Lists.immutable.with(offset, owner, property));
-        return () -> (ReferenceUsage) elementBuilder.buildComponentInstance(instanceData, Lists.fixedSize.empty(), idResolver, internalIdResolver);
+        return () -> (RU) elementBuilder.buildComponentInstance(instanceData, Lists.fixedSize.empty(), idResolver, internalIdResolver);
     }
 
-    protected static Supplier<Generalization> getSpecializationSupplier(BackReference.Specialization specialization, ReferenceIdResolver idResolver)
+    @SuppressWarnings("unchecked")
+    protected static <G extends CoreInstance> Supplier<G> getSpecializationSupplier(BackReference.Specialization specialization, ReferenceIdResolver idResolver)
     {
         String generalizationId = specialization.getGeneralization();
-        return () -> (Generalization) idResolver.resolveReference(generalizationId);
+        return () -> (G) idResolver.resolveReference(generalizationId);
     }
 
     // Values
@@ -1067,6 +1120,8 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
                             SharedSupplier<? extends T> sharedSupplier = (SharedSupplier<? extends T>) local;
                             if (sharedSupplier.isResolved())
                             {
+                                // The SharedSupplier might have been resolved by another instance holding it.
+                                // In that case, we can resolve the value for this holder, as well as the copy.
                                 T v = this.value = sharedSupplier.getResolvedValue();
                                 this.initializer = null;
                                 return new SimpleOneValue<>(v);
@@ -1393,7 +1448,10 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
                         }
                         else if (((SharedSupplier<?>) this.initializers.get(0)).isResolved())
                         {
-                            // if one is resolved, then all are resolved (or are being resolved): get the values
+                            // The SharedSupplier(s) might have been resolved (or might be in the process of being
+                            // resolved) by another instance holding it. Note that if one is resolved, then all are
+                            // resolved (or being resolved). In that case, we can resolve the values for this holder,
+                            // as well as the copy.
                             this.values = local = this.initializers.collect(Supplier::get, Lists.mutable.<T>ofInitialCapacity(this.initializers.size())).toImmutable();
                             this.initializers = null;
                             return new SimpleManyValues<>(local);
