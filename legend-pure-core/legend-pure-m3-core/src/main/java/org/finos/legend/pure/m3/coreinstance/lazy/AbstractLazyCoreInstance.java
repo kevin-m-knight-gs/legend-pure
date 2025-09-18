@@ -46,9 +46,12 @@ import org.finos.legend.pure.m4.coreinstance.compileState.CompileState;
 import org.finos.legend.pure.m4.coreinstance.compileState.CompileStateSet;
 import org.finos.legend.pure.m4.coreinstance.indexing.IDConflictException;
 import org.finos.legend.pure.m4.coreinstance.indexing.IndexSpecification;
+import org.finos.legend.pure.m4.coreinstance.primitive.date.PureDate;
+import org.finos.legend.pure.m4.coreinstance.primitive.strictTime.PureStrictTime;
 import org.finos.legend.pure.m4.exception.PureCompilationException;
 import org.finos.legend.pure.m4.transaction.ModelRepositoryTransaction;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -295,7 +298,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
         return index;
     }
 
-    protected static <V> OneValue<V> newToOnePropertyValue(PropertyValues propertyValues, ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver)
+    protected static <V> OneValue<V> newToOnePropertyValue(PropertyValues propertyValues, ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver, boolean allowEagerValueResolution)
     {
         if (propertyValues == null)
         {
@@ -306,11 +309,11 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
         {
             throw new IllegalStateException("Cannot create to-one property value for property '" + propertyValues.getPropertyName() + "': " + values.size() + " values present");
         }
-        return newToOnePropertyValue(values.getFirst(), extResolver, intResolver, primitiveValueResolver);
+        return newToOnePropertyValue(values.getFirst(), extResolver, intResolver, primitiveValueResolver, allowEagerValueResolution);
     }
 
     @SuppressWarnings("unchecked")
-    protected static <V> OneValue<V> newToOnePropertyValue(ValueOrReference propertyValue, ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver)
+    protected static <V> OneValue<V> newToOnePropertyValue(ValueOrReference propertyValue, ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver, boolean allowEagerValueResolution)
     {
         return (propertyValue == null) ? fromValue(null) : propertyValue.visit(new ValueOrReferenceVisitor<OneValue<V>>()
         {
@@ -331,77 +334,109 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
             @Override
             public OneValue<V> visit(Value.BooleanValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveBoolean(value.getValue()));
+                boolean b = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveBoolean(b)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveBoolean(b));
             }
 
             @Override
             public OneValue<V> visit(Value.ByteValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveByte(value.getValue()));
+                byte b = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveByte(b)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveByte(b));
             }
 
             @Override
             public OneValue<V> visit(Value.DateValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveDate(value.getValue()));
+                PureDate date = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveDate(date)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveDate(date));
             }
 
             @Override
             public OneValue<V> visit(Value.DateTimeValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveDateTime(value.getValue()));
+                PureDate dateTime = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveDateTime(dateTime)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveDateTime(dateTime));
             }
 
             @Override
             public OneValue<V> visit(Value.StrictDateValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveStrictDate(value.getValue()));
+                PureDate strictDate = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveStrictDate(strictDate)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveStrictDate(strictDate));
             }
 
             @Override
             public OneValue<V> visit(Value.LatestDateValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveLatestDate());
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveLatestDate()) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveLatestDate());
             }
 
             @Override
             public OneValue<V> visit(Value.DecimalValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveDecimal(value.getValue()));
+                BigDecimal d = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveDecimal(d)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveDecimal(d));
             }
 
             @Override
             public OneValue<V> visit(Value.FloatValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveFloat(value.getValue()));
+                BigDecimal f = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveFloat(f)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveFloat(f));
             }
 
             @Override
             public OneValue<V> visit(Value.IntegerValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveInteger(value.getValue()));
+                Number i = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveInteger(i)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveInteger(i));
             }
 
             @Override
             public OneValue<V> visit(Value.StrictTimeValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveStrictTime(value.getValue()));
+                PureStrictTime strictTime = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveStrictTime(strictTime)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveStrictTime(strictTime));
             }
 
             @Override
             public OneValue<V> visit(Value.StringValue value)
             {
-                return fromValue((V) primitiveValueResolver.resolveString(value.getValue()));
+                String string = value.getValue();
+                return allowEagerValueResolution ?
+                       fromValue((V) primitiveValueResolver.resolveString(string)) :
+                       fromSupplier(() -> (V) primitiveValueResolver.resolveString(string));
             }
         });
     }
 
-    protected static <V> ManyValues<V> newToManyPropertyValue(PropertyValues propertyValues, ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver)
+    protected static <V> ManyValues<V> newToManyPropertyValue(PropertyValues propertyValues, ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver, boolean allowEagerValueResolution)
     {
-        return newToManyPropertyValue(propertyValues, extResolver, intResolver, primitiveValueResolver, null);
+        return newToManyPropertyValue(propertyValues, extResolver, intResolver, primitiveValueResolver, allowEagerValueResolution, null);
     }
 
-    protected static <V> ManyValues<V> newToManyPropertyValue(PropertyValues propertyValues, ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver, ListIterable<? extends Supplier<? extends V>> extraSuppliers)
+    protected static <V> ManyValues<V> newToManyPropertyValue(PropertyValues propertyValues, ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver, boolean allowEagerValueResolution, ListIterable<? extends Supplier<? extends V>> extraSuppliers)
     {
         ListIterable<ValueOrReference> pvList = (propertyValues == null) ? null : propertyValues.getValues();
         if ((extraSuppliers != null) && extraSuppliers.notEmpty())
@@ -410,7 +445,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
             {
                 return fromSuppliers(extraSuppliers.toImmutable());
             }
-            ValueOrReferenceVisitor<Supplier<V>> visitor = getSupplierVisitor(extResolver, intResolver, primitiveValueResolver);
+            ValueOrReferenceVisitor<Supplier<V>> visitor = getSupplierVisitor(extResolver, intResolver, primitiveValueResolver, allowEagerValueResolution);
             MutableList<Supplier<? extends V>> suppliers = Lists.mutable.ofInitialCapacity(pvList.size() + extraSuppliers.size());
             pvList.collect(v -> v.visit(visitor), suppliers);
             suppliers.addAllIterable(extraSuppliers);
@@ -420,12 +455,12 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
         {
             return fromValues(null);
         }
-        if (pvList.noneSatisfy(v -> v instanceof Reference))
+        if (allowEagerValueResolution && pvList.noneSatisfy(v -> v instanceof Reference))
         {
             ValueOrReferenceVisitor<V> visitor = getValueVisitor(primitiveValueResolver);
             return fromValues(pvList.collect(v -> v.visit(visitor), Lists.mutable.ofInitialCapacity(pvList.size())));
         }
-        ValueOrReferenceVisitor<Supplier<V>> visitor = getSupplierVisitor(extResolver, intResolver, primitiveValueResolver);
+        ValueOrReferenceVisitor<Supplier<V>> visitor = getSupplierVisitor(extResolver, intResolver, primitiveValueResolver, allowEagerValueResolution);
         return fromSuppliers(pvList.collect(v -> v.visit(visitor), Lists.mutable.ofInitialCapacity(pvList.size())));
     }
 
@@ -503,95 +538,188 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
     }
 
     @SuppressWarnings("unchecked")
-    private static <V> ValueOrReferenceVisitor<Supplier<V>> getSupplierVisitor(ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver)
+    private static <V> ValueOrReferenceVisitor<Supplier<V>> getSupplierVisitor(ReferenceIdResolver extResolver, IntFunction<? extends CoreInstance> intResolver, PrimitiveValueResolver primitiveValueResolver, boolean allowEagerValueResolution)
     {
-        return new ValueOrReferenceVisitor<Supplier<V>>()
-        {
-            @Override
-            public Supplier<V> visit(Reference.ExternalReference reference)
-            {
-                String id = reference.getId();
-                return () -> (V) extResolver.resolveReference(id);
-            }
+        return allowEagerValueResolution ?
+               new ValueOrReferenceVisitor<Supplier<V>>()
+               {
+                   @Override
+                   public Supplier<V> visit(Reference.ExternalReference reference)
+                   {
+                       String id = reference.getId();
+                       return () -> (V) extResolver.resolveReference(id);
+                   }
 
-            @Override
-            public Supplier<V> visit(Reference.InternalReference reference)
-            {
-                int id = reference.getId();
-                return () -> (V) intResolver.apply(id);
-            }
+                   @Override
+                   public Supplier<V> visit(Reference.InternalReference reference)
+                   {
+                       int id = reference.getId();
+                       return () -> (V) intResolver.apply(id);
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.BooleanValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveBoolean(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.BooleanValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveBoolean(value.getValue()));
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.ByteValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveByte(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.ByteValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveByte(value.getValue()));
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.DateValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveDate(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.DateValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveDate(value.getValue()));
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.DateTimeValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveDateTime(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.DateTimeValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveDateTime(value.getValue()));
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.StrictDateValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveStrictDate(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.StrictDateValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveStrictDate(value.getValue()));
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.LatestDateValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveLatestDate());
-            }
+                   @Override
+                   public Supplier<V> visit(Value.LatestDateValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveLatestDate());
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.DecimalValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveDecimal(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.DecimalValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveDecimal(value.getValue()));
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.FloatValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveFloat(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.FloatValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveFloat(value.getValue()));
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.IntegerValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveInteger(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.IntegerValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveInteger(value.getValue()));
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.StrictTimeValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveStrictTime(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.StrictTimeValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveStrictTime(value.getValue()));
+                   }
 
-            @Override
-            public Supplier<V> visit(Value.StringValue value)
-            {
-                return valueSupplier((V) primitiveValueResolver.resolveString(value.getValue()));
-            }
+                   @Override
+                   public Supplier<V> visit(Value.StringValue value)
+                   {
+                       return valueSupplier((V) primitiveValueResolver.resolveString(value.getValue()));
+                   }
 
-            private Supplier<V> valueSupplier(V value)
-            {
-                return () -> value;
-            }
-        };
+                   private Supplier<V> valueSupplier(V value)
+                   {
+                       return () -> value;
+                   }
+               } :
+               new ValueOrReferenceVisitor<Supplier<V>>()
+               {
+                   @Override
+                   public Supplier<V> visit(Reference.ExternalReference reference)
+                   {
+                       String id = reference.getId();
+                       return () -> (V) extResolver.resolveReference(id);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Reference.InternalReference reference)
+                   {
+                       int id = reference.getId();
+                       return () -> (V) intResolver.apply(id);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.BooleanValue value)
+                   {
+                       boolean b = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveBoolean(b);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.ByteValue value)
+                   {
+                       byte b = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveByte(b);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.DateValue value)
+                   {
+                       PureDate date = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveDate(date);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.DateTimeValue value)
+                   {
+                       PureDate dateTime = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveDateTime(dateTime);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.StrictDateValue value)
+                   {
+                       PureDate strictDate = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveStrictDate(strictDate);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.LatestDateValue value)
+                   {
+                       return () -> (V) primitiveValueResolver.resolveLatestDate();
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.DecimalValue value)
+                   {
+                       BigDecimal d = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveDecimal(d);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.FloatValue value)
+                   {
+                       BigDecimal f = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveFloat(f);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.IntegerValue value)
+                   {
+                       Number i = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveInteger(i);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.StrictTimeValue value)
+                   {
+                       PureStrictTime strictTime = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveStrictTime(strictTime);
+                   }
+
+                   @Override
+                   public Supplier<V> visit(Value.StringValue value)
+                   {
+                       String string = value.getValue();
+                       return () -> (V) primitiveValueResolver.resolveString(string);
+                   }
+               };
     }
 
     @SuppressWarnings("unchecked")
