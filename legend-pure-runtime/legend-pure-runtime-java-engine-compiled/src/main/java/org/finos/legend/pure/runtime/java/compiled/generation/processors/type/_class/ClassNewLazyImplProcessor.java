@@ -317,7 +317,7 @@ public class ClassNewLazyImplProcessor
             {
                 builder.append("        this._").append(propertyInfo.name).append(" = ")
                         .append(propertyInfo.toOne ? "newToOnePropertyValue" : "newToManyPropertyValue")
-                        .append("(propertyValuesByName.get(\"").append(propertyInfo.name).append("\"), referenceIdResolver, internalIdResolver, primitiveValueResolver");
+                        .append("(propertyValuesByName.get(\"").append(propertyInfo.name).append("\"), referenceIdResolver, internalIdResolver, primitiveValueResolver, true");
                 if (propertyInfo.isBackRef())
                 {
                     builder.append(", ").append(propertyInfo.name);
@@ -1596,7 +1596,7 @@ public class ClassNewLazyImplProcessor
             {
                 builder.append("        this._").append(propertyInfo.name).append(" = ")
                         .append(propertyInfo.toOne ? "newToOnePropertyValue" : "newToManyPropertyValue")
-                        .append("(propertyValuesByName.get(\"").append(propertyInfo.name).append("\"), referenceIdResolver, internalIdResolver, primitiveValueResolver");
+                        .append("(propertyValuesByName.get(\"").append(propertyInfo.name).append("\"), referenceIdResolver, internalIdResolver, primitiveValueResolver, true");
                 if (propertyInfo.isBackRef())
                 {
                     builder.append(", ").append(propertyInfo.name);
