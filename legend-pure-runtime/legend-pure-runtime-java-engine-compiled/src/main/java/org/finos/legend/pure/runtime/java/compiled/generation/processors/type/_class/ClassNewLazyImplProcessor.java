@@ -27,6 +27,8 @@ import org.eclipse.collections.api.set.MutableSet;
 import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyConcreteElement;
 import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyCoreInstance;
 import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyVirtualPackage;
+import org.finos.legend.pure.m3.coreinstance.lazy.ManyValues;
+import org.finos.legend.pure.m3.coreinstance.lazy.OneValue;
 import org.finos.legend.pure.m3.coreinstance.lazy.PrimitiveValueResolver;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Paths;
@@ -231,6 +233,8 @@ public class ClassNewLazyImplProcessor
 
         MutableList<String> imports = ClassImplProcessor.IMPORTS_LIST.toList()
                 .with(superClass.getName())
+                .with(ManyValues.class.getName())
+                .with(OneValue.class.getName())
                 .with(ModelRepository.class.getName())
                 .with(SourceInformation.class.getName())
                 .with(IndexSpecification.class.getName())
