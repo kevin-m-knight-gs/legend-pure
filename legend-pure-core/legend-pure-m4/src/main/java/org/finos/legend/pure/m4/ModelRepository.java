@@ -876,7 +876,7 @@ public class ModelRepository
         this.anonymousIdCounter.set(anonymousIdCounter);
     }
 
-    private int nextId()
+    public int nextId()
     {
         return this.idCounter.getAndIncrement();
     }
@@ -886,7 +886,7 @@ public class ModelRepository
         return this.anonymousIdCounter.getAndIncrement();
     }
 
-    private String nextAnonymousInstanceName()
+    public String nextAnonymousInstanceName()
     {
         String id = Integer.toString(nextAnonymousId(), 32);
         if (id.length() >= ANONYMOUS_PADDING_LENGTH)
