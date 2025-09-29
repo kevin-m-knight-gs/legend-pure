@@ -17,6 +17,7 @@ package org.finos.legend.pure.m3.serialization.compiler.element;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.set.MutableSet;
+import org.eclipse.collections.impl.utility.Iterate;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Any;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3ProcessorSupport;
@@ -331,7 +332,12 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
 
     protected void testConcreteElement(String path, String classifierPath)
     {
-        CE element = assertLoadConcreteElement(path, classifierPath);
+        testConcreteElement(path, classifierPath, true);
+    }
+
+    protected void testConcreteElement(String path, String classifierPath, boolean requireNotLoaded)
+    {
+        CE element = assertLoadConcreteElement(path, classifierPath, requireNotLoaded);
         testConcreteElement(path, classifierPath, element);
     }
 
@@ -362,7 +368,7 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
         }
         else
         {
-            Assert.assertSame(path, getExpectedComponentInstanceClass(M3Paths.GenericType), classifierGenericType.getClass());
+            assertComponentInstanceClass(path, M3Paths.GenericType, classifierGenericType);
             Assert.assertEquals(path, printGenericType(srcClassifierGenericType, true), printGenericType(classifierGenericType, false));
         }
     }
@@ -372,7 +378,7 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
         CoreInstance classifierGenericType = element.getValueForMetaPropertyToOne(M3Properties.classifierGenericType);
         if (classifierGenericType != null)
         {
-            Assert.assertSame(path, getExpectedComponentInstanceClass(M3Paths.GenericType), classifierGenericType.getClass());
+            assertComponentInstanceClass(path, M3Paths.GenericType, classifierGenericType);
             Assert.assertEquals(path, M3Paths.Package, printGenericType(classifierGenericType, false));
         }
     }
@@ -392,8 +398,7 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
         CoreInstance element = this.elementLoader.loadElement(path);
         Assert.assertNotNull(path, element);
         Assert.assertTrue(path, this.elementBuilder.virtualPackages.contains(path));
-        Class<? extends VP> expectedJavaClass = getExpectedVirtualPackageClass();
-        Assert.assertSame(path, expectedJavaClass, element.getClass());
+        assertVirtualPackageClass(path, element);
         assertPackageableElement(path, M3Paths.Package, element);
         return (VP) element;
     }
@@ -413,8 +418,7 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
         CoreInstance element = this.elementLoader.loadElement(path);
         Assert.assertNotNull(path, element);
         Assert.assertTrue(path, this.elementBuilder.concreteElements.contains(path));
-        Class<? extends CE> expectedJavaClass = getExpectedConcreteElementClass(classifierPath);
-        Assert.assertSame(path, expectedJavaClass, element.getClass());
+        assertConcreteElementClass(path, classifierPath, element);
         assertPackageableElement(path, classifierPath, element);
         return (CE) element;
     }
@@ -447,7 +451,7 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
             }
             else
             {
-                Assert.assertSame(getExpectedConcreteElementClass(M3Paths.Package), pkg.getClass());
+                assertConcreteElementClass(path, M3Paths.Package, pkg);
                 Assert.assertEquals(path, M3Paths.Root, getUserPath(pkg));
                 Assert.assertSame(path, this.elementLoader.loadElement(M3Paths.Root), pkg);
                 Assert.assertTrue(path, this.elementBuilder.isConcreteElementLoaded(M3Paths.Root));
@@ -462,11 +466,11 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
             Assert.assertEquals(path, expectedPackagePath, getUserPath(pkg));
             if (this.elementBuilder.isConcreteElementLoaded(expectedPackagePath))
             {
-                Assert.assertSame(getExpectedConcreteElementClass(M3Paths.Package), pkg.getClass());
+                assertConcreteElementClass(path, M3Paths.Package, pkg);
             }
             else if (this.elementBuilder.isVirtualPackageLoaded(expectedPackagePath))
             {
-                Assert.assertSame(getExpectedVirtualPackageClass(), pkg.getClass());
+                assertVirtualPackageClass(path, pkg);
             }
             else
             {
@@ -486,6 +490,54 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
 
         // Java class
         Assert.assertSame(getExpectedConcreteElementClass(M3Paths.Class), classifier.getClass());
+    }
+
+    protected void assertVirtualPackageClass(String message, CoreInstance pkg)
+    {
+        assertClass(message, getExpectedVirtualPackageClass(), pkg);
+    }
+
+    protected void assertVirtualPackageClass(String message, Iterable<? extends CoreInstance> packages)
+    {
+        assertClass(message, getExpectedVirtualPackageClass(), packages);
+    }
+
+    protected void assertConcreteElementClass(String message, String classifierPath, CoreInstance element)
+    {
+        assertClass(message, getExpectedConcreteElementClass(classifierPath), element);
+    }
+
+    protected void assertConcreteElementClass(String message, String classifierPath, Iterable<? extends CoreInstance> elements)
+    {
+        assertClass(message, getExpectedConcreteElementClass(classifierPath), elements);
+    }
+
+    protected void assertComponentInstanceClass(String message, String classifierPath, CoreInstance instance)
+    {
+        assertClass(message, getExpectedComponentInstanceClass(classifierPath), instance);
+    }
+
+    protected void assertComponentInstanceClass(String message, String classifierPath, Iterable<? extends CoreInstance> instances)
+    {
+        assertClass(message, getExpectedComponentInstanceClass(classifierPath), instances);
+    }
+
+    protected void assertClass(String message, Class<?> expectedJavaClass, CoreInstance instance)
+    {
+        Assert.assertSame(message, expectedJavaClass, instance.getClass());
+    }
+
+    protected void assertClass(String message, Class<?> expectedJavaClass, Iterable<? extends CoreInstance> instances)
+    {
+        MutableSet<Class<?>> actualJavaClasses = Iterate.collect(instances, Object::getClass, Sets.mutable.empty());
+        if (actualJavaClasses.size() == 1)
+        {
+            Assert.assertSame(message, expectedJavaClass, actualJavaClasses.getAny());
+        }
+        else if (actualJavaClasses.size() > 1)
+        {
+            Assert.assertEquals(message, Sets.fixedSize.with(expectedJavaClass), actualJavaClasses);
+        }
     }
 
     protected String printGenericType(CoreInstance genericType, boolean sourceModel)
@@ -517,6 +569,12 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
         private ElementBuilderWrapper(ElementBuilder delegate)
         {
             this.delegate = delegate;
+        }
+
+        @Override
+        public void initialize(ElementLoader elementLoader)
+        {
+            this.delegate.initialize(elementLoader);
         }
 
         @Override

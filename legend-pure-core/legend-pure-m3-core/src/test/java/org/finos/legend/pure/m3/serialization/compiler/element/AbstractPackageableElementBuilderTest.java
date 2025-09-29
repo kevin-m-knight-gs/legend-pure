@@ -40,6 +40,7 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.PrimitiveT
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Type;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Unit;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.VariableExpression;
+import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.generictype.GenericType;
 import org.finos.legend.pure.m3.navigation.multiplicity.Multiplicity;
 import org.junit.Assert;
@@ -105,9 +106,12 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
         }
 
         Assert.assertEquals(path, getStereotypeSpecs(srcElement._stereotypes()), getStereotypeSpecs(element._stereotypes()));
+        assertComponentInstanceClass(path, M3Paths.Stereotype, element._stereotypes());
         Assert.assertEquals(path, getTaggedValueSpecs(srcElement._taggedValues()), getTaggedValueSpecs(element._taggedValues()));
+        assertComponentInstanceClass(path, M3Paths.TaggedValue, element._taggedValues());
 
         Assert.assertEquals(path, getRefUsageSpecs(srcElement._referenceUsages()).sortThis(), getRefUsageSpecs(element._referenceUsages()).sortThis());
+        assertComponentInstanceClass(path, M3Paths.ReferenceUsage, element._referenceUsages());
 
         if (srcElement instanceof ElementWithConstraints)
         {
@@ -115,6 +119,7 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
             Assert.assertEquals(path,
                     getConstraintSpecs(((ElementWithConstraints) srcElement)._constraints()),
                     getConstraintSpecs(((ElementWithConstraints) element)._constraints()));
+            assertComponentInstanceClass(path, M3Paths.Constraint, ((ElementWithConstraints) element)._constraints());
         }
         else
         {
@@ -143,7 +148,9 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
             Type type = (Type) element;
 
             Assert.assertEquals(path, getGeneralizationSpecs(srcType._generalizations(), true), getGeneralizationSpecs(type._generalizations(), false));
+            assertComponentInstanceClass(path, M3Paths.Generalization, type._generalizations());
             Assert.assertEquals(path, getSpecializationSpecs(srcType._specializations()).sortThis(), getSpecializationSpecs(type._specializations()).sortThis());
+            assertComponentInstanceClass(path, M3Paths.Generalization, type._specializations());
         }
         else
         {
@@ -157,10 +164,15 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
             org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> cls = (org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?>) element;
 
             Assert.assertEquals(path, getPropertySpecs(srcClass._properties(), true), getPropertySpecs(cls._properties(), false));
+            assertComponentInstanceClass(path, M3Paths.Property, cls._properties());
             Assert.assertEquals(path, getQualifiedPropertySpecs(srcClass._qualifiedProperties(), true), getQualifiedPropertySpecs(cls._qualifiedProperties(), false));
+            assertComponentInstanceClass(path, M3Paths.QualifiedProperty, cls._qualifiedProperties());
             Assert.assertEquals(path, getPropertySpecs(srcClass._propertiesFromAssociations(), true), getPropertySpecs(cls._propertiesFromAssociations(), false));
+            assertComponentInstanceClass(path, M3Paths.Property, cls._propertiesFromAssociations());
             Assert.assertEquals(path, getQualifiedPropertySpecs(srcClass._qualifiedPropertiesFromAssociations(), true), getQualifiedPropertySpecs(cls._qualifiedPropertiesFromAssociations(), false));
+            assertComponentInstanceClass(path, M3Paths.QualifiedProperty, cls._qualifiedPropertiesFromAssociations());
             Assert.assertEquals(path, getVariableExpressionSpecs(srcClass._typeVariables(), true), getVariableExpressionSpecs(cls._typeVariables(), false));
+            assertComponentInstanceClass(path, M3Paths.VariableExpression, cls._typeVariables());
         }
         else
         {
@@ -175,6 +187,7 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
 
             Assert.assertEquals(path, srcPrimitiveType._extended(), primitiveType._extended());
             Assert.assertEquals(path, getVariableExpressionSpecs(srcPrimitiveType._typeVariables(), true), getVariableExpressionSpecs(primitiveType._typeVariables(), false));
+            assertComponentInstanceClass(path, M3Paths.VariableExpression, primitiveType._typeVariables());
         }
         else
         {
@@ -184,10 +197,10 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
         if (srcElement instanceof Enumeration)
         {
             Assert.assertTrue(path, element instanceof Enumeration);
-            Enumeration<? extends org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum> srcEnumeration = (Enumeration<? extends org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum>) srcElement;
-            Enumeration<? extends org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum> enumeration = (Enumeration<? extends org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum>) element;
+            Enumeration<? extends Enum> srcEnumeration = (Enumeration<? extends Enum>) srcElement;
+            Enumeration<? extends Enum> enumeration = (Enumeration<? extends Enum>) element;
 
-            Assert.assertEquals(path, srcEnumeration._values().collect(org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum::_name, Lists.mutable.empty()), enumeration._values().collect(Enum::_name, Lists.mutable.empty()));
+            Assert.assertEquals(path, srcEnumeration._values().collect(Enum::_name, Lists.mutable.empty()), enumeration._values().collect(Enum::_name, Lists.mutable.empty()));
         }
         else
         {
@@ -201,7 +214,9 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
             Association association = (Association) element;
 
             Assert.assertEquals(path, getPropertySpecs(srcAssociation._properties(), true), getPropertySpecs(association._properties(), false));
+            assertComponentInstanceClass(path, M3Paths.Property, association._properties());
             Assert.assertEquals(path, getQualifiedPropertySpecs(srcAssociation._qualifiedProperties(), true), getQualifiedPropertySpecs(association._qualifiedProperties(), false));
+            assertComponentInstanceClass(path, M3Paths.QualifiedProperty, association._qualifiedProperties());
         }
         else
         {
@@ -215,7 +230,9 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
             Measure measure = (Measure) element;
 
             Assert.assertEquals(srcMeasure._canonicalUnit()._name(), measure._canonicalUnit()._name());
+            assertComponentInstanceClass(path, M3Paths.Unit, measure._canonicalUnit());
             Assert.assertEquals(srcMeasure._nonCanonicalUnits().collect(Unit::_name, Lists.mutable.empty()), measure._nonCanonicalUnits().collect(Unit::_name, Lists.mutable.empty()));
+            assertComponentInstanceClass(path, M3Paths.Unit, measure._nonCanonicalUnits());
         }
         else
         {
@@ -230,13 +247,14 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
 
             FunctionType srcFuncType = (FunctionType) srcFunc._classifierGenericType()._typeArguments().getOnly()._rawType();
             FunctionType funcType = (FunctionType) func._classifierGenericType()._typeArguments().getOnly()._rawType();
+            assertComponentInstanceClass(path, M3Paths.FunctionType, funcType);
             Assert.assertEquals(path, getVariableExpressionSpecs(srcFuncType._parameters(), true), getVariableExpressionSpecs(funcType._parameters(), false));
+            assertComponentInstanceClass(path, M3Paths.VariableExpression, funcType._parameters());
+            Assert.assertEquals(path, printGenericType(srcFuncType._returnType(), true), printGenericType(funcType._returnType(), false));
+            assertComponentInstanceClass(path, M3Paths.GenericType, funcType._returnType());
 
             Assert.assertEquals(path, srcFunc._applications().size(), func._applications().size());
             Assert.assertEquals(path, srcFunc._expressionSequence().size(), func._expressionSequence().size());
-
-            Assert.assertEquals(path, getVariableExpressionSpecs(srcFuncType._parameters(), true), getVariableExpressionSpecs(funcType._parameters(), false));
-            Assert.assertEquals(path, printGenericType(srcFuncType._returnType(), true), printGenericType(funcType._returnType(), false));
         }
         else
         {
