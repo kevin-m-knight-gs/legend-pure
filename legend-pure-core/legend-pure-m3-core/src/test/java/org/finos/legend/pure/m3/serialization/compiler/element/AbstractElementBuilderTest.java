@@ -19,9 +19,12 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.set.MutableSet;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Any;
 import org.finos.legend.pure.m3.navigation.M3Paths;
+import org.finos.legend.pure.m3.navigation.M3ProcessorSupport;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
+import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.navigation.generictype.GenericType;
 import org.finos.legend.pure.m3.serialization.compiler.PureCompilerSerializer;
 import org.finos.legend.pure.m3.serialization.compiler.file.FileDeserializer;
 import org.finos.legend.pure.m3.serialization.compiler.file.FilePathProvider;
@@ -38,6 +41,7 @@ import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdProv
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolver;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolvers;
 import org.finos.legend.pure.m3.tools.GraphTools;
+import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.junit.Assert;
 import org.junit.Before;
@@ -60,8 +64,10 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
     private static FileDeserializer fileDeserializer;
     private static MetadataIndex metadataIndex;
 
+    protected ModelRepository elementModelRepository;
     protected ElementBuilderWrapper elementBuilder;
     protected ElementLoader elementLoader;
+    protected ProcessorSupport elementProcessorSupport;
 
     @BeforeClass
     public static void serialize() throws IOException
@@ -90,6 +96,7 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
     @Before
     public void setUpElementBuilderAndLoader()
     {
+        this.elementModelRepository = new ModelRepository();
         this.elementBuilder = new ElementBuilderWrapper(newElementBuilder());
         this.elementLoader = ElementLoader.builder()
                 .withMetadataIndex(metadataIndex)
@@ -98,6 +105,7 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
                 .withFileDeserializer(fileDeserializer)
                 .withDirectory(serializationDir)
                 .build();
+        this.elementProcessorSupport = new ElementLoaderProcessorSupport(this.elementModelRepository, this.elementLoader);
     }
 
     @Test
@@ -341,9 +349,33 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
 
     protected abstract Class<? extends CI> getExpectedComponentInstanceClass(String classifierPath);
 
-    protected abstract void testConcreteElement(String path, String classifierPath, CE element);
+    protected void testConcreteElement(String path, String classifierPath, CE element)
+    {
+        CoreInstance srcElement = runtime.getCoreInstance(path);
+        Assert.assertNotNull(path, srcElement);
 
-    protected abstract void testVirtualPackage(String path, VP element);
+        CoreInstance classifierGenericType = element.getValueForMetaPropertyToOne(M3Properties.classifierGenericType);
+        CoreInstance srcClassifierGenericType = srcElement.getValueForMetaPropertyToOne(M3Properties.classifierGenericType);
+        if (classifierGenericType == null)
+        {
+            Assert.assertNull(path, srcClassifierGenericType);
+        }
+        else
+        {
+            Assert.assertSame(path, getExpectedComponentInstanceClass(M3Paths.GenericType), classifierGenericType.getClass());
+            Assert.assertEquals(path, printGenericType(srcClassifierGenericType, true), printGenericType(classifierGenericType, false));
+        }
+    }
+
+    protected void testVirtualPackage(String path, VP element)
+    {
+        CoreInstance classifierGenericType = element.getValueForMetaPropertyToOne(M3Properties.classifierGenericType);
+        if (classifierGenericType != null)
+        {
+            Assert.assertSame(path, getExpectedComponentInstanceClass(M3Paths.GenericType), classifierGenericType.getClass());
+            Assert.assertEquals(path, M3Paths.Package, printGenericType(classifierGenericType, false));
+        }
+    }
 
     protected VP assertLoadVirtualPackage(String path)
     {
@@ -456,6 +488,16 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
         Assert.assertSame(getExpectedConcreteElementClass(M3Paths.Class), classifier.getClass());
     }
 
+    protected String printGenericType(CoreInstance genericType, boolean sourceModel)
+    {
+        return GenericType.print(genericType, true, getProcessorSupport(sourceModel));
+    }
+
+    protected ProcessorSupport getProcessorSupport(boolean sourceModel)
+    {
+        return sourceModel ? processorSupport : this.elementProcessorSupport;
+    }
+
     protected static String getUserPath(CoreInstance element)
     {
         return PackageableElement.getUserPathForPackageableElement(element);
@@ -505,6 +547,41 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
         public boolean isVirtualPackageLoaded(String path)
         {
             return this.virtualPackages.contains(path);
+        }
+    }
+
+    private static class ElementLoaderProcessorSupport extends M3ProcessorSupport
+    {
+        private final ElementLoader elementLoader;
+
+        private ElementLoaderProcessorSupport(ModelRepository modelRepository, ElementLoader elementLoader)
+        {
+            super(modelRepository);
+            this.elementLoader = elementLoader;
+        }
+
+        @Override
+        public CoreInstance package_getByUserPath(String path)
+        {
+            return this.elementLoader.loadElement(path);
+        }
+
+        @Override
+        public CoreInstance repository_getTopLevel(String root)
+        {
+            return package_getByUserPath(root);
+        }
+
+        @Override
+        public CoreInstance type_BottomType()
+        {
+            return package_getByUserPath(M3Paths.Nil);
+        }
+
+        @Override
+        public CoreInstance type_TopType()
+        {
+            return package_getByUserPath(M3Paths.Any);
         }
     }
 }
