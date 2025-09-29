@@ -28,7 +28,7 @@ public class TestSimpleElementBuilder extends AbstractElementBuilderTest<SimpleL
     @Override
     protected ElementBuilder newElementBuilder()
     {
-        return new SimpleElementBuilder(repository);
+        return new SimpleElementBuilder(this.elementModelRepository);
     }
 
     @Override
@@ -52,12 +52,14 @@ public class TestSimpleElementBuilder extends AbstractElementBuilderTest<SimpleL
     @Override
     protected void testConcreteElement(String path, String classifierPath, SimpleLazyConcreteElement element)
     {
+        super.testConcreteElement(path, classifierPath, element);
         testElement(path, element);
     }
 
     @Override
     protected void testVirtualPackage(String path, SimpleLazyVirtualPackage element)
     {
+        super.testVirtualPackage(path, element);
         testElement(path, element);
     }
 
