@@ -40,7 +40,6 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.PrimitiveT
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Type;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Unit;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.VariableExpression;
-import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.generictype.GenericType;
 import org.finos.legend.pure.m3.navigation.multiplicity.Multiplicity;
 import org.junit.Assert;
@@ -74,12 +73,14 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
     @Override
     protected void testConcreteElement(String path, String classifierPath, PackageableElement element)
     {
+        super.testConcreteElement(path, classifierPath, element);
         testElement(path, element);
     }
 
     @Override
     protected void testVirtualPackage(String path, Package element)
     {
+        super.testVirtualPackage(path, element);
         testElement(path, element);
     }
 
@@ -101,17 +102,6 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
         else
         {
             Assert.assertEquals(path, getUserPath(pkg), getUserPath(element._package()));
-        }
-
-        org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.generics.GenericType classifierGenericType = srcElement._classifierGenericType();
-        if (classifierGenericType == null)
-        {
-            Assert.assertNull(path, element._classifierGenericType());
-        }
-        else
-        {
-            Assert.assertEquals(path, GenericType.print(classifierGenericType, true, processorSupport), GenericType.print(element._classifierGenericType(), true, processorSupport));
-            Assert.assertSame(path, getExpectedComponentInstanceClass(M3Paths.GenericType), element._classifierGenericType().getClass());
         }
 
         Assert.assertEquals(path, getStereotypeSpecs(srcElement._stereotypes()), getStereotypeSpecs(element._stereotypes()));
@@ -152,7 +142,7 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
             Type srcType = (Type) srcElement;
             Type type = (Type) element;
 
-            Assert.assertEquals(path, getGeneralizationSpecs(srcType._generalizations()), getGeneralizationSpecs(type._generalizations()));
+            Assert.assertEquals(path, getGeneralizationSpecs(srcType._generalizations(), true), getGeneralizationSpecs(type._generalizations(), false));
             Assert.assertEquals(path, getSpecializationSpecs(srcType._specializations()).sortThis(), getSpecializationSpecs(type._specializations()).sortThis());
         }
         else
@@ -166,11 +156,11 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
             org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> srcClass = (org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?>) srcElement;
             org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?> cls = (org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Class<?>) element;
 
-            Assert.assertEquals(path, getPropertySpecs(srcClass._properties()), getPropertySpecs(cls._properties()));
-            Assert.assertEquals(path, getQualifiedPropertySpecs(srcClass._qualifiedProperties()), getQualifiedPropertySpecs(cls._qualifiedProperties()));
-            Assert.assertEquals(path, getPropertySpecs(srcClass._propertiesFromAssociations()), getPropertySpecs(cls._propertiesFromAssociations()));
-            Assert.assertEquals(path, getQualifiedPropertySpecs(srcClass._qualifiedPropertiesFromAssociations()), getQualifiedPropertySpecs(cls._qualifiedPropertiesFromAssociations()));
-            Assert.assertEquals(path, getVariableExpressionSpecs(srcClass._typeVariables()), getVariableExpressionSpecs(cls._typeVariables()));
+            Assert.assertEquals(path, getPropertySpecs(srcClass._properties(), true), getPropertySpecs(cls._properties(), false));
+            Assert.assertEquals(path, getQualifiedPropertySpecs(srcClass._qualifiedProperties(), true), getQualifiedPropertySpecs(cls._qualifiedProperties(), false));
+            Assert.assertEquals(path, getPropertySpecs(srcClass._propertiesFromAssociations(), true), getPropertySpecs(cls._propertiesFromAssociations(), false));
+            Assert.assertEquals(path, getQualifiedPropertySpecs(srcClass._qualifiedPropertiesFromAssociations(), true), getQualifiedPropertySpecs(cls._qualifiedPropertiesFromAssociations(), false));
+            Assert.assertEquals(path, getVariableExpressionSpecs(srcClass._typeVariables(), true), getVariableExpressionSpecs(cls._typeVariables(), false));
         }
         else
         {
@@ -184,7 +174,7 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
             PrimitiveType primitiveType = (PrimitiveType) element;
 
             Assert.assertEquals(path, srcPrimitiveType._extended(), primitiveType._extended());
-            Assert.assertEquals(path, getVariableExpressionSpecs(srcPrimitiveType._typeVariables()), getVariableExpressionSpecs(primitiveType._typeVariables()));
+            Assert.assertEquals(path, getVariableExpressionSpecs(srcPrimitiveType._typeVariables(), true), getVariableExpressionSpecs(primitiveType._typeVariables(), false));
         }
         else
         {
@@ -210,8 +200,8 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
             Association srcAssociation = (Association) srcElement;
             Association association = (Association) element;
 
-            Assert.assertEquals(path, getPropertySpecs(srcAssociation._properties()), getPropertySpecs(association._properties()));
-            Assert.assertEquals(path, getQualifiedPropertySpecs(srcAssociation._qualifiedProperties()), getQualifiedPropertySpecs(association._qualifiedProperties()));
+            Assert.assertEquals(path, getPropertySpecs(srcAssociation._properties(), true), getPropertySpecs(association._properties(), false));
+            Assert.assertEquals(path, getQualifiedPropertySpecs(srcAssociation._qualifiedProperties(), true), getQualifiedPropertySpecs(association._qualifiedProperties(), false));
         }
         else
         {
@@ -240,13 +230,13 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
 
             FunctionType srcFuncType = (FunctionType) srcFunc._classifierGenericType()._typeArguments().getOnly()._rawType();
             FunctionType funcType = (FunctionType) func._classifierGenericType()._typeArguments().getOnly()._rawType();
-            Assert.assertEquals(path, getVariableExpressionSpecs(srcFuncType._parameters()), getVariableExpressionSpecs(funcType._parameters()));
+            Assert.assertEquals(path, getVariableExpressionSpecs(srcFuncType._parameters(), true), getVariableExpressionSpecs(funcType._parameters(), false));
 
             Assert.assertEquals(path, srcFunc._applications().size(), func._applications().size());
             Assert.assertEquals(path, srcFunc._expressionSequence().size(), func._expressionSequence().size());
 
-            Assert.assertEquals(path, getVariableExpressionSpecs(srcFuncType._parameters()), getVariableExpressionSpecs(funcType._parameters()));
-            Assert.assertEquals(path, GenericType.print(srcFuncType._returnType(), true, processorSupport), GenericType.print(funcType._returnType(), true, processorSupport));
+            Assert.assertEquals(path, getVariableExpressionSpecs(srcFuncType._parameters(), true), getVariableExpressionSpecs(funcType._parameters(), false));
+            Assert.assertEquals(path, printGenericType(srcFuncType._returnType(), true), printGenericType(funcType._returnType(), false));
         }
         else
         {
@@ -254,22 +244,22 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
         }
     }
 
-    private static MutableList<String> getGeneralizationSpecs(RichIterable<? extends Generalization> generalizations)
+    private MutableList<String> getGeneralizationSpecs(RichIterable<? extends Generalization> generalizations, boolean sourceModel)
     {
-        return generalizations.collect(AbstractPackageableElementBuilderTest::getGeneralizationSpec, Lists.mutable.ofInitialCapacity(generalizations.size()));
+        return generalizations.collect(g -> getGeneralizationSpec(g, sourceModel), Lists.mutable.ofInitialCapacity(generalizations.size()));
     }
 
-    private static String getGeneralizationSpec(Generalization generalization)
+    private String getGeneralizationSpec(Generalization generalization, boolean sourceModel)
     {
-        return GenericType.print(generalization._general(), true, processorSupport);
+        return printGenericType(generalization._general(), sourceModel);
     }
 
-    private static MutableList<String> getSpecializationSpecs(RichIterable<? extends Generalization> specializations)
+    private MutableList<String> getSpecializationSpecs(RichIterable<? extends Generalization> specializations)
     {
-        return specializations.collect(AbstractPackageableElementBuilderTest::getSpecializationSpec, Lists.mutable.ofInitialCapacity(specializations.size()));
+        return specializations.collect(this::getSpecializationSpec, Lists.mutable.ofInitialCapacity(specializations.size()));
     }
 
-    private static String getSpecializationSpec(Generalization specialization)
+    private String getSpecializationSpec(Generalization specialization)
     {
         Type specific = specialization._specific();
         if (specific instanceof PackageableElement)
@@ -283,54 +273,54 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
         return appendUserPath(new StringBuilder(specific.getName()).append(" instance of "), specific.getClassifier()).toString();
     }
 
-    private static MutableList<String> getPropertySpecs(RichIterable<? extends Property<?, ?>> properties)
+    private MutableList<String> getPropertySpecs(RichIterable<? extends Property<?, ?>> properties, boolean sourceModel)
     {
-        return properties.collect(AbstractPackageableElementBuilderTest::getPropertySpec, Lists.mutable.ofInitialCapacity(properties.size()));
+        return properties.collect(p -> getPropertySpec(p, sourceModel), Lists.mutable.ofInitialCapacity(properties.size()));
     }
 
-    private static String getPropertySpec(Property<?, ?> property)
+    private String getPropertySpec(Property<?, ?> property, boolean sourceModel)
     {
         StringBuilder builder = new StringBuilder(property._name());
-        GenericType.print(builder.append(':'), property._genericType(), true, processorSupport);
+        GenericType.print(builder.append(':'), property._genericType(), true, getProcessorSupport(sourceModel));
         Multiplicity.print(builder, property._multiplicity(), true);
         return builder.toString();
     }
 
-    private static MutableList<String> getQualifiedPropertySpecs(RichIterable<? extends QualifiedProperty<?>> qualifiedProperties)
+    private MutableList<String> getQualifiedPropertySpecs(RichIterable<? extends QualifiedProperty<?>> qualifiedProperties, boolean sourceModel)
     {
-        return qualifiedProperties.collect(AbstractPackageableElementBuilderTest::getQualifiedPropertySpec, Lists.mutable.ofInitialCapacity(qualifiedProperties.size()));
+        return qualifiedProperties.collect(qp -> getQualifiedPropertySpec(qp, sourceModel), Lists.mutable.ofInitialCapacity(qualifiedProperties.size()));
     }
 
-    private static String getQualifiedPropertySpec(QualifiedProperty<?> qualifiedProperty)
+    private String getQualifiedPropertySpec(QualifiedProperty<?> qualifiedProperty, boolean sourceModel)
     {
         StringBuilder builder = new StringBuilder(qualifiedProperty._functionName()).append('(');
         ((FunctionType) qualifiedProperty._classifierGenericType()._typeArguments().getOnly()._rawType())._parameters()
-                .forEach(p -> appendVariableExpressionSpec(builder, p).append(", "));
+                .forEach(p -> appendVariableExpressionSpec(builder, p, sourceModel).append(", "));
         if (builder.charAt(builder.length() - 1) == ' ')
         {
             builder.setLength(builder.length() - 2);
         }
-        GenericType.print(builder.append("):"), qualifiedProperty._genericType(), true, processorSupport);
+        GenericType.print(builder.append("):"), qualifiedProperty._genericType(), true, getProcessorSupport(sourceModel));
         Multiplicity.print(builder, qualifiedProperty._multiplicity(), true);
         return builder.toString();
     }
 
-    private static MutableList<String> getStereotypeSpecs(RichIterable<? extends Stereotype> stereotypes)
+    private MutableList<String> getStereotypeSpecs(RichIterable<? extends Stereotype> stereotypes)
     {
-        return stereotypes.collect(AbstractPackageableElementBuilderTest::getStereotypeSpec, Lists.mutable.ofInitialCapacity(stereotypes.size()));
+        return stereotypes.collect(this::getStereotypeSpec, Lists.mutable.ofInitialCapacity(stereotypes.size()));
     }
 
-    private static String getStereotypeSpec(Stereotype stereotype)
+    private String getStereotypeSpec(Stereotype stereotype)
     {
         return appendUserPath(new StringBuilder(), stereotype._profile()).append('.').append(stereotype._value()).toString();
     }
 
-    private static MutableList<String> getTaggedValueSpecs(RichIterable<? extends TaggedValue> taggedValues)
+    private MutableList<String> getTaggedValueSpecs(RichIterable<? extends TaggedValue> taggedValues)
     {
-        return taggedValues.collect(AbstractPackageableElementBuilderTest::getTaggedValueSpec, Lists.mutable.ofInitialCapacity(taggedValues.size()));
+        return taggedValues.collect(this::getTaggedValueSpec, Lists.mutable.ofInitialCapacity(taggedValues.size()));
     }
 
-    private static String getTaggedValueSpec(TaggedValue taggedValue)
+    private String getTaggedValueSpec(TaggedValue taggedValue)
     {
         Tag tag = taggedValue._tag();
         return appendUserPath(new StringBuilder(), tag._profile())
@@ -342,41 +332,41 @@ public abstract class AbstractPackageableElementBuilderTest extends AbstractElem
                 .toString();
     }
 
-    private static MutableList<String> getVariableExpressionSpecs(RichIterable<? extends VariableExpression> vars)
+    private MutableList<String> getVariableExpressionSpecs(RichIterable<? extends VariableExpression> vars, boolean sourceModel)
     {
-        return vars.collect(AbstractPackageableElementBuilderTest::getVariableExpressionSpec, Lists.mutable.ofInitialCapacity(vars.size()));
+        return vars.collect(v -> getVariableExpressionSpec(v, sourceModel), Lists.mutable.ofInitialCapacity(vars.size()));
     }
 
-    private static String getVariableExpressionSpec(VariableExpression var)
+    private String getVariableExpressionSpec(VariableExpression var, boolean sourceModel)
     {
-        return appendVariableExpressionSpec(new StringBuilder(), var).toString();
+        return appendVariableExpressionSpec(new StringBuilder(), var, sourceModel).toString();
     }
 
-    private static StringBuilder appendVariableExpressionSpec(StringBuilder builder, VariableExpression var)
+    private StringBuilder appendVariableExpressionSpec(StringBuilder builder, VariableExpression var, boolean sourceModel)
     {
         builder.append(var._name());
-        GenericType.print(builder.append(':'), var._genericType(), true, processorSupport);
+        GenericType.print(builder.append(':'), var._genericType(), true, getProcessorSupport(sourceModel));
         Multiplicity.print(builder, var._multiplicity(), true);
         return builder;
     }
 
-    private static MutableList<String> getRefUsageSpecs(RichIterable<? extends ReferenceUsage> refUsages)
+    private MutableList<String> getRefUsageSpecs(RichIterable<? extends ReferenceUsage> refUsages)
     {
-        return refUsages.collect(AbstractPackageableElementBuilderTest::getRefUsageSpec, Lists.mutable.ofInitialCapacity(refUsages.size()));
+        return refUsages.collect(this::getRefUsageSpec, Lists.mutable.ofInitialCapacity(refUsages.size()));
     }
 
-    private static String getRefUsageSpec(ReferenceUsage refUsage)
+    private String getRefUsageSpec(ReferenceUsage refUsage)
     {
         // we don't use the owner here to avoid resolving the reference, which can be expensive when there are a large number
         return "ReferenceUsage{property=" + refUsage._propertyName() + " offset=" + refUsage._offset() + " }";
     }
 
-    private static MutableList<String> getConstraintSpecs(RichIterable<? extends Constraint> constraints)
+    private MutableList<String> getConstraintSpecs(RichIterable<? extends Constraint> constraints)
     {
-        return constraints.collect(AbstractPackageableElementBuilderTest::getConstraintSpec, Lists.mutable.ofInitialCapacity(constraints.size()));
+        return constraints.collect(this::getConstraintSpec, Lists.mutable.ofInitialCapacity(constraints.size()));
     }
 
-    private static String getConstraintSpec(Constraint constraint)
+    private String getConstraintSpec(Constraint constraint)
     {
         // TODO improve this
         return constraint._name();
