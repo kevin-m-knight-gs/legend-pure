@@ -15,6 +15,7 @@
 package org.finos.legend.pure.m3.coreinstance.lazy.simple;
 
 import org.eclipse.collections.api.list.ListIterable;
+import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.M3PropertyPaths;
 import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
@@ -22,9 +23,45 @@ import org.finos.legend.pure.m3.serialization.compiler.element.AbstractElementBu
 import org.finos.legend.pure.m3.serialization.compiler.element.ElementBuilder;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.junit.Assert;
+import org.junit.Test;
 
 public class TestSimpleElementBuilder extends AbstractElementBuilderTest<SimpleLazyVirtualPackage, SimpleLazyConcreteElement, SimpleLazyComponentInstance>
 {
+    @Test
+    @Override
+    public void testBuildRootPackage()
+    {
+        testConcreteElement(M3Paths.Root, M3Paths.Package, false);
+    }
+
+    @Test
+    @Override
+    public void testBuildPackageClass()
+    {
+        testConcreteElement(M3Paths.Package, M3Paths.Class, false);
+    }
+
+    @Test
+    @Override
+    public void testBuildInteger()
+    {
+        testConcreteElement(M3Paths.Integer, M3Paths.PrimitiveType, false);
+    }
+
+    @Test
+    @Override
+    public void testBuildNumber()
+    {
+        testConcreteElement(M3Paths.Number, M3Paths.PrimitiveType, false);
+    }
+
+    @Test
+    @Override
+    public void testBuildString()
+    {
+        testConcreteElement(M3Paths.String, M3Paths.PrimitiveType, false);
+    }
+
     @Override
     protected ElementBuilder newElementBuilder()
     {
