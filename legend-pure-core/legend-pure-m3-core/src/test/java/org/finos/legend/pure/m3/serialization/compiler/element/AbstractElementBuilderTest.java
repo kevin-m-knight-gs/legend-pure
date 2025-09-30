@@ -128,6 +128,14 @@ public abstract class AbstractElementBuilderTest<VP extends CoreInstance, CE ext
     }
 
     @Test
+    public void testPrimitiveValueClassifiers()
+    {
+        CoreInstance stringType = this.elementLoader.loadElement(M3Paths.String);
+        CoreInstance stringTypeName = stringType.getValueForMetaPropertyToOne(M3Properties.name);
+        Assert.assertSame(stringType, stringTypeName.getClassifier());
+    }
+
+    @Test
     public void testBuildRootPackage()
     {
         testConcretePackage(M3Paths.Root);
