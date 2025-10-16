@@ -69,9 +69,9 @@ public class M3GeneratedLazyElementBuilder implements ElementBuilder
         // Load the top level elements eagerly to avoid bootstrapping issues (especially with classifiers for
         // primitive values)
         LOGGER.debug("Initializing element builder");
-        PrimitiveUtilities.getPrimitiveTypeNames().forEach(n -> this.repository.addTopLevel(elementLoader.loadElement(n)));
-        this.repository.addTopLevel(elementLoader.loadElement(M3Paths.Root));
-        this.repository.addTopLevel(elementLoader.loadElement(M3Paths.Package));
+        PrimitiveUtilities.getPrimitiveTypeNames().forEach(n -> this.repository.addTopLevel(elementLoader.loadElementStrict(n)));
+        this.repository.addTopLevel(elementLoader.loadElementStrict(M3Paths.Root));
+        this.repository.addTopLevel(elementLoader.loadElementStrict(M3Paths.Package));
     }
 
     @Override
