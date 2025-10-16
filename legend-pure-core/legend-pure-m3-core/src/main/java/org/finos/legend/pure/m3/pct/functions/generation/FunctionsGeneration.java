@@ -44,12 +44,15 @@ import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.classpa
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.composite.CompositeCodeStorage;
 import org.finos.legend.pure.m3.serialization.runtime.GraphLoader;
 import org.finos.legend.pure.m3.serialization.runtime.Message;
+import org.finos.legend.pure.m3.serialization.runtime.PureCompilerLoader;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntimeBuilder;
 import org.finos.legend.pure.m3.serialization.runtime.binary.PureRepositoryJarLibrary;
 import org.finos.legend.pure.m3.serialization.runtime.binary.SimplePureRepositoryJarLibrary;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 
 public class FunctionsGeneration
@@ -61,15 +64,15 @@ public class FunctionsGeneration
 
     public static void generateFunctions(String targetDir, String scopeProviderMethod)
     {
-        Functions functions = generateFunctions(scopeProviderMethod);
         try
         {
+            Functions functions = generateFunctions(scopeProviderMethod);
             String reportStr = JsonMapper.builder().build().setSerializationInclusion(JsonInclude.Include.NON_NULL).writerWithDefaultPrettyPrinter().writeValueAsString(functions);
             Shared.writeStringToTarget(targetDir, "FUNCTIONS_" + functions.reportScope.module + ".json", reportStr);
         }
-        catch (Exception e)
+        catch (IOException e)
         {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
         }
     }
 
@@ -86,7 +89,7 @@ public class FunctionsGeneration
 
             return generateFunctions(reportScope);
         }
-        catch (Exception e)
+        catch (ReflectiveOperationException e)
         {
             throw new RuntimeException(e);
         }
@@ -95,15 +98,19 @@ public class FunctionsGeneration
     private static Functions generateFunctions(ReportScope reportScope)
     {
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-        CodeRepositorySet.Builder builder = CodeRepositorySet.newBuilder().withCodeRepositories(CodeRepositoryProviderHelper.findCodeRepositories(classLoader, true));
-        RichIterable<CodeRepository> codeRepositories = builder.build().getRepositories();
-        CompositeCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(codeRepositories));
-        PureRuntime runtime = new PureRuntimeBuilder(codeStorage).build();
-        Message message = new Message("");
-
-        PureRepositoryJarLibrary jarLibrary = SimplePureRepositoryJarLibrary.newLibrary(GraphLoader.findJars(Lists.mutable.withAll(codeRepositories.select(c -> c.getName() != null && (c.getName().startsWith("platform") || c.getName().startsWith("core"))).collect(CodeRepository::getName)), Thread.currentThread().getContextClassLoader(), message));
-        GraphLoader loader = new GraphLoader(runtime.getModelRepository(), runtime.getContext(), runtime.getIncrementalCompiler().getParserLibrary(), runtime.getIncrementalCompiler().getDslLibrary(), runtime.getSourceRegistry(), runtime.getURLPatternLibrary(), jarLibrary);
-        loader.loadAll(message);
+        RichIterable<CodeRepository> codeRepositories = CodeRepositorySet.newBuilder()
+                .withCodeRepositories(CodeRepositoryProviderHelper.findCodeRepositories(classLoader, true).asLazy().select(r -> r.getName().startsWith("platform") || r.getName().startsWith("core")))
+                .build()
+                .getRepositories();
+        CompositeCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(classLoader, codeRepositories));
+        PureRuntime runtime = new PureRuntimeBuilder(codeStorage).setTransactionalByDefault(false).build();
+        if (!PureCompilerLoader.newLoader(classLoader).loadAll(runtime, false))
+        {
+            Message message = new Message("");
+            PureRepositoryJarLibrary jarLibrary = SimplePureRepositoryJarLibrary.newLibrary(GraphLoader.findJars(codeRepositories.asLazy().collect(CodeRepository::getName), classLoader, message));
+            GraphLoader graphLoader = new GraphLoader(runtime.getModelRepository(), runtime.getContext(), runtime.getIncrementalCompiler().getParserLibrary(), runtime.getIncrementalCompiler().getDslLibrary(), runtime.getSourceRegistry(), runtime.getURLPatternLibrary(), jarLibrary);
+            graphLoader.loadAll(message);
+        }
 
         MutableMap<String, FunctionDefinition> functionsInfo = Maps.mutable.empty();
         FunctionsRepository functionsRepository = getPCTFunctions(_Package.getByUserPath(reportScope._package, runtime.getProcessorSupport()), reportScope.filePath, runtime.getProcessorSupport());
