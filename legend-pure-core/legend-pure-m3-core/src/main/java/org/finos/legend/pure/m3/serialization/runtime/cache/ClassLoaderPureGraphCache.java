@@ -22,6 +22,7 @@ import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.Reposit
 import org.finos.legend.pure.m3.serialization.grammar.ParserLibrary;
 import org.finos.legend.pure.m3.serialization.runtime.GraphLoader;
 import org.finos.legend.pure.m3.serialization.runtime.Message;
+import org.finos.legend.pure.m3.serialization.runtime.PureCompilerLoader;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
 import org.finos.legend.pure.m3.serialization.runtime.RepositoryComparator;
 import org.finos.legend.pure.m3.serialization.runtime.SourceRegistry;
@@ -87,13 +88,16 @@ public class ClassLoaderPureGraphCache implements PureGraphCache
 
         try
         {
-            RepositoryCodeStorage codeStorage = this.runtime.getCodeStorage();
-            MutableList<String> repoNames = codeStorage.getAllRepositories().collect(CodeRepository::getName).toSortedList(new RepositoryComparator(codeStorage.getAllRepositories()));
-            PureRepositoryJarLibrary jarLibrary = SimplePureRepositoryJarLibrary.newLibrary(GraphLoader.findJars(repoNames, this.classLoader, message));
-            GraphLoader loader = new GraphLoader(modelRepository, context, parserLibrary, this.runtime.getIncrementalCompiler().getDslLibrary(), sourceRegistry, null, jarLibrary, this.forkJoinPool);
-            for (String repoName : repoNames)
+            if (!PureCompilerLoader.newLoader(this.classLoader).loadAll(this.runtime))
             {
-                loader.loadRepository(repoName, message);
+                RepositoryCodeStorage codeStorage = this.runtime.getCodeStorage();
+                MutableList<String> repoNames = codeStorage.getAllRepositories().collect(CodeRepository::getName).toSortedList(new RepositoryComparator(codeStorage.getAllRepositories()));
+                PureRepositoryJarLibrary jarLibrary = SimplePureRepositoryJarLibrary.newLibrary(GraphLoader.findJars(repoNames, this.classLoader, message));
+                GraphLoader loader = new GraphLoader(modelRepository, context, parserLibrary, this.runtime.getIncrementalCompiler().getDslLibrary(), sourceRegistry, null, jarLibrary, this.forkJoinPool);
+                for (String repoName : repoNames)
+                {
+                    loader.loadRepository(repoName, message);
+                }
             }
             this.state.update(true, -1L, true, null);
             return true;

@@ -74,13 +74,13 @@ import org.finos.legend.pure.m3.serialization.grammar.m3parser.antlr.M3Parser;
 import org.finos.legend.pure.m3.serialization.grammar.m3parser.inlinedsl.InlineDSL;
 import org.finos.legend.pure.m3.serialization.runtime.GraphLoader;
 import org.finos.legend.pure.m3.serialization.runtime.PrintPureRuntimeStatus;
+import org.finos.legend.pure.m3.serialization.runtime.PureCompilerLoader;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntimeBuilder;
 import org.finos.legend.pure.m3.serialization.runtime.Source;
 import org.finos.legend.pure.m3.serialization.runtime.binary.BinaryModelSourceDeserializer;
 import org.finos.legend.pure.m3.serialization.runtime.binary.BinaryModelSourceSerializer;
 import org.finos.legend.pure.m3.serialization.runtime.binary.PureRepositoryJar;
-import org.finos.legend.pure.m3.serialization.runtime.binary.SimplePureRepositoryJarLibrary;
 import org.finos.legend.pure.m3.serialization.runtime.binary.reference.ExternalReferenceSerializerLibrary;
 import org.finos.legend.pure.m3.tools.GraphTools;
 import org.finos.legend.pure.m3.tools.PackageTreeIterable;
@@ -100,6 +100,7 @@ import org.junit.Test;
 import java.io.ByteArrayOutputStream;
 import java.util.Collection;
 import java.util.Objects;
+import java.util.Set;
 
 public abstract class AbstractCompiledStateIntegrityTest
 {
@@ -150,15 +151,13 @@ public abstract class AbstractCompiledStateIntegrityTest
         {
             try
             {
-                GraphLoader loader = new GraphLoader(repository, context, runtime.getIncrementalCompiler().getParserLibrary(), runtime.getIncrementalCompiler().getDslLibrary(), runtime.getSourceRegistry(), null, SimplePureRepositoryJarLibrary.newLibrary(repoJars));
-                loader.loadAll();
-                if (repoJars.size() < repoNames.size())
+                Set<String> loadedRepos = PureCompilerLoader.newLoader(Thread.currentThread().getContextClassLoader()).loadIfPossible(runtime);
+                MutableList<String> unloadedRepos = codeStorage.getAllRepositories().collectIf(r -> !loadedRepos.contains(r.getName()), CodeRepository::getName, Lists.mutable.empty());
+                if (unloadedRepos.notEmpty())
                 {
-                    MutableSet<String> found = repoJars.collect(j -> j.getMetadata().getRepositoryName(), Sets.mutable.ofInitialCapacity(repoJars.size()));
-                    System.out.println(repoNames.reject(found::contains).sortThis().makeString("Missing caches for: ", ", ", ""));
+                    System.out.println(unloadedRepos.makeString("Missing caches for: ", ", ", ""));
                     runtime.compile();
                 }
-                System.out.println("Initialized runtime from caches");
             }
             catch (Exception e)
             {

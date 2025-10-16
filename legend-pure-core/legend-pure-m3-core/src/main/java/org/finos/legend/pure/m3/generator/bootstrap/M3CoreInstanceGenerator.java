@@ -14,8 +14,9 @@
 
 package org.finos.legend.pure.m3.generator.bootstrap;
 
-import org.eclipse.collections.api.RichIterable;
+import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Sets;
+import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.set.SetIterable;
 import org.eclipse.collections.impl.list.fixed.ArrayAdapter;
@@ -29,21 +30,25 @@ import org.finos.legend.pure.m3.navigation.M3ProcessorSupport;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation.type.Type;
-import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepository;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositoryProviderHelper;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositorySet;
+import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorageTools;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.classpath.ClassLoaderCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.composite.CompositeCodeStorage;
+import org.finos.legend.pure.m3.serialization.runtime.PureCompilerLoader;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntimeBuilder;
 import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Paths;
 
-
 public class M3CoreInstanceGenerator
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(M3CoreInstanceGenerator.class);
+
     public static void main(String[] args)
     {
         String outputDir = args[0];
@@ -58,12 +63,43 @@ public class M3CoreInstanceGenerator
     public static void generate(String outputDir, String factoryNamePrefix, SetIterable<String> filePaths, String fileNamePrefix)
     {
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-        RichIterable<CodeRepository> repositories = CodeRepositorySet.newBuilder().withCodeRepositories(CodeRepositoryProviderHelper.findCodeRepositories(classLoader, true)).build().getRepositories();
-        PureRuntime runtime = new PureRuntimeBuilder(new CompositeCodeStorage(new ClassLoaderCodeStorage(classLoader, repositories))).setTransactionalByDefault(false).build();
+        CodeRepositorySet repositories = CodeRepositorySet.newBuilder().withCodeRepositories(CodeRepositoryProviderHelper.findCodeRepositories(classLoader, true)).build();
+        CompositeCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(classLoader, repositories.getRepositories()));
+        PureRuntime runtime = new PureRuntimeBuilder(codeStorage).setTransactionalByDefault(false).build();
+        PureCompilerLoader loader = PureCompilerLoader.newLoader(classLoader);
+        MutableList<String> reposToLoad = Lists.mutable.empty();
+        MutableList<String> reposToCompile = Lists.mutable.empty();
+        repositories.getRepositoryNames().forEach(r -> (loader.canLoad(r) ? reposToLoad : reposToCompile).add(r));
+
+        if (reposToLoad.isEmpty())
+        {
+            long initStart = System.nanoTime();
+            LOGGER.debug("No repositories to load: initializing runtime");
+            runtime.loadAndCompileCore();
+            runtime.loadAndCompileSystem();
+            long initEnd = System.nanoTime();
+            LOGGER.debug("Finished initializing runtime in {}s", (initEnd - initStart) / 1_000_000_000.0);
+        }
+        else
+        {
+            long initStart = System.nanoTime();
+            LOGGER.debug("Loading repositories: {}", reposToLoad);
+            reposToLoad.forEach(repo -> codeStorage.getFileOrFiles(repo).forEach(runtime::loadSourceIfLoadable));
+            loader.load(runtime, reposToLoad, false);
+            long initEnd = System.nanoTime();
+            LOGGER.debug("Finished loading repositories in {}s", (initEnd - initStart) / 1_000_000_000.0);
+
+            if (reposToCompile.notEmpty())
+            {
+                long compileStart = System.nanoTime();
+                LOGGER.debug("Compiling repositories: {}", reposToCompile);
+                runtime.loadAndCompile(reposToCompile.asLazy().flatCollect(codeStorage::getFileOrFiles).select(CodeStorageTools::isPureFilePath));
+                long compileEnd = System.nanoTime();
+                LOGGER.debug("Finished compiling repositories in {}s", (compileEnd - compileStart) / 1_000_000_000.0);
+            }
+        }
 
         ModelRepository repository = runtime.getModelRepository();
-        runtime.loadAndCompileCore();
-        runtime.loadAndCompileSystem();
 
         M3ToJavaGenerator m3ToJavaGenerator = generator(outputDir, factoryNamePrefix, repository);
         m3ToJavaGenerator.generate(repository, filePaths, fileNamePrefix);
