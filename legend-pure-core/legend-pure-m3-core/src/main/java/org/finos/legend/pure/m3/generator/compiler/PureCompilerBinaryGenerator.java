@@ -30,6 +30,7 @@ import org.finos.legend.pure.m3.serialization.compiler.metadata.ModuleMetadataSe
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepository;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositoryProviderHelper;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositorySet;
+import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorageTools;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.MutableRepositoryCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.classpath.ClassLoaderCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.composite.CompositeCodeStorage;
@@ -173,7 +174,7 @@ public class PureCompilerBinaryGenerator
 
             long compileStart = System.nanoTime();
             LOGGER.info("Compiling repositories: {}", reposToCompile);
-            runtime.loadAndCompile(reposToCompile.flatCollect(codeStorage::getFileOrFiles));
+            runtime.loadAndCompile(reposToCompile.asLazy().flatCollect(codeStorage::getFileOrFiles).select(CodeStorageTools::isPureFilePath));
             long compileEnd = System.nanoTime();
             LOGGER.info("Finished compiling repositories in {}s", (compileEnd - compileStart) / 1_000_000_000.0);
 
