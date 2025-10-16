@@ -152,9 +152,6 @@ public class PureCompilerBinaryGenerator
             MutableList<String> reposToCompile = Lists.mutable.empty();
             codeRepositories.getRepositoryNames().forEach(r -> (loader.canLoad(r) ? reposToLoad : reposToCompile).add(r));
 
-            MutableRepositoryCodeStorage codeStorage = runtime.getCodeStorage();
-            reposToLoad.forEach(repo -> codeStorage.getFileOrFiles(repo).forEach(runtime::loadSourceIfLoadable));
-
             if (reposToLoad.isEmpty())
             {
                 long initStart = System.nanoTime();
@@ -165,8 +162,11 @@ public class PureCompilerBinaryGenerator
                 return runtime;
             }
 
+            MutableRepositoryCodeStorage codeStorage = runtime.getCodeStorage();
+
             long initStart = System.nanoTime();
             LOGGER.info("Loading repositories: {}", reposToLoad);
+            reposToLoad.forEach(repo -> codeStorage.getFileOrFiles(repo).forEach(runtime::loadSourceIfLoadable));
             loader.load(runtime, reposToLoad);
             long initEnd = System.nanoTime();
             LOGGER.info("Finished loading repositories in {}s", (initEnd - initStart) / 1_000_000_000.0);
