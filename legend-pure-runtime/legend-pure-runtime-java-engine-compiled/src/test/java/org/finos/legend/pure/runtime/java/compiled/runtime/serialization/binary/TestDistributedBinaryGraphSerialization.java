@@ -15,9 +15,9 @@
 package org.finos.legend.pure.runtime.java.compiled.runtime.serialization.binary;
 
 import org.eclipse.collections.api.factory.Lists;
-import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.multimap.list.ListMultimap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.tuple.Pair;
@@ -32,12 +32,10 @@ import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeReposito
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.MutableRepositoryCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.classpath.ClassLoaderCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.composite.CompositeCodeStorage;
-import org.finos.legend.pure.m3.serialization.runtime.GraphLoader;
 import org.finos.legend.pure.m3.serialization.runtime.PrintPureRuntimeStatus;
+import org.finos.legend.pure.m3.serialization.runtime.PureCompilerLoader;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntimeBuilder;
-import org.finos.legend.pure.m3.serialization.runtime.binary.PureRepositoryJar;
-import org.finos.legend.pure.m3.serialization.runtime.binary.SimplePureRepositoryJarLibrary;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.tools.GraphNodeIterable;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
@@ -95,35 +93,11 @@ public abstract class TestDistributedBinaryGraphSerialization
                 .withRuntimeStatus(new PrintPureRuntimeStatus(System.out))
                 .setTransactionalByDefault(false)
                 .build();
-        MutableList<PureRepositoryJar> repoJars = GraphLoader.findJars(repoSet.getRepositoryNames(), Thread.currentThread().getContextClassLoader(), null, false);
-        if (repoJars.isEmpty())
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (!PureCompilerLoader.newLoader(classLoader).loadAll(runtime, false))
         {
+            System.out.println("Failed to initialized runtime from caches: compiling from source code");
             runtime.initialize();
-        }
-        else
-        {
-            try
-            {
-                GraphLoader loader = new GraphLoader(runtime.getModelRepository(), runtime.getContext(), runtime.getIncrementalCompiler().getParserLibrary(), runtime.getIncrementalCompiler().getDslLibrary(), runtime.getSourceRegistry(), null, SimplePureRepositoryJarLibrary.newLibrary(repoJars));
-                loader.loadAll();
-                if (repoJars.size() < repoSet.size())
-                {
-                    MutableSet<String> found = repoJars.collect(j -> j.getMetadata().getRepositoryName(), Sets.mutable.ofInitialCapacity(repoJars.size()));
-                    System.out.println(repoSet.getRepositoryNames().reject(found::contains, Lists.mutable.empty()).sortThis().makeString("Missing caches for: ", ", ", ""));
-                    runtime.compile();
-                }
-                System.out.println("Initialized runtime from caches");
-            }
-            catch (Exception e)
-            {
-                System.out.println("Failed to initialize runtime from caches, will try to initialize from source");
-                e.printStackTrace();
-
-                runtime = new PureRuntimeBuilder(codeStorage)
-                        .withRuntimeStatus(new PrintPureRuntimeStatus(System.out))
-                        .setTransactionalByDefault(false)
-                        .buildAndInitialize();
-            }
         }
         return runtime;
     }
@@ -166,11 +140,11 @@ public abstract class TestDistributedBinaryGraphSerialization
             Assert.assertEquals(classifierId, instanceIds.makeString("\n"), deserializer.getClassifierInstanceIds(classifierId).toSortedList().makeString("\n"));
             if (strictForPackages || !M3Paths.Package.equals(classifierId))
             {
-                Assert.assertEquals(classifierId, instances, deserializer.getInstances(classifierId, instanceIds).toSortedListBy(Obj::getIdentifier));
+                assertClassifierObjsEqual(classifierId, instances, deserializer.getInstances(classifierId, instanceIds).toSortedListBy(Obj::getIdentifier));
             }
             else
             {
-                Assert.assertEquals(classifierId, instances.collect(this::normalizeObj), deserializer.getInstances(classifierId, instanceIds).collect(this::normalizeObj, Lists.mutable.empty()).sortThisBy(Obj::getIdentifier));
+                assertClassifierObjsEqual(classifierId, instances.collect(this::normalizeObj), deserializer.getInstances(classifierId, instanceIds).collect(this::normalizeObj, Lists.mutable.empty()).sortThisBy(Obj::getIdentifier));
             }
         }
 
@@ -189,6 +163,37 @@ public abstract class TestDistributedBinaryGraphSerialization
             {
                 Assert.assertEquals(normalizeObj(obj), normalizeObj(deserializer.getInstance(classifierId, identifier)));
             }
+        }
+    }
+
+    private void assertClassifierObjsEqual(String classifierId, MutableList<Obj> expected, MutableList<Obj> actual)
+    {
+        if (!expected.equals(actual))
+        {
+            StringBuilder builder = new StringBuilder("Objs for classifier ").append(classifierId).append(" do not match\n")
+                    .append("\texpected count: ").append(expected.size()).append("\n")
+                    .append("\tactual count: ").append(actual.size()).append("\n");
+            MutableMap<String, Obj> actualById = actual.groupByUniqueKey(Obj::getIdentifier);
+            expected.forEach(expectedObj ->
+            {
+                Obj actualObj = actualById.remove(expectedObj.getIdentifier());
+                if (actualObj == null)
+                {
+                    builder.append('\t').append(expectedObj.getIdentifier()).append(": missing\n");
+                }
+                else if (!expectedObj.equals(actualObj))
+                {
+                    builder.append('\t').append(expectedObj.getIdentifier()).append(": mismatch\n");
+                    expectedObj.writeObj(builder.append("\t\texpected: "), true).append('\n');
+                    actualObj.writeObj(builder.append("\t\tactual:   "), true).append('\n');
+                }
+            });
+            actualById.forEachKeyValue((actualId, actualObj) ->
+            {
+                builder.append('\t').append(actualId).append(": unexpected\n");
+                actualObj.writeObj(builder.append("\t\tactual:   "), true).append('\n');
+            });
+            Assert.fail(builder.toString());
         }
     }
 
