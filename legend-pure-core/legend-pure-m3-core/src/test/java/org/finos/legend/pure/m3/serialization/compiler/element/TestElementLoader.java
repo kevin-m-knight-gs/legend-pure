@@ -275,7 +275,8 @@ public class TestElementLoader extends AbstractReferenceTest
             Assert.assertEquals(beforeVirtualPackageCount, elementBuilder.getVirtualPackageCounter());
             Assert.assertEquals(beforeConcreteElementCount, elementBuilder.getConcreteElementCounter());
 
-            Assert.assertNull(path, loader.loadElement(path));
+            IllegalArgumentException e = Assert.assertThrows(IllegalArgumentException.class, () -> loader.loadElementStrict(path));
+            Assert.assertEquals((path == null) ? "path may not be null" : ("Element not found: " + path), e.getMessage());
             Assert.assertEquals(beforeVirtualPackageCount, elementBuilder.getVirtualPackageCounter());
             Assert.assertEquals(beforeConcreteElementCount, elementBuilder.getConcreteElementCounter());
         });

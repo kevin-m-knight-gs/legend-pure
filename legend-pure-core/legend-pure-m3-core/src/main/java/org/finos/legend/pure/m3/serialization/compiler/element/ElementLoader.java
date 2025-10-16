@@ -85,23 +85,59 @@ public abstract class ElementLoader
 
     /**
      * Load an element. Returns null if the element does not exist. This method is thread safe, and a given element will
-     * be loaded at most once.
+     * be loaded at most once. This is equivalent to calling {@code loadElement(path, false)}.
      *
      * @param path package path of the element
      * @return the loaded element, or null if it does not exist
+     * @see #loadElement(String, boolean)
      */
     public CoreInstance loadElement(String path)
     {
+        return loadElement(path, false);
+    }
+
+    /**
+     * Load an element. Throws an exception if the element does not exist. This method is thread safe, and a given
+     * element will be loaded at most once. This is equivalent to calling {@code loadElement(path, true)}.
+     *
+     * @param path package path of the element
+     * @return the loaded element
+     * @throws IllegalArgumentException if path is null or the element does not exist
+     * @see #loadElement(String, boolean)
+     */
+    public CoreInstance loadElementStrict(String path)
+    {
+        return loadElement(path, true);
+    }
+
+    /**
+     * Load an element. If errorIfNotFound is true, throws an exception if the element does not exist; otherwise, it
+     * returns null. This method is thread safe, and a given element will be loaded at most once.
+     *
+     * @param path package path of the element
+     * @param errorIfNotFound whether to throw an exception if the element does not exist
+     * @return the loaded element, or null if it does not exist and errorIfNotFound is false
+     * @throws IllegalArgumentException if errorIfNotFound is true and path is null or the element does not exist
+     */
+    public CoreInstance loadElement(String path, boolean errorIfNotFound)
+    {
         if (path == null)
         {
+            if (errorIfNotFound)
+            {
+                throw new IllegalArgumentException("path may not be null");
+            }
             return null;
         }
-
         AtomicReference<CoreInstance> ref = this.cache.get(path);
         if (ref == null)
         {
             if (!elementPresentInMetadata(path))
             {
+                if (errorIfNotFound)
+                {
+                    throw new IllegalArgumentException("Element not found: " + path);
+                }
                 return null;
             }
             ref = this.cache.getIfAbsentPut(path, new AtomicReference<>());
