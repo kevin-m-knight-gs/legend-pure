@@ -14,6 +14,7 @@
 
 package org.finos.legend.pure.m3.generator.compiler;
 
+import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.set.MutableSet;
@@ -29,9 +30,10 @@ import org.finos.legend.pure.m3.serialization.compiler.metadata.ModuleMetadataSe
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepository;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositoryProviderHelper;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositorySet;
-import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.MutableRepositoryCodeStorage;
+import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorageTools;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.classpath.ClassLoaderCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.composite.CompositeCodeStorage;
+import org.finos.legend.pure.m3.serialization.runtime.PureCompilerLoader;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntimeBuilder;
 import org.finos.legend.pure.m4.exception.PureCompilationException;
@@ -141,11 +143,42 @@ public class PureCompilerBinaryGenerator
         LOGGER.info("Starting compilation");
         try
         {
-            MutableRepositoryCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(classLoader, codeRepositories.getRepositories()));
-            // TODO initialize non-selected repos from caches
-            return new PureRuntimeBuilder(codeStorage)
+            CompositeCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(classLoader, codeRepositories.getRepositories()));
+            PureRuntime runtime = new PureRuntimeBuilder(codeStorage)
                     .setTransactionalByDefault(false)
-                    .buildAndInitialize();
+                    .build();
+
+            PureCompilerLoader loader = PureCompilerLoader.newLoader(classLoader);
+            MutableList<String> reposToLoad = Lists.mutable.empty();
+            MutableList<String> reposToCompile = Lists.mutable.empty();
+            codeRepositories.getRepositoryNames().forEach(r -> (loader.canLoad(r) ? reposToLoad : reposToCompile).add(r));
+
+            if (reposToLoad.isEmpty())
+            {
+                long initStart = System.nanoTime();
+                LOGGER.info("No repositories to load: initializing runtime");
+                runtime.initialize();
+                long initEnd = System.nanoTime();
+                LOGGER.info("Finished initializing runtime in {}s", (initEnd - initStart) / 1_000_000_000.0);
+                return runtime;
+            }
+
+            long initStart = System.nanoTime();
+            LOGGER.info("Loading repositories: {}", reposToLoad);
+            loader.load(runtime, reposToLoad);
+            long initEnd = System.nanoTime();
+            LOGGER.info("Finished loading repositories in {}s", (initEnd - initStart) / 1_000_000_000.0);
+
+            if (reposToCompile.notEmpty())
+            {
+                long compileStart = System.nanoTime();
+                LOGGER.info("Compiling repositories: {}", reposToCompile);
+                runtime.loadAndCompile(reposToCompile.asLazy().flatCollect(codeStorage::getFileOrFiles).select(CodeStorageTools::isPureFilePath));
+                long compileEnd = System.nanoTime();
+                LOGGER.info("Finished compiling repositories in {}s", (compileEnd - compileStart) / 1_000_000_000.0);
+            }
+
+            return runtime;
         }
         catch (PureCompilationException | PureParserException e)
         {
