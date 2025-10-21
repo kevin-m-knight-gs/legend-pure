@@ -201,7 +201,7 @@ public abstract class ElementLoader
         finally
         {
             long end = System.nanoTime();
-            LOGGER.debug("Finished loading {} in {}s", path, (end - start) / 1_000_000_000.0);
+            LOGGER.debug("Finished loading {} in {}ns", path, end - start);
         }
     }
 
@@ -221,29 +221,44 @@ public abstract class ElementLoader
         finally
         {
             long end = System.nanoTime();
-            LOGGER.debug("Finished deserializing {} in {}s", path, (end - start) / 1_000_000_000.0);
+            LOGGER.debug("Finished deserializing {} in {}ns", path, end - start);
         }
     }
 
     private BackReferenceProvider deserializeBackReferences(String path)
     {
-        MutableMap<String, MutableList<BackReference>> map = Maps.mutable.empty();
-        this.index.getAllModuleNames().forEach(moduleName ->
+        long start = System.nanoTime();
+        LOGGER.debug("Deserializing back references for {}", path);
+        try
         {
-            if (hasBackReferences(moduleName, path))
+            MutableMap<String, MutableList<BackReference>> map = Maps.mutable.empty();
+            this.index.getAllModuleNames().forEach(moduleName ->
             {
-                ElementBackReferenceMetadata backReferenceMetadata = deserializeBackReferences(moduleName, path);
-                backReferenceMetadata.getInstanceBackReferenceMetadata().forEach(ibr -> map.getIfAbsentPut(ibr.getInstanceReferenceId(), Lists.mutable::empty).addAll(ibr.getBackReferences().castToList()));
+                if (hasBackReferences(moduleName, path))
+                {
+                    ElementBackReferenceMetadata backReferenceMetadata = deserializeBackReferences(moduleName, path);
+                    backReferenceMetadata.getInstanceBackReferenceMetadata().forEach(ibr -> map.getIfAbsentPut(ibr.getInstanceReferenceId(), Lists.mutable::empty).addAll(ibr.getBackReferences().castToList()));
+                }
+            });
+
+            if (map.isEmpty())
+            {
+                return id -> Lists.fixedSize.empty();
             }
-        });
 
-        if (map.isEmpty())
-        {
-            return id -> Lists.fixedSize.empty();
+            map.forEachValue(ListHelper::sortAndRemoveDuplicates);
+            return id -> map.getIfAbsentValue(id, Lists.fixedSize.empty());
         }
-
-        map.forEachValue(ListHelper::sortAndRemoveDuplicates);
-        return id -> map.getIfAbsentValue(id, Lists.fixedSize.empty());
+        catch (Throwable t)
+        {
+            LOGGER.error("Error deserializing back references for {}", path, t);
+            throw t;
+        }
+        finally
+        {
+            long end = System.nanoTime();
+            LOGGER.info("Finished deserializing back references for {} in {}ns", path, end - start);
+        }
     }
 
     abstract DeserializedConcreteElement deserializeConcreteElement(String path);
