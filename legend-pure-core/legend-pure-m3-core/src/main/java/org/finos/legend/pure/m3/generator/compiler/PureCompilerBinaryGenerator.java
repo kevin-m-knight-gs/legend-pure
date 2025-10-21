@@ -165,7 +165,7 @@ public class PureCompilerBinaryGenerator
 
             long initStart = System.nanoTime();
             LOGGER.info("Loading repositories: {}", reposToLoad);
-            loader.load(runtime, reposToLoad);
+            loader.load(runtime, reposToLoad, false);
             long initEnd = System.nanoTime();
             LOGGER.info("Finished loading repositories in {}s", (initEnd - initStart) / 1_000_000_000.0);
 

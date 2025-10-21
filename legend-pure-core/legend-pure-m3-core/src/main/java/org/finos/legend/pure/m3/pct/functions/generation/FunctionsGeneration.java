@@ -104,7 +104,7 @@ public class FunctionsGeneration
                 .getRepositories();
         CompositeCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(classLoader, codeRepositories));
         PureRuntime runtime = new PureRuntimeBuilder(codeStorage).setTransactionalByDefault(false).build();
-        if (!PureCompilerLoader.newLoader(classLoader).loadAll(runtime))
+        if (!PureCompilerLoader.newLoader(classLoader).loadAll(runtime, false))
         {
             Message message = new Message("");
             PureRepositoryJarLibrary jarLibrary = SimplePureRepositoryJarLibrary.newLibrary(GraphLoader.findJars(codeRepositories.asLazy().collect(CodeRepository::getName), classLoader, message));

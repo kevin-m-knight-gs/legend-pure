@@ -24,6 +24,10 @@ import org.eclipse.collections.impl.factory.Multimaps;
 import org.eclipse.collections.impl.utility.LazyIterate;
 import org.finos.legend.pure.m3.compiler.Context;
 import org.finos.legend.pure.m3.coreinstance.lazy.generator.M3GeneratedLazyElementBuilder;
+import org.finos.legend.pure.m3.navigation.M3Paths;
+import org.finos.legend.pure.m3.navigation.M3Properties;
+import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.navigation.profile.Profile;
 import org.finos.legend.pure.m3.serialization.compiler.element.ConcreteElementDeserializer;
 import org.finos.legend.pure.m3.serialization.compiler.element.ElementLoader;
 import org.finos.legend.pure.m3.serialization.compiler.file.FileDeserializer;
@@ -37,9 +41,12 @@ import org.finos.legend.pure.m3.serialization.compiler.strings.StringIndexer;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepository;
 import org.finos.legend.pure.m3.serialization.grammar.Parser;
 import org.finos.legend.pure.m3.serialization.grammar.ParserLibrary;
+import org.finos.legend.pure.m3.serialization.runtime.pattern.URLPatternLibrary;
 import org.finos.legend.pure.m3.tools.GraphTools;
 import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.Objects;
@@ -47,6 +54,8 @@ import java.util.Set;
 
 public abstract class PureCompilerLoader
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PureCompilerLoader.class);
+
     final ClassLoader classLoader;
     final FileDeserializer fileDeserializer;
 
@@ -87,23 +96,24 @@ public abstract class PureCompilerLoader
      * @param runtime      Pure runtime
      * @param repositories repositories to load
      */
-    public void load(PureRuntime runtime, String... repositories)
+    public void load(PureRuntime runtime, Iterable<? extends String> repositories)
     {
-        load(runtime, Sets.mutable.with(repositories));
+        load(runtime, repositories, true);
     }
 
     /**
      * Load the given repositories.
      *
-     * @param runtime      Pure runtime
-     * @param repositories repositories to load
+     * @param runtime                     Pure runtime
+     * @param repositories                repositories to load
+     * @param initializeURLPatternLibrary whether to initialize the URL pattern library
      */
-    public void load(PureRuntime runtime, Iterable<? extends String> repositories)
+    public void load(PureRuntime runtime, Iterable<? extends String> repositories, boolean initializeURLPatternLibrary)
     {
         Set<? extends String> repoSet = (repositories instanceof Set) ? (Set<? extends String>) repositories : Sets.mutable.withAll(repositories);
         if (!repoSet.isEmpty())
         {
-            load(runtime, Lists.mutable.withAll(repoSet));
+            load(runtime, Lists.mutable.withAll(repoSet), initializeURLPatternLibrary);
         }
     }
 
@@ -117,13 +127,27 @@ public abstract class PureCompilerLoader
      */
     public Set<String> loadIfPossible(PureRuntime runtime, Iterable<? extends String> repositories)
     {
-        MutableSet<String> toLoad = Sets.mutable.empty();
-        LazyIterate.select(repositories, this::canLoad).forEach(toLoad::add);
-        if (toLoad.notEmpty())
+        return loadIfPossible(runtime, repositories, false);
+    }
+
+    /**
+     * Load as many of the given repositories as possible. Returns a (possibly empty) set of repositories that were
+     * loaded.
+     *
+     * @param runtime                     Pure runtime to initialize
+     * @param repositories                repositories to load
+     * @param initializeURLPatternLibrary whether to initialize the URL pattern library
+     * @return repositories that were loaded
+     */
+    public Set<String> loadIfPossible(PureRuntime runtime, Iterable<? extends String> repositories, boolean initializeURLPatternLibrary)
+    {
+        MutableSet<String> loadable = Sets.mutable.empty();
+        LazyIterate.select(repositories, this::canLoad).forEach(loadable::add);
+        if (loadable.notEmpty())
         {
-            load(runtime, Lists.mutable.withAll(toLoad));
+            load(runtime, Lists.mutable.withAll(loadable), initializeURLPatternLibrary);
         }
-        return toLoad;
+        return loadable;
     }
 
     /**
@@ -135,7 +159,20 @@ public abstract class PureCompilerLoader
      */
     public Set<String> loadIfPossible(PureRuntime runtime)
     {
-        return loadIfPossible(runtime, runtime.getCodeStorage().getAllRepositories().asLazy().collect(CodeRepository::getName));
+        return loadIfPossible(runtime, true);
+    }
+
+    /**
+     * Load as many of the repositories in the runtime as possible. Returns a (possibly empty) set of repositories that
+     * were loaded.
+     *
+     * @param runtime                     Pure runtime to initialize
+     * @param initializeURLPatternLibrary whether to initialize the URL pattern library
+     * @return repositories that were loaded
+     */
+    public Set<String> loadIfPossible(PureRuntime runtime, boolean initializeURLPatternLibrary)
+    {
+        return loadIfPossible(runtime, runtime.getCodeStorage().getAllRepositories().asLazy().collect(CodeRepository::getName), initializeURLPatternLibrary);
     }
 
     /**
@@ -147,6 +184,19 @@ public abstract class PureCompilerLoader
      */
     public boolean loadAll(PureRuntime runtime)
     {
+        return loadAll(runtime, true);
+    }
+
+    /**
+     * Load all repositories in the runtime if possible; otherwise, load none. Returns a boolean indicating whether all
+     * repositories were loaded.
+     *
+     * @param runtime                     Pure runtime to initialize
+     * @param initializeURLPatternLibrary whether to initialize the URL pattern library
+     * @return true if all repositories were loaded; false if none
+     */
+    public boolean loadAll(PureRuntime runtime, boolean initializeURLPatternLibrary)
+    {
         MutableList<String> repos = runtime.getCodeStorage().getAllRepositories().collect(CodeRepository::getName, Lists.mutable.empty());
         if (!repos.allSatisfy(this::canLoad))
         {
@@ -154,59 +204,124 @@ public abstract class PureCompilerLoader
             return false;
         }
 
-        load(runtime, repos);
+        load(runtime, repos, initializeURLPatternLibrary);
         return true;
     }
 
-    private void load(PureRuntime runtime, MutableList<? extends String> repositories)
+    private void load(PureRuntime runtime, MutableList<? extends String> repositories, boolean initializeURLPatternLibrary)
     {
-        MetadataIndex metadataIndex = MetadataIndex.builder()
-                .withModules(LazyIterate.collect(repositories, this::loadModuleManifest))
-                .build();
-
-        ModelRepository repository = runtime.getModelRepository();
-        ElementLoader elementLoader = ElementLoader.builder()
-                .withMetadataIndex(metadataIndex)
-                .withClassLoader(this.classLoader)
-                .withAvailableReferenceIdExtensions(this.classLoader)
-                .withFileDeserializer(this.fileDeserializer)
-                .withElementBuilder(M3GeneratedLazyElementBuilder.newElementBuilder(this.classLoader, repository))
-                .build();
-
-        // initialize top level elements
-        GraphTools.getTopLevelNames().forEach(n -> repository.addTopLevel(elementLoader.loadElementStrict(n)));
-
-        // initialize source registry
-        ParserLibrary parserLibrary = runtime.getIncrementalCompiler().getParserLibrary();
-        repositories.forEach(repo -> loadModuleSourceMetadata(repo).forEachSource(sourceMetadata ->
+        long start = System.nanoTime();
+        LOGGER.debug("loading repos {}", repositories);
+        try
         {
-            String sourceId = sourceMetadata.getSourceId();
-            runtime.loadSourceIfLoadable(sourceId);
-            Source source = runtime.getSourceById(sourceId);
-            if (source == null)
+            long metadataStart = System.nanoTime();
+            LOGGER.debug("Loading metadata index");
+            MetadataIndex metadataIndex = MetadataIndex.builder()
+                    .withModules(LazyIterate.collect(repositories, this::loadModuleManifest))
+                    .build();
+            long metadataEnd = System.nanoTime();
+            LOGGER.debug("Finished loading metadata index in {}ns", metadataEnd - metadataStart);
+
+            long loaderStart = System.nanoTime();
+            LOGGER.debug("Building element loader");
+            ModelRepository repository = runtime.getModelRepository();
+            ElementLoader elementLoader = ElementLoader.builder()
+                    .withMetadataIndex(metadataIndex)
+                    .withClassLoader(this.classLoader)
+                    .withAvailableReferenceIdExtensions(this.classLoader)
+                    .withFileDeserializer(this.fileDeserializer)
+                    .withElementBuilder(M3GeneratedLazyElementBuilder.newElementBuilder(this.classLoader, repository))
+                    .build();
+            long loaderEnd = System.nanoTime();
+            LOGGER.debug("Finished building element loader in {}ns", loaderEnd - loaderStart);
+
+            // initialize top level elements
+            long topLevelStart = System.nanoTime();
+            LOGGER.debug("Initializing top level elements");
+            GraphTools.getTopLevelNames().forEach(n -> repository.addTopLevel(elementLoader.loadElementStrict(n)));
+            long topLevelEnd = System.nanoTime();
+            LOGGER.debug("Finished initializing top level elements in {}ns", topLevelEnd - topLevelStart);
+
+            // initialize source registry
+            long srcRegStart = System.nanoTime();
+            LOGGER.debug("Initializing the source registry");
+            ParserLibrary parserLibrary = runtime.getIncrementalCompiler().getParserLibrary();
+            repositories.forEach(repo -> loadModuleSourceMetadata(repo).forEachSource(sourceMetadata ->
             {
-                throw new RuntimeException("Unknown source: " + sourceId);
+                String sourceId = sourceMetadata.getSourceId();
+                runtime.loadSourceIfLoadable(sourceId);
+                Source source = runtime.getSourceById(sourceId);
+                if (source == null)
+                {
+                    throw new RuntimeException("Unknown source: " + sourceId);
+                }
+
+                MutableListMultimap<Parser, CoreInstance> instancesByParser = Multimaps.mutable.list.empty();
+                sourceMetadata.getSections().forEach(section ->
+                {
+                    Parser parser = parserLibrary.getParser(section.getParser()).newInstance(parserLibrary);
+                    MutableList<CoreInstance> elements = section.getElements().collect(elementLoader::loadElementStrict, Lists.mutable.ofInitialCapacity(section.getElements().size()));
+                    instancesByParser.putAll(parser, elements);
+                });
+
+                source.linkInstances(instancesByParser);
+            }));
+            long srcRegEnd = System.nanoTime();
+            LOGGER.debug("Finished initializing the source registry in {}ns", srcRegEnd - srcRegStart);
+
+            // load functions by name
+            long fnsByNameStart = System.nanoTime();
+            LOGGER.debug("Loading functions by name");
+            Context context = runtime.getContext();
+            repositories.forEach(repo -> loadModuleFunctionsByName(repo).getFunctionsByName().forEach(fbn ->
+            {
+                String funcName = fbn.getFunctionName();
+                ImmutableList<String> funcPaths = fbn.getFunctions();
+                context.registerFunctionsByName(funcName, funcPaths.collect(elementLoader::loadElementStrict, Lists.mutable.ofInitialCapacity(funcPaths.size())));
+            }));
+            long fnsByNameEnd = System.nanoTime();
+            LOGGER.debug("Finished loading functions by name in {}ns", fnsByNameEnd - fnsByNameStart);
+
+            // update URL pattern library
+            if (initializeURLPatternLibrary)
+            {
+                long patternLibStart = System.nanoTime();
+                LOGGER.debug("Initializing the URL pattern library");
+                CoreInstance serviceProfile = elementLoader.loadElement(M3Paths.service);
+                if (serviceProfile != null)
+                {
+                    CoreInstance urlTag = Profile.findTag(serviceProfile, "url");
+                    if (urlTag != null)
+                    {
+                        URLPatternLibrary patternLibrary = runtime.getURLPatternLibrary();
+                        ProcessorSupport processorSupport = runtime.getProcessorSupport();
+                        urlTag.getValueForMetaPropertyToMany(M3Properties.modelElements).forEach(elt ->
+                        {
+                            try
+                            {
+                                patternLibrary.possiblyRegister(elt, processorSupport);
+                            }
+                            catch (Exception e)
+                            {
+                                LOGGER.error("Error registering element with URL pattern library", e);
+                            }
+                        });
+                    }
+                }
+                long patternLibEnd = System.nanoTime();
+                LOGGER.debug("Finished initializing the URL pattern library in {}ns", patternLibEnd - patternLibStart);
             }
-
-            MutableListMultimap<Parser, CoreInstance> instancesByParser = Multimaps.mutable.list.empty();
-            sourceMetadata.getSections().forEach(section ->
-            {
-                Parser parser = parserLibrary.getParser(section.getParser()).newInstance(parserLibrary);
-                MutableList<CoreInstance> elements = section.getElements().collect(elementLoader::loadElementStrict, Lists.mutable.ofInitialCapacity(section.getElements().size()));
-                instancesByParser.putAll(parser, elements);
-            });
-
-            source.linkInstances(instancesByParser);
-        }));
-
-        // load functions by name
-        Context context = runtime.getContext();
-        repositories.forEach(repo -> loadModuleFunctionsByName(repo).getFunctionsByName().forEach(fbn ->
+        }
+        catch (Throwable t)
         {
-            String funcName = fbn.getFunctionName();
-            ImmutableList<String> funcPaths = fbn.getFunctions();
-            context.registerFunctionsByName(funcName, funcPaths.collect(elementLoader::loadElementStrict, Lists.mutable.ofInitialCapacity(funcPaths.size())));
-        }));
+            LOGGER.error("Error loading repos {}", repositories, t);
+            throw t;
+        }
+        finally
+        {
+            long end = System.nanoTime();
+            LOGGER.debug("Finished loading repos {} in {}ns", repositories, end - start);
+        }
     }
 
     abstract boolean moduleManifestExists(String repository);

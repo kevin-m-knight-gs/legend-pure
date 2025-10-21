@@ -367,7 +367,7 @@ public class JavaCodeGeneration
                         .build();
                 long initStart = System.nanoTime();
                 log.info(repositoriesForCompilation.asLazy().collect(CodeRepository::getName).makeString("    Loading repositories: [", ", ", "]"));
-                loader.load(runtime, repositoriesForCompilation.asLazy().collect(CodeRepository::getName));
+                loader.load(runtime, repositoriesForCompilation.asLazy().collect(CodeRepository::getName), false);
                 long initEnd = System.nanoTime();
                 log.info(String.format("    Finished loading repositories in %.9fs", (initEnd - initStart) / 1_000_000_000.0));
                 log.info(String.format("    Finished Pure initialization (%.9fs)", durationSinceInSeconds(start)));

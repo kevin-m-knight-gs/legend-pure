@@ -85,7 +85,7 @@ public class M3CoreInstanceGenerator
             long initStart = System.nanoTime();
             LOGGER.info("Loading repositories: {}", reposToLoad);
             reposToLoad.forEach(repo -> codeStorage.getFileOrFiles(repo).forEach(runtime::loadSourceIfLoadable));
-            loader.load(runtime, reposToLoad);
+            loader.load(runtime, reposToLoad, false);
             long initEnd = System.nanoTime();
             LOGGER.info("Finished loading repositories in {}s", (initEnd - initStart) / 1_000_000_000.0);
 
