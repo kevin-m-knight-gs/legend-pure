@@ -19,7 +19,6 @@ import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.map.MutableMap;
-import org.eclipse.collections.api.set.MutableSet;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation._package._Package;
 import org.finos.legend.pure.m3.serialization.compiler.element.ElementBuilder;
@@ -38,7 +37,6 @@ import org.finos.legend.pure.m4.coreinstance.compileState.CompileState;
 import org.finos.legend.pure.m4.coreinstance.compileState.CompileStateSet;
 import org.finos.legend.pure.m4.coreinstance.indexing.IDConflictException;
 import org.finos.legend.pure.m4.coreinstance.indexing.IndexSpecification;
-import org.finos.legend.pure.m4.exception.PureCompilationException;
 import org.finos.legend.pure.m4.transaction.ModelRepositoryTransaction;
 
 import java.util.Collection;
@@ -165,22 +163,6 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
     }
 
     @Override
-    public CoreInstance getKeyByName(String name)
-    {
-        ListIterable<String> realKey = getRealKeyByName(name);
-        if (realKey == null)
-        {
-            throw new IllegalArgumentException("Unsupported key: " + name);
-        }
-        return resolveRealKey(realKey);
-    }
-
-    protected CoreInstance resolveRealKey(ListIterable<String> realKey)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public <K> CoreInstance getValueInValueForMetaPropertyToManyByIDIndex(String keyName, IndexSpecification<K> indexSpec, K keyInIndex)
     {
         try
@@ -197,6 +179,13 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
             builder.append(": multiple values for id ").append(e.getId());
             throw new RuntimeException(builder.toString(), e);
         }
+    }
+
+    @Override
+    public String toString()
+    {
+        CoreInstance classifier = getClassifier();
+        return getName() + "(" + getSyntheticId() + ") instanceOf " + ((classifier == null) ? null : classifier.getName());
     }
 
     protected abstract <K> CoreInstance getValueByIDIndex(String keyName, IndexSpecification<K> indexSpec, K keyInIndex) throws IDConflictException;
@@ -250,12 +239,6 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance
     protected void setCompileStatesFrom(int states)
     {
         this.compileStateBitSet = states;
-    }
-
-    @Override
-    public void validate(MutableSet<CoreInstance> doneList) throws PureCompilationException
-    {
-        throw new UnsupportedOperationException();
     }
 
     protected static MutableMap<String, PropertyValues> indexPropertyValues(InstanceData instanceData)

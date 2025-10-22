@@ -24,10 +24,6 @@ import java.util.function.Function;
 
 public interface PropertyValue<T>
 {
-    boolean isMany();
-
-    int size();
-
     boolean hasValue();
 
     T getValue();

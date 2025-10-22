@@ -36,21 +36,9 @@ public abstract class OneValue<T> implements PropertyValue<T>
     }
 
     @Override
-    public boolean isMany()
-    {
-        return false;
-    }
-
-    @Override
     public boolean hasValue()
     {
         return getValue() != null;
-    }
-
-    @Override
-    public int size()
-    {
-        return hasValue() ? 1 : 0;
     }
 
     @Override
@@ -113,7 +101,7 @@ public abstract class OneValue<T> implements PropertyValue<T>
     @Override
     public void setValues(RichIterable<? extends T> values)
     {
-        switch (values.size())
+        switch ((values == null) ? 0 : values.size())
         {
             case 0:
             {
