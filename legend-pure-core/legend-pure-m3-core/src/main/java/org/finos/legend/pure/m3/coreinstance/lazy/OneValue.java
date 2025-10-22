@@ -36,21 +36,9 @@ public abstract class OneValue<T> implements PropertyValue<T>
     }
 
     @Override
-    public boolean isMany()
-    {
-        return false;
-    }
-
-    @Override
     public boolean hasValue()
     {
         return getValue() != null;
-    }
-
-    @Override
-    public int size()
-    {
-        return hasValue() ? 1 : 0;
     }
 
     @Override
