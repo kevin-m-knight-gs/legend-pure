@@ -257,7 +257,7 @@ public abstract class ElementLoader
         finally
         {
             long end = System.nanoTime();
-            LOGGER.info("Finished deserializing back references for {} in {}ns", path, end - start);
+            LOGGER.debug("Finished deserializing back references for {} in {}ns", path, end - start);
         }
     }
 
