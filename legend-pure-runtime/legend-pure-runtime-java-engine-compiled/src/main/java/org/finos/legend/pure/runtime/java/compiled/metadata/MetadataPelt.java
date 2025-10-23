@@ -136,6 +136,17 @@ public class MetadataPelt implements Metadata
     }
 
     /**
+     * Return whether the metadata has an element with the given package path.
+     *
+     * @param path package path
+     * @return whether there is an element with the given path
+     */
+    public boolean hasElement(String path)
+    {
+        return this.elementLoader.elementExists(path);
+    }
+
+    /**
      * Get an element by its package path. Returns null if there is no such element.
      *
      * @param path package path of the element
@@ -144,6 +155,19 @@ public class MetadataPelt implements Metadata
     public CoreInstance getElementByPath(String path)
     {
         return this.elementLoader.loadElement(path);
+    }
+
+    public static MetadataPelt fromClassLoader(ClassLoader classLoader, Iterable<? extends String> repositories)
+    {
+        Objects.requireNonNull(classLoader, "class loader may not be null");
+        return builder().withClassLoader(classLoader).withRepositories(repositories).build();
+    }
+
+    public static MetadataPelt fromDirectory(ClassLoader classLoader, Path directory, Iterable<? extends String> repositories)
+    {
+        Objects.requireNonNull(classLoader, "class loader may not be null");
+        Objects.requireNonNull(directory, "directory may not be null");
+        return builder().withClassLoader(classLoader).withDirectory(directory).withRepositories(repositories).build();
     }
 
     public static Builder builder()
@@ -179,7 +203,7 @@ public class MetadataPelt implements Metadata
             return this;
         }
 
-        public Builder withRepositories(Iterable<String> repositories)
+        public Builder withRepositories(Iterable<? extends String> repositories)
         {
             repositories.forEach(this::withRepository);
             return this;
