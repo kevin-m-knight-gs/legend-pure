@@ -157,10 +157,7 @@ public class TestJavaStandaloneLibraryGenerator extends AbstractPureTestWithCore
         generator.compileAndWriteClasses(classesDir, new VoidLog());
         try (URLClassLoader classLoader = new URLClassLoader(new URL[]{classesDir.toUri().toURL()}, Thread.currentThread().getContextClassLoader()))
         {
-            Metadata metadata = MetadataPelt.builder()
-                    .withClassLoader(classLoader)
-                    .withRepositories(runtime.getCodeStorage().getAllRepositories().asLazy().collect(CodeRepository::getName))
-                    .build();
+            Metadata metadata = MetadataPelt.fromClassLoader(classLoader, runtime.getCodeStorage().getAllRepositories().asLazy().collect(CodeRepository::getName));
             testStandaloneLibraryNoExternal(classLoader, metadata);
         }
     }

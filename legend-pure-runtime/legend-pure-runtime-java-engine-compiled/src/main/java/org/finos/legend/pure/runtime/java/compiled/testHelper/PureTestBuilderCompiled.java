@@ -184,10 +184,7 @@ public class PureTestBuilderCompiled extends TestSuite
     {
         MutableList<CodeRepository> codeRepos = CodeRepositoryProviderHelper.findCodeRepositories(classLoader)
                 .reject(r -> "test_generic_repository".equals(r.getName()) || "other_test_generic_repository".equals(r.getName()), Lists.mutable.empty());
-        Metadata metadata = MetadataPelt.builder()
-                .withClassLoader(classLoader)
-                .withRepositories(codeRepos.asLazy().collect(CodeRepository::getName))
-                .build();
+        Metadata metadata = MetadataPelt.fromClassLoader(classLoader, codeRepos.asLazy().collect(CodeRepository::getName));
         return new CompiledExecutionSupport(
                 new JavaCompilerState(null, classLoader),
                 new CompiledProcessorSupport(classLoader, metadata, Sets.mutable.empty()),
