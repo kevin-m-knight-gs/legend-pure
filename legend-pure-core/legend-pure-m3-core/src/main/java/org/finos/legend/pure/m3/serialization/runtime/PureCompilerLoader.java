@@ -188,6 +188,19 @@ public abstract class PureCompilerLoader
     }
 
     /**
+     * Load all the given repositories if possible; otherwise, load none. Returns a boolean indicating whether all
+     * repositories were loaded.
+     *
+     * @param runtime      Pure runtime to initialize
+     * @param repositories repositories to load
+     * @return true if all repositories were loaded; false if none
+     */
+    public boolean loadAll(PureRuntime runtime, Iterable<? extends String> repositories)
+    {
+        return loadAll(runtime, repositories, true);
+    }
+
+    /**
      * Load all repositories in the runtime if possible; otherwise, load none. Returns a boolean indicating whether all
      * repositories were loaded.
      *
@@ -197,14 +210,33 @@ public abstract class PureCompilerLoader
      */
     public boolean loadAll(PureRuntime runtime, boolean initializeURLPatternLibrary)
     {
-        MutableList<String> repos = runtime.getCodeStorage().getAllRepositories().collect(CodeRepository::getName, Lists.mutable.empty());
-        if (!repos.allSatisfy(this::canLoad))
+        return loadAll(runtime, runtime.getCodeStorage().getAllRepositories().collect(CodeRepository::getName, Lists.mutable.empty()), initializeURLPatternLibrary);
+    }
+
+    /**
+     * Load all the given repositories if possible; otherwise, load none. Returns a boolean indicating whether all
+     * repositories were loaded.
+     *
+     * @param runtime                     Pure runtime to initialize
+     * @param repositories                repositories to load
+     * @param initializeURLPatternLibrary whether to initialize the URL pattern library
+     * @return true if all repositories were loaded; false if none
+     */
+    public boolean loadAll(PureRuntime runtime, Iterable<? extends String> repositories, boolean initializeURLPatternLibrary)
+    {
+        Set<? extends String> repoSet = (repositories instanceof Set) ? (Set<? extends String>) repositories : Sets.mutable.withAll(repositories);
+        return loadAll(runtime, Lists.mutable.withAll(repoSet), initializeURLPatternLibrary);
+    }
+
+    private boolean loadAll(PureRuntime runtime, MutableList<? extends String> repositories, boolean initializeURLPatternLibrary)
+    {
+        if (!repositories.allSatisfy(this::canLoad))
         {
             // if we cannot load all repositories, do not load any
             return false;
         }
 
-        load(runtime, repos, initializeURLPatternLibrary);
+        load(runtime, repositories, initializeURLPatternLibrary);
         return true;
     }
 
