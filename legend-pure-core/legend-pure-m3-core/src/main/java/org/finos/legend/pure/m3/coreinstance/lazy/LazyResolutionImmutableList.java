@@ -246,6 +246,27 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
         return -1;
     }
 
+    private int resolvedIndexOf(Object o)
+    {
+        for (int i = 0, size = size(); i < size; i++)
+        {
+            Object item = this.items[toArrayIndex(i)];
+            if (item instanceof LazyResolver)
+            {
+                LazyResolver<?> resolver = (LazyResolver<?>) item;
+                if (resolver.isResolved() && Objects.equals(o, resolver.getResolvedValue()))
+                {
+                    return i;
+                }
+            }
+            else if (Objects.equals(o, item))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     @Override
     public Iterator<T> iterator()
     {
@@ -782,39 +803,44 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
     @Override
     public ImmutableList<T> newWithout(T element)
     {
-        int index = indexOf(element);
+        // first check only resolved items, then check everything
+        int index = resolvedIndexOf(element);
         if (index == -1)
         {
-            return this;
+            index = indexOf(element);
+            if (index == -1)
+            {
+                return this;
+            }
         }
 
         int size = size();
         Object[] newItems = new Object[size - 1];
-        for (int i = 0; i < index; i++)
-        {
-            newItems[i] = getResolved(i);
-        }
         boolean anyUnresolved = false;
-        for (int i = index + 1; i < size; i++)
+        for (int i = 0, j = 0; i < size; i++, j++)
         {
-            int targetIndex = i - 1;
+            if (i == index)
+            {
+                j--;
+                continue;
+            }
             Object item = this.items[toArrayIndex(i)];
             if (item instanceof LazyResolver)
             {
                 LazyResolver<?> supplier = (LazyResolver<?>) item;
                 if (supplier.isResolved())
                 {
-                    newItems[targetIndex] = supplier.getResolvedValue();
+                    newItems[j] = supplier.getResolvedValue();
                 }
                 else
                 {
                     anyUnresolved = true;
-                    newItems[targetIndex] = item;
+                    newItems[j] = item;
                 }
             }
             else
             {
-                newItems[targetIndex] = item;
+                newItems[j] = item;
             }
         }
         return anyUnresolved ?
