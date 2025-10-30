@@ -16,12 +16,12 @@ package org.finos.legend.pure.m3.coreinstance.lazy;
 
 import java.util.function.Supplier;
 
-class SharedSupplier<T> implements Supplier<T>
+class LazyResolver<T> implements Supplier<T>
 {
     private volatile Supplier<T> supplier;
     private volatile T value;
 
-    SharedSupplier(Supplier<T> supplier)
+    LazyResolver(Supplier<T> supplier)
     {
         this.supplier = supplier;
     }
@@ -53,5 +53,10 @@ class SharedSupplier<T> implements Supplier<T>
     T getResolvedValue()
     {
         return this.value;
+    }
+
+    static <T> LazyResolver<T> fromSupplier(Supplier<T> supplier)
+    {
+        return (supplier instanceof LazyResolver) ? (LazyResolver<T>) supplier : new LazyResolver<>(supplier);
     }
 }

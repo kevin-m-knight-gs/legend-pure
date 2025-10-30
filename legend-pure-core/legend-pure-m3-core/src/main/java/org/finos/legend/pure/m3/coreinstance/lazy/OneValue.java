@@ -258,21 +258,21 @@ public abstract class OneValue<T> implements PropertyValue<T>
                     Supplier<? extends T> local = this.initializer;
                     if (local != null)
                     {
-                        if (local instanceof SharedSupplier)
+                        if (local instanceof LazyResolver)
                         {
-                            SharedSupplier<? extends T> sharedSupplier = (SharedSupplier<? extends T>) local;
-                            if (sharedSupplier.isResolved())
+                            LazyResolver<? extends T> lazyResolver = (LazyResolver<? extends T>) local;
+                            if (lazyResolver.isResolved())
                             {
-                                // The SharedSupplier might have been resolved by another instance holding it.
+                                // The LazyResolver might have been resolved by another instance holding it.
                                 // In that case, we can resolve the value for this holder, as well as the copy.
-                                T v = this.value = sharedSupplier.getResolvedValue();
+                                T v = this.value = lazyResolver.getResolvedValue();
                                 this.initializer = null;
                                 return new SimpleOneValue<>(v);
                             }
                         }
                         else
                         {
-                            this.initializer = local = new SharedSupplier<>(local);
+                            this.initializer = local = new LazyResolver<>(local);
                         }
                         return new LazyOneValue<>(local);
                     }

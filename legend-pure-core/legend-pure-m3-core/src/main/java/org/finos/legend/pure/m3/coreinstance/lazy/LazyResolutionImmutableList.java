@@ -709,9 +709,9 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
         {
             int targetIndex = size - i - 1;
             Object item = this.items[toArrayIndex(i)];
-            if (item.getClass() == SharedSupplier.class)
+            if (item instanceof LazyResolver)
             {
-                SharedSupplier<?> supplier = (SharedSupplier<?>) item;
+                LazyResolver<?> supplier = (LazyResolver<?>) item;
                 if (supplier.isResolved())
                 {
                     reversed[targetIndex] = supplier.getResolvedValue();
@@ -754,9 +754,9 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
         for (int i = 0; i < size; i++)
         {
             Object item = this.items[toArrayIndex(i)];
-            if (item.getClass() == SharedSupplier.class)
+            if (item instanceof LazyResolver)
             {
-                SharedSupplier<?> supplier = (SharedSupplier<?>) item;
+                LazyResolver<?> supplier = (LazyResolver<?>) item;
                 if (supplier.isResolved())
                 {
                     newItems[i] = supplier.getResolvedValue();
@@ -799,9 +799,9 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
         {
             int targetIndex = i - 1;
             Object item = this.items[toArrayIndex(i)];
-            if (item.getClass() == SharedSupplier.class)
+            if (item instanceof LazyResolver)
             {
-                SharedSupplier<?> supplier = (SharedSupplier<?>) item;
+                LazyResolver<?> supplier = (LazyResolver<?>) item;
                 if (supplier.isResolved())
                 {
                     newItems[targetIndex] = supplier.getResolvedValue();
@@ -839,9 +839,9 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
         while (i < oldSize)
         {
             Object item = this.items[toArrayIndex(i)];
-            if (item.getClass() == SharedSupplier.class)
+            if (item instanceof LazyResolver)
             {
-                SharedSupplier<?> supplier = (SharedSupplier<?>) item;
+                LazyResolver<?> supplier = (LazyResolver<?>) item;
                 if (supplier.isResolved())
                 {
                     newItems[i] = supplier.getResolvedValue();
@@ -918,8 +918,8 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
     private T getResolvedByArrayIndex(int arrayIndex)
     {
         Object item = this.items[arrayIndex];
-        return (item.getClass() == SharedSupplier.class) ?
-               ((SharedSupplier<? extends T>) item).get() :
+        return (item instanceof LazyResolver) ?
+               ((LazyResolver<? extends T>) item).get() :
                (T) item;
     }
 
@@ -932,9 +932,9 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
         for (int i = toArrayIndex(0); i < end; i++)
         {
             Object item = this.items[i];
-            if (item.getClass() == SharedSupplier.class)
+            if (item instanceof LazyResolver)
             {
-                SharedSupplier<? extends T> supplier = (SharedSupplier<? extends T>) item;
+                LazyResolver<? extends T> supplier = (LazyResolver<? extends T>) item;
                 if (supplier.isResolved())
                 {
                     T value = supplier.getResolvedValue();
@@ -1035,7 +1035,24 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
     static <T> LazyResolutionImmutableList<T> newList(ListIterable<? extends Supplier<? extends T>> suppliers)
     {
         Object[] items = new Object[suppliers.size()];
-        suppliers.forEachWithIndex((supplier, i) -> items[i] = new SharedSupplier<>(supplier));
+        suppliers.forEachWithIndex((supplier, i) -> items[i] = LazyResolver.fromSupplier(supplier));
         return new SimpleLazyResolutionImmutableList<>(items);
+    }
+
+    @SafeVarargs
+    static <T> LazyResolutionImmutableList<T> newList(Supplier<? extends T>... suppliers)
+    {
+        int size = suppliers.length;
+        Object[] items = new Object[size];
+        for (int i = 0; i < size; i++)
+        {
+            items[i] = LazyResolver.fromSupplier(suppliers[i]);
+        }
+        return new SimpleLazyResolutionImmutableList<>(items);
+    }
+
+    static <T> LazyResolutionImmutableList<T> newList(Supplier<? extends T> supplier)
+    {
+        return new SimpleLazyResolutionImmutableList<>(new Object[]{LazyResolver.fromSupplier(supplier)});
     }
 }
