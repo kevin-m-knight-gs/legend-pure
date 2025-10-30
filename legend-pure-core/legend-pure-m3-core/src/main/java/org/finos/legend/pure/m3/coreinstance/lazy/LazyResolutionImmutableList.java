@@ -800,6 +800,46 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
     }
 
     @SuppressWarnings("unchecked")
+    public ImmutableList<T> newWithAt(T element, int index)
+    {
+        checkBounds(index);
+        int size = size();
+        Object[] newItems = new Object[size];
+        boolean anyUnresolved = false;
+        for (int i = 0; i < size; i++)
+        {
+            if (i == index)
+            {
+                newItems[i] = element;
+            }
+            else
+            {
+                Object item = this.items[toArrayIndex(i)];
+                if (item instanceof LazyResolver)
+                {
+                    LazyResolver<?> supplier = (LazyResolver<?>) item;
+                    if (supplier.isResolved())
+                    {
+                        newItems[i] = supplier.getResolvedValue();
+                    }
+                    else
+                    {
+                        anyUnresolved = true;
+                        newItems[i] = item;
+                    }
+                }
+                else
+                {
+                    newItems[i] = item;
+                }
+            }
+        }
+        return anyUnresolved ?
+               new SimpleLazyResolutionImmutableList<>(newItems) :
+               Lists.immutable.with((T[]) newItems);
+    }
+
+    @SuppressWarnings("unchecked")
     @Override
     public ImmutableList<T> newWithout(Object element)
     {

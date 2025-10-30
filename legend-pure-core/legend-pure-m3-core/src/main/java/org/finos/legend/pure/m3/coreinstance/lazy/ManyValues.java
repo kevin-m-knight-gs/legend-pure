@@ -127,14 +127,22 @@ public class ManyValues<T> implements PropertyValue<T>
     public void setValue(int offset, T value)
     {
         ImmutableList<T> current;
-        MutableList<T> newValues;
+        ImmutableList<T> newValues;
         do
         {
             current = this.values;
-            newValues = Lists.mutable.withAll(current);
-            newValues.set(offset, value);
+            if (current instanceof LazyResolutionImmutableList)
+            {
+                newValues = ((LazyResolutionImmutableList<T>) current).newWithAt(value, offset);
+            }
+            else
+            {
+                MutableList<T> mutable = Lists.mutable.withAll(current);
+                mutable.set(offset, value);
+                newValues = mutable.toImmutable();
+            }
         }
-        while (!UPDATER.compareAndSet(this, current, newValues.toImmutable()));
+        while (!UPDATER.compareAndSet(this, current, newValues));
     }
 
     @Override
@@ -167,14 +175,14 @@ public class ManyValues<T> implements PropertyValue<T>
         }
 
         ImmutableList<T> current;
-        ImmutableList<T> replacement;
+        ImmutableList<T> newValues;
         do
         {
             current = this.values;
             if (current instanceof LazyResolutionImmutableList)
             {
-                replacement = ((LazyResolutionImmutableList<T>) current).newWithout(value);
-                if (replacement == current)
+                newValues = ((LazyResolutionImmutableList<T>) current).newWithout(value);
+                if (newValues == current)
                 {
                     // value is not present
                     return false;
@@ -188,10 +196,10 @@ public class ManyValues<T> implements PropertyValue<T>
                     // value is not present
                     return false;
                 }
-                replacement = current.newWithout(current.get(index));
+                newValues = current.newWithout(current.get(index));
             }
         }
-        while (!UPDATER.compareAndSet(this, current, replacement));
+        while (!UPDATER.compareAndSet(this, current, newValues));
         return true;
     }
 
