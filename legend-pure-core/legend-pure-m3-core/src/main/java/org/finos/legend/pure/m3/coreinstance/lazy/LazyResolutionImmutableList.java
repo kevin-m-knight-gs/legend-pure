@@ -801,7 +801,7 @@ abstract class LazyResolutionImmutableList<T> extends AbstractImmutableCollectio
 
     @SuppressWarnings("unchecked")
     @Override
-    public ImmutableList<T> newWithout(T element)
+    public ImmutableList<T> newWithout(Object element)
     {
         // first check only resolved items, then check everything
         int index = resolvedIndexOf(element);

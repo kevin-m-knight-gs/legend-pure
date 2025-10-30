@@ -161,19 +161,38 @@ public class ManyValues<T> implements PropertyValue<T>
     @Override
     public boolean removeValue(Object value)
     {
-        if (value != null)
+        if (value == null)
         {
-            ImmutableList<T> current;
-            int index;
-            while ((index = (current = this.values).indexOf(value)) >= 0)
+            return false;
+        }
+
+        ImmutableList<T> current;
+        ImmutableList<T> replacement;
+        do
+        {
+            current = this.values;
+            if (current instanceof LazyResolutionImmutableList)
             {
-                if (UPDATER.compareAndSet(this, current, current.newWithout(current.get(index))))
+                replacement = ((LazyResolutionImmutableList<T>) current).newWithout(value);
+                if (replacement == current)
                 {
-                    return true;
+                    // value is not present
+                    return false;
                 }
             }
+            else
+            {
+                int index = current.indexOf(value);
+                if (index < 0)
+                {
+                    // value is not present
+                    return false;
+                }
+                replacement = current.newWithout(current.get(index));
+            }
         }
-        return false;
+        while (!UPDATER.compareAndSet(this, current, replacement));
+        return true;
     }
 
     @Override
