@@ -34,6 +34,7 @@ import org.eclipse.collections.impl.utility.LazyIterate;
 import org.finos.legend.pure.m3.bootstrap.generator.M3ToJavaGenerator;
 import org.finos.legend.pure.m3.coreinstance.BaseCoreInstance;
 import org.finos.legend.pure.m3.coreinstance.Package;
+import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyCoreInstance;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.ConcreteFunctionDefinition;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Any;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.type.Enum;
@@ -1183,7 +1184,7 @@ public class CompiledSupport
         {
             return ((JavaCompiledCoreInstance) instance).toString(es);
         }
-        if (instance instanceof BaseCoreInstance)
+        if ((instance instanceof BaseCoreInstance) || (instance instanceof AbstractLazyCoreInstance))
         {
             String id = ((CoreInstance) instance).getName();
             return ModelRepository.possiblyReplaceAnonymousId(id);

@@ -15,10 +15,8 @@
 package org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance;
 
 import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyCoreInstance;
-import org.finos.legend.pure.m3.execution.ExecutionSupport;
 import org.finos.legend.pure.m3.serialization.compiler.element.InstanceData;
 import org.finos.legend.pure.m3.serialization.compiler.reference.ReferenceIdResolver;
-import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.tools.SafeAppendable;
 import org.finos.legend.pure.runtime.java.compiled.execution.ConsoleCompiled;
@@ -47,11 +45,6 @@ public abstract class AbstractCompiledLazyComponentInstance extends AbstractLazy
     public String toString()
     {
         return toString(null);
-    }
-
-    public String toString(ExecutionSupport executionSupport)
-    {
-        return ModelRepository.possiblyReplaceAnonymousId(getName());
     }
 
     @Override
