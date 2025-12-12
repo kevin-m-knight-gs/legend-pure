@@ -54,9 +54,10 @@ import org.finos.legend.pure.runtime.java.compiled.extension.CompiledExtensionLo
 import org.finos.legend.pure.runtime.java.compiled.factory.JavaModelFactoryRegistryLoader;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.FunctionProcessor;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.CompiledIncrementalCompilationElementBuilder;
 import org.finos.legend.pure.runtime.java.compiled.metadata.Metadata;
 import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataEager;
-import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataLazy;
+import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataPelt;
 import org.junit.Assert;
 
 import java.lang.reflect.Field;
@@ -229,7 +230,7 @@ public class PureTestBuilderCompiled extends TestSuite
         if (eager)
         {
             PureRuntime runtime = new PureRuntimeBuilder(codeStorage)
-                    .withCache(new ClassLoaderPureGraphCache(classLoader))
+                    .withCache(new ClassLoaderPureGraphCache(classLoader, CompiledIncrementalCompilationElementBuilder::newElementBuilder))
                     .withFactoryRegistryOverride(JavaModelFactoryRegistryLoader.loader())
                     .withRuntimeStatus(new PrintPureRuntimeStatus(System.out))
                     .buildAndInitialize();
@@ -249,7 +250,7 @@ public class PureTestBuilderCompiled extends TestSuite
             }
             return new MetadataEager(runtime.getProcessorSupport());
         }
-        return MetadataLazy.fromClassLoader(classLoader, codeStorage.getAllRepositories().asLazy().collect(CodeRepository::getName));
+        return MetadataPelt.fromClassLoader(classLoader, codeStorage.getAllRepositories().asLazy().collect(CodeRepository::getName));
     }
 
     public static MutableSet<CoreInstance> buildExclusionList(ProcessorSupport processorSupport, String... exclusions)

@@ -17,6 +17,7 @@ package org.finos.legend.pure.m3.serialization.runtime.cache;
 import org.eclipse.collections.api.list.MutableList;
 import org.finos.legend.pure.m3.compiler.Context;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
+import org.finos.legend.pure.m3.serialization.compiler.element.ElementBuilder;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepository;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.RepositoryCodeStorage;
 import org.finos.legend.pure.m3.serialization.grammar.ParserLibrary;
@@ -31,23 +32,36 @@ import org.finos.legend.pure.m3.serialization.runtime.binary.SimplePureRepositor
 import org.finos.legend.pure.m4.ModelRepository;
 
 import java.util.concurrent.ForkJoinPool;
+import java.util.function.BiFunction;
 
 public class ClassLoaderPureGraphCache implements PureGraphCache
 {
     private final ClassLoader classLoader;
+    private final BiFunction<? super ClassLoader, ? super ModelRepository, ? extends ElementBuilder> elementBuilderFactory;
     private final ForkJoinPool forkJoinPool;
     private final CacheState state = new CacheState(false, -1L, true);
     private PureRuntime runtime;
 
-    public ClassLoaderPureGraphCache(ClassLoader classLoader, ForkJoinPool forkJoinPool)
+    private ClassLoaderPureGraphCache(ClassLoader classLoader, BiFunction<? super ClassLoader, ? super ModelRepository, ? extends ElementBuilder> elementBuilderFactory, ForkJoinPool forkJoinPool)
     {
         this.classLoader = (classLoader == null) ? ClassLoaderPureGraphCache.class.getClassLoader() : classLoader;
+        this.elementBuilderFactory = elementBuilderFactory;
         this.forkJoinPool = forkJoinPool;
+    }
+
+    public ClassLoaderPureGraphCache(ClassLoader classLoader, ForkJoinPool forkJoinPool)
+    {
+        this(classLoader, null, forkJoinPool);
+    }
+
+    public ClassLoaderPureGraphCache(ClassLoader classLoader, BiFunction<? super ClassLoader, ? super ModelRepository, ? extends ElementBuilder> elementBuilderFactory)
+    {
+        this(classLoader, elementBuilderFactory, null);
     }
 
     public ClassLoaderPureGraphCache(ClassLoader classLoader)
     {
-        this(classLoader, null);
+        this(classLoader, null, null);
     }
 
     public ClassLoaderPureGraphCache(ForkJoinPool forkJoinPool)
@@ -55,9 +69,14 @@ public class ClassLoaderPureGraphCache implements PureGraphCache
         this(null, forkJoinPool);
     }
 
+    public ClassLoaderPureGraphCache(BiFunction<? super ClassLoader, ? super ModelRepository, ? extends ElementBuilder> elementBuilderFactory)
+    {
+        this(null, elementBuilderFactory);
+    }
+
     public ClassLoaderPureGraphCache()
     {
-        this(null, null);
+        this(null, null, null);
     }
 
     @Override
@@ -88,7 +107,7 @@ public class ClassLoaderPureGraphCache implements PureGraphCache
 
         try
         {
-            if (!PureCompilerLoader.newLoader(this.classLoader).loadAll(this.runtime))
+            if (!PureCompilerLoader.newLoader(this.classLoader, this.elementBuilderFactory).loadAll(this.runtime))
             {
                 RepositoryCodeStorage codeStorage = this.runtime.getCodeStorage();
                 MutableList<String> repoNames = codeStorage.getAllRepositories().collect(CodeRepository::getName).toSortedList(new RepositoryComparator(codeStorage.getAllRepositories()));
