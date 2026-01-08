@@ -82,7 +82,9 @@ public class MetadataPelt implements Metadata
     public CoreInstance getMetadata(String classifier, String id)
     {
         // TODO should we validate the classifier?
-        return getInstance(id);
+        // for backward compatibility
+        String resolvedId = id.startsWith("Root::") ? id.substring(6) : id;
+        return getInstance(resolvedId);
     }
 
     @Override
