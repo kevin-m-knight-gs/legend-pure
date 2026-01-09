@@ -74,26 +74,29 @@ public class M3CoreInstanceGenerator
         if (reposToLoad.isEmpty())
         {
             long initStart = System.nanoTime();
-            LOGGER.info("No repositories to load: initializing runtime");
+            LOGGER.debug("No repositories to load: initializing runtime");
             runtime.loadAndCompileCore();
             runtime.loadAndCompileSystem();
             long initEnd = System.nanoTime();
-            LOGGER.info("Finished initializing runtime in {}s", (initEnd - initStart) / 1_000_000_000.0);
+            LOGGER.debug("Finished initializing runtime in {}s", (initEnd - initStart) / 1_000_000_000.0);
         }
         else
         {
             long initStart = System.nanoTime();
-            LOGGER.info("Loading repositories: {}", reposToLoad);
+            LOGGER.debug("Loading repositories: {}", reposToLoad);
             reposToLoad.forEach(repo -> codeStorage.getFileOrFiles(repo).forEach(runtime::loadSourceIfLoadable));
             loader.load(runtime, reposToLoad, false);
             long initEnd = System.nanoTime();
-            LOGGER.info("Finished loading repositories in {}s", (initEnd - initStart) / 1_000_000_000.0);
+            LOGGER.debug("Finished loading repositories in {}s", (initEnd - initStart) / 1_000_000_000.0);
 
-            long compileStart = System.nanoTime();
-            LOGGER.info("Compiling repositories: {}", reposToCompile);
-            runtime.loadAndCompile(reposToCompile.asLazy().flatCollect(codeStorage::getFileOrFiles).select(CodeStorageTools::isPureFilePath));
-            long compileEnd = System.nanoTime();
-            LOGGER.info("Finished compiling repositories in {}s", (compileEnd - compileStart) / 1_000_000_000.0);
+            if (reposToCompile.notEmpty())
+            {
+                long compileStart = System.nanoTime();
+                LOGGER.debug("Compiling repositories: {}", reposToCompile);
+                runtime.loadAndCompile(reposToCompile.asLazy().flatCollect(codeStorage::getFileOrFiles).select(CodeStorageTools::isPureFilePath));
+                long compileEnd = System.nanoTime();
+                LOGGER.debug("Finished compiling repositories in {}s", (compileEnd - compileStart) / 1_000_000_000.0);
+            }
         }
 
         ModelRepository repository = runtime.getModelRepository();
