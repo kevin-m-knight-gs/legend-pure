@@ -197,6 +197,10 @@
                                 <value>true</value>
                             </systemProperty>
                             <systemProperty>
+                                <key>org.slf4j.simpleLogger.showThreadName</key>
+                                <value>false</value>
+                            </systemProperty>
+                            <systemProperty>
                                 <key>org.slf4j.simpleLogger.showLogName</key>
                                 <value>false</value>
                             </systemProperty>
