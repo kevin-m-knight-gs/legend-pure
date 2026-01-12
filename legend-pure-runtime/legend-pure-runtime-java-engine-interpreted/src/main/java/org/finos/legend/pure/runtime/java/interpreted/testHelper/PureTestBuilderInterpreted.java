@@ -152,7 +152,7 @@ public class PureTestBuilderInterpreted
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         CodeRepositorySet.Builder builder = CodeRepositorySet.newBuilder().withCodeRepositories(CodeRepositoryProviderHelper.findCodeRepositories(classLoader, true));
         RichIterable<CodeRepository> codeRepositories = builder.build().getRepositories();
-        CompositeCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(codeRepositories));
+        CompositeCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(classLoader, codeRepositories));
 
         FunctionExecutionInterpreted functionExecution;
 
