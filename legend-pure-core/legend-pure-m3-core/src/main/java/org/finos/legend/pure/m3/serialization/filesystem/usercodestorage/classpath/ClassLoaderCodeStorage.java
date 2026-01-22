@@ -15,9 +15,9 @@
 package org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.classpath;
 
 import org.eclipse.collections.api.RichIterable;
-import org.eclipse.collections.api.block.function.Function;
-import org.eclipse.collections.api.block.predicate.Predicate;
-import org.eclipse.collections.api.block.procedure.Procedure2;
+import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Maps;
+import org.eclipse.collections.api.factory.Sets;
 import org.eclipse.collections.api.map.ConcurrentMutableMap;
 import org.eclipse.collections.api.map.ImmutableMap;
 import org.eclipse.collections.api.map.MutableMap;
@@ -26,16 +26,9 @@ import org.eclipse.collections.api.multimap.set.MutableSetMultimap;
 import org.eclipse.collections.api.multimap.set.SetMultimap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.tuple.Pair;
-import org.eclipse.collections.impl.block.factory.Functions;
-import org.eclipse.collections.impl.block.factory.Functions0;
-import org.eclipse.collections.impl.block.factory.Predicates;
-import org.eclipse.collections.impl.block.function.checked.CheckedFunction;
-import org.eclipse.collections.impl.factory.Lists;
 import org.eclipse.collections.impl.factory.Multimaps;
-import org.eclipse.collections.impl.factory.Sets;
 import org.eclipse.collections.impl.list.fixed.ArrayAdapter;
 import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
-import org.eclipse.collections.impl.map.mutable.UnifiedMap;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepository;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.AbstractMultipleRepositoryCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.CodeStorageNode;
@@ -48,6 +41,7 @@ import org.finos.legend.pure.m3.tools.FileTools;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.JarURLConnection;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
@@ -62,26 +56,13 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Enumeration;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorage implements ImmutableRepositoryCodeStorage
 {
     private static final ConcurrentMutableMap<String, ImmutableMap<String, ClassLoaderCodeStorageNode>> MAIN_CLASS_LOADER_CACHE = ConcurrentHashMap.newMap();
-
-    private static final Predicate<CodeStorageNode> IS_PURE_FILE = node -> !node.isDirectory() && CodeStorageTools.isPureFilePath(node.getPath());
-
-
-    private static final Function<URL, ResourceType> GET_RESOURCE_TYPE = new CheckedFunction<URL, ResourceType>()
-    {
-        @Override
-        public ResourceType safeValueOf(URL url) throws IOException
-        {
-            return getResourceType(url);
-        }
-    };
-
-    private static final Function<String, ClassLoaderDirectoryNode> NEW_DIR_NODE = ClassLoaderDirectoryNode::new;
 
     private final ClassLoader classLoader;
     private volatile ImmutableMap<String, ImmutableMap<String, ClassLoaderCodeStorageNode>> nodesByPathByRepo; //NOSONAR we actually want to protect the pointer
@@ -138,7 +119,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
         {
             return Lists.immutable.empty();
         }
-        ClassLoaderDirectoryNode dirNode = (ClassLoaderDirectoryNode)node;
+        ClassLoaderDirectoryNode dirNode = (ClassLoaderDirectoryNode) node;
         RichIterable<CodeStorageNode> children = dirNode.getChildren();
         if (children == null)
         {
@@ -152,14 +133,10 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
     public RichIterable<String> getUserFiles()
     {
         initializeNodes();
-        return getAllRepositories().collect(CodeRepository::getName).flatCollect(new Function<String, RichIterable<String>>()
+        return getAllRepositories().collect(CodeRepository::getName).flatCollect(repoName ->
         {
-            @Override
-            public RichIterable<String> valueOf(String repoName)
-            {
-                ImmutableMap<String, ClassLoaderCodeStorageNode> repoNodesByPath = getRepoNodesByPath(repoName);
-                return (repoNodesByPath == null) ? Lists.immutable.<String>empty() : repoNodesByPath.valuesView().collectIf(IS_PURE_FILE, CodeStorageNode.GET_PATH);
-            }
+            ImmutableMap<String, ClassLoaderCodeStorageNode> repoNodesByPath = getRepoNodesByPath(repoName);
+            return (repoNodesByPath == null) ? Lists.immutable.empty() : repoNodesByPath.valuesView().collectIf(ClassLoaderCodeStorage::isPureFile, CodeStorageNode::getPath);
         });
     }
 
@@ -172,14 +149,14 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
             return Lists.immutable.with(node.getPath());
         }
 
-        ClassLoaderDirectoryNode dirNode = (ClassLoaderDirectoryNode)node;
+        ClassLoaderDirectoryNode dirNode = (ClassLoaderDirectoryNode) node;
         RichIterable<ClassLoaderCodeStorageNode> descendents = dirNode.getDescendants();
         if (descendents == null)
         {
             dirNode.initializeDescendents(getRepoNodesByPath(CodeStorageTools.getInitialPathElement(node.getPath())));
             descendents = dirNode.getDescendants();
         }
-        return descendents.collectIf(Predicates.not(CodeStorageNode.IS_DIRECTORY), CodeStorageNode.GET_PATH);
+        return descendents.collectIf(n -> !n.isDirectory(), CodeStorageNode::getPath);
     }
 
     @Override
@@ -192,7 +169,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
         }
         try
         {
-            return ((ClassLoaderFileNode)node).getContent();
+            return ((ClassLoaderFileNode) node).getContent();
         }
         catch (Exception e)
         {
@@ -210,7 +187,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
         }
         try
         {
-            return ((ClassLoaderFileNode)node).getContentAsBytes();
+            return ((ClassLoaderFileNode) node).getContentAsBytes();
         }
         catch (Exception e)
         {
@@ -228,7 +205,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
         }
         try
         {
-            return ((ClassLoaderFileNode)node).getContentAsText();
+            return ((ClassLoaderFileNode) node).getContentAsText();
         }
         catch (Exception e)
         {
@@ -264,7 +241,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
         {
             return false;
         }
-        ClassLoaderDirectoryNode dirNode = (ClassLoaderDirectoryNode)node;
+        ClassLoaderDirectoryNode dirNode = (ClassLoaderDirectoryNode) node;
         RichIterable<CodeStorageNode> children = dirNode.getChildren();
         if (children == null)
         {
@@ -318,7 +295,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
                     }
                     catch (IOException e)
                     {
-                        throw new RuntimeException("Error initializing code storage", e);
+                        throw new UncheckedIOException("Error initializing code storage", e);
                     }
                 }
             }
@@ -328,8 +305,8 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
     private ImmutableMap<String, ImmutableMap<String, ClassLoaderCodeStorageNode>> buildNodeMap() throws IOException
     {
         RichIterable<String> repositoryNames = getAllRepositories().collect(CodeRepository::getName);
-        final MutableMap<String, ImmutableMap<String, ClassLoaderCodeStorageNode>> result = UnifiedMap.newMap(repositoryNames.size());
-        final boolean canUseCache = canUseMainClassLoaderCache();
+        MutableMap<String, ImmutableMap<String, ClassLoaderCodeStorageNode>> result = Maps.mutable.ofInitialCapacity(repositoryNames.size());
+        boolean canUseCache = canUseMainClassLoaderCache();
         if (canUseCache)
         {
             repositoryNames = repositoryNames.toSet();
@@ -348,7 +325,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
 
         if (repositoryNames.notEmpty())
         {
-            MutableMap<String, MutableMap<String, ClassLoaderCodeStorageNode>> workingSet = UnifiedMap.newMap(repositoryNames.size());
+            MutableMap<String, MutableMap<String, ClassLoaderCodeStorageNode>> workingSet = Maps.mutable.ofInitialCapacity(repositoryNames.size());
             SetMultimap<String, URL> pathURLs = findURLsByPath(repositoryNames);
             for (Pair<String, RichIterable<URL>> pair : pathURLs.keyMultiValuePairsView())
             {
@@ -357,7 +334,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
                 ClassLoaderCodeStorageNode node;
                 if (urls.size() == 1)
                 {
-                    URL url = urls.getFirst();
+                    URL url = urls.getAny();
                     switch (url.getProtocol())
                     {
                         case "file":
@@ -379,7 +356,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
                 }
                 else
                 {
-                    EnumSet<ResourceType> resourceTypes = urls.collect(GET_RESOURCE_TYPE, EnumSet.noneOf(ResourceType.class));
+                    EnumSet<ResourceType> resourceTypes = urls.collect(ClassLoaderCodeStorage::getResourceType, EnumSet.noneOf(ResourceType.class));
                     if (resourceTypes.size() > 1)
                     {
                         throw new RuntimeException("Invalid URLs for '" + path + "' - both file and directory URLs: " + urls);
@@ -405,36 +382,32 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
                             }
                         }
                         // Choose just one URL for the actual node
-                        URL firstURL = urls.minBy(Functions.getToString());
+                        URL firstURL = urls.minBy(Objects::toString);
                         node = "file".equals(firstURL.getProtocol()) ? new ClassLoaderPathFileNode(path, fileURLToPath(firstURL)) : new ClassLoaderURLFileNode(path, firstURL);
                     }
                 }
                 String repositoryName = CodeStorageTools.getInitialPathElement(path);
-                workingSet.getIfAbsentPut(repositoryName, Functions0.<String, ClassLoaderCodeStorageNode>newUnifiedMap()).put(path, node);
+                workingSet.getIfAbsentPut(repositoryName, Maps.mutable::empty).put(path, node);
             }
-            workingSet.forEachKeyValue(new Procedure2<String, MutableMap<String, ClassLoaderCodeStorageNode>>()
+            workingSet.forEachKeyValue((repositoryName, nodeMap) ->
             {
-                @Override
-                public void value(String repositoryName, MutableMap<String, ClassLoaderCodeStorageNode> nodeMap)
+                for (String path : nodeMap.keysView().toList())
                 {
-                    for (String path : nodeMap.keysView().toList())
+                    for (int slashIndex = path.indexOf('/', 1); slashIndex != -1; slashIndex = path.indexOf('/', slashIndex + 1))
                     {
-                        for (int slashIndex = path.indexOf('/', 1); slashIndex != -1; slashIndex = path.indexOf('/', slashIndex + 1))
+                        String ancestorPath = path.substring(0, slashIndex);
+                        ClassLoaderCodeStorageNode ancestorNode = nodeMap.getIfAbsentPutWithKey(ancestorPath, ClassLoaderDirectoryNode::new);
+                        if (!ancestorNode.isDirectory())
                         {
-                            String ancestorPath = path.substring(0, slashIndex);
-                            ClassLoaderCodeStorageNode ancestorNode = nodeMap.getIfAbsentPutWithKey(ancestorPath, NEW_DIR_NODE);
-                            if (!ancestorNode.isDirectory())
-                            {
-                                throw new RuntimeException("Found both file and directory for path: " + ancestorPath);
-                            }
+                            throw new RuntimeException("Found both file and directory for path: " + ancestorPath);
                         }
                     }
-                    ImmutableMap<String, ClassLoaderCodeStorageNode> immutableNodeMap = nodeMap.toImmutable();
-                    result.put(repositoryName, immutableNodeMap);
-                    if (canUseCache)
-                    {
-                        MAIN_CLASS_LOADER_CACHE.putIfAbsent(repositoryName, immutableNodeMap);
-                    }
+                }
+                ImmutableMap<String, ClassLoaderCodeStorageNode> immutableNodeMap = nodeMap.toImmutable();
+                result.put(repositoryName, immutableNodeMap);
+                if (canUseCache)
+                {
+                    MAIN_CLASS_LOADER_CACHE.putIfAbsent(repositoryName, immutableNodeMap);
                 }
             });
         }
@@ -481,7 +454,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
                         }
                         case "jar":
                         {
-                            JarURLConnection connection = (JarURLConnection)url.openConnection();
+                            JarURLConnection connection = (JarURLConnection) url.openConnection();
                             String jarFileURL = connection.getJarFileURL().toString();
                             if (searchedJarFileURLs.add(jarFileURL))
                             {
@@ -499,7 +472,7 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
         }
         catch (IOException e)
         {
-            throw new RuntimeException("Error initializing " + getClass().getSimpleName() + " for repositories: " + getAllRepositories().collect(CodeRepository::getName).toSortedList(), e);
+            throw new UncheckedIOException("Error initializing " + getClass().getSimpleName() + " for repositories: " + getAllRepositories().collect(CodeRepository::getName).toSortedList(), e);
         }
         return pathURLs;
     }
@@ -541,7 +514,12 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
         return new URL("jar:" + jarFileURL + "!/" + entryName);
     }
 
-    private static ResourceType getResourceType(URL url) throws IOException
+    private static boolean isPureFile(CodeStorageNode node)
+    {
+        return !node.isDirectory() && CodeStorageTools.isPureFilePath(node.getPath());
+    }
+
+    private static ResourceType getResourceType(URL url)
     {
         switch (url.getProtocol())
         {
@@ -560,10 +538,17 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
         }
     }
 
-    private static ResourceType getFileURLResourceType(URL url) throws IOException
+    private static ResourceType getFileURLResourceType(URL url)
     {
-        Path path = fileURLToPath(url);
-        BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+        BasicFileAttributes attributes;
+        try
+        {
+            attributes = Files.readAttributes(fileURLToPath(url), BasicFileAttributes.class);
+        }
+        catch (IOException e)
+        {
+            throw new UncheckedIOException(e);
+        }
         if (attributes.isDirectory())
         {
             return ResourceType.DIRECTORY;
@@ -575,15 +560,22 @@ public class ClassLoaderCodeStorage extends AbstractMultipleRepositoryCodeStorag
         throw new RuntimeException("Invalid URL: " + url);
     }
 
-    private static ResourceType getJarURLResourceType(URL url) throws IOException
+    private static ResourceType getJarURLResourceType(URL url)
     {
-        URLConnection urlConnection = url.openConnection();
-        if (!(urlConnection instanceof JarURLConnection))
+        try
         {
-            throw new RuntimeException("Invalid URL: " + url);
+            URLConnection urlConnection = url.openConnection();
+            if (!(urlConnection instanceof JarURLConnection))
+            {
+                throw new RuntimeException("Invalid URL: " + url);
+            }
+            JarEntry entry = ((JarURLConnection) urlConnection).getJarEntry();
+            return entry.isDirectory() ? ResourceType.DIRECTORY : ResourceType.FILE;
         }
-        JarEntry entry = ((JarURLConnection)urlConnection).getJarEntry();
-        return entry.isDirectory() ? ResourceType.DIRECTORY : ResourceType.FILE;
+        catch (IOException e)
+        {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static Path fileURLToPath(URL fileURL)
