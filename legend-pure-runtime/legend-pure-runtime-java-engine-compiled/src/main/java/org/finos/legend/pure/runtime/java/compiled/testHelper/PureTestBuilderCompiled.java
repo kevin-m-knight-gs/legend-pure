@@ -54,6 +54,7 @@ import org.finos.legend.pure.runtime.java.compiled.extension.CompiledExtensionLo
 import org.finos.legend.pure.runtime.java.compiled.factory.JavaModelFactoryRegistryLoader;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.FunctionProcessor;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.IdBuilder;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.CompiledIncrementalCompilationElementBuilder;
 import org.finos.legend.pure.runtime.java.compiled.metadata.Metadata;
 import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataEager;
 import org.finos.legend.pure.runtime.java.compiled.metadata.MetadataPelt;
@@ -229,7 +230,7 @@ public class PureTestBuilderCompiled extends TestSuite
         if (eager)
         {
             PureRuntime runtime = new PureRuntimeBuilder(codeStorage)
-                    .withCache(new ClassLoaderPureGraphCache(classLoader))
+                    .withCache(new ClassLoaderPureGraphCache(classLoader, CompiledIncrementalCompilationElementBuilder::newElementBuilder))
                     .withFactoryRegistryOverride(JavaModelFactoryRegistryLoader.loader())
                     .withRuntimeStatus(new PrintPureRuntimeStatus(System.out))
                     .buildAndInitialize();
