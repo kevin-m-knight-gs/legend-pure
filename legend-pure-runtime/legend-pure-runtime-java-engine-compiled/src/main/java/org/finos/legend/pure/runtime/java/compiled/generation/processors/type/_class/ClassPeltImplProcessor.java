@@ -86,21 +86,23 @@ public class ClassPeltImplProcessor
             // Nothing can instantiate Nil, so no need to generate implementations
             return;
         }
+        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorContext);
+        MapIterable<String, CoreInstance> qualifiedProperties = processorSupport.class_getQualifiedPropertiesByName(_class);
         if (_class == processorSupport.package_getByUserPath(M3Paths.Package))
         {
             // Special handling for Package, which can be virtual
-            consumer.accept(buildConcreteElementImplementation(javaPackage, classGenericType, _class, processorContext, processorSupport));
-            consumer.accept(buildVirtualPackageImplementation(javaPackage, classGenericType, _class, processorContext, processorSupport));
+            consumer.accept(buildConcreteElementImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, processorContext, processorSupport));
+            consumer.accept(buildVirtualPackageImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, processorContext, processorSupport));
             return;
         }
         if (processorSupport.type_subTypeOf(_class, processorSupport.package_getByUserPath(M3Paths.PackageableElement)))
         {
-            consumer.accept(buildConcreteElementImplementation(javaPackage, classGenericType, _class, processorContext, processorSupport));
+            consumer.accept(buildConcreteElementImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, processorContext, processorSupport));
         }
-        consumer.accept(buildComponentInstanceImplementation(javaPackage, classGenericType, _class, processorContext, processorSupport));
+        consumer.accept(buildComponentInstanceImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, processorContext, processorSupport));
     }
 
-    private static StringJavaSource buildConcreteElementImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ProcessorContext processorContext, ProcessorSupport processorSupport)
+    private static StringJavaSource buildConcreteElementImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, ProcessorContext processorContext, ProcessorSupport processorSupport)
     {
         String classInterfaceName = TypeProcessor.javaInterfaceForType(_class, processorSupport);
         String className = JavaPackageAndImportBuilder.buildLazyConcreteElementClassNameFromType(_class, processorSupport);
@@ -110,8 +112,6 @@ public class ClassPeltImplProcessor
         String typeParamsString = typeParams.isEmpty() ? "" : ("<" + typeParams + ">");
         String classNamePlusTypeParams = className + typeParamsString;
         String interfaceNamePlusTypeParams = classInterfaceName + typeParamsString;
-        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorContext);
-        MapIterable<String, CoreInstance> qualifiedProperties = processorSupport.class_getQualifiedPropertiesByName(_class);
 
         processorContext.setClassImplSuffix(CLASS_LAZY_CONCRETE_SUFFIX);
 
@@ -147,7 +147,7 @@ public class ClassPeltImplProcessor
         return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
     }
 
-    private static StringJavaSource buildComponentInstanceImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ProcessorContext processorContext, ProcessorSupport processorSupport)
+    private static StringJavaSource buildComponentInstanceImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, ProcessorContext processorContext, ProcessorSupport processorSupport)
     {
         String classInterfaceName = TypeProcessor.javaInterfaceForType(_class, processorSupport);
         String className = JavaPackageAndImportBuilder.buildLazyComponentInstanceClassNameFromType(_class, processorSupport);
@@ -157,8 +157,6 @@ public class ClassPeltImplProcessor
         String typeParamsString = typeParams.isEmpty() ? "" : ("<" + typeParams + ">");
         String classNamePlusTypeParams = className + typeParamsString;
         String interfaceNamePlusTypeParams = classInterfaceName + typeParamsString;
-        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorContext);
-        MapIterable<String, CoreInstance> qualifiedProperties = processorSupport.class_getQualifiedPropertiesByName(_class);
 
         processorContext.setClassImplSuffix(CLASS_LAZY_COMPONENT_SUFFIX);
 
@@ -193,14 +191,11 @@ public class ClassPeltImplProcessor
         return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
     }
 
-    private static StringJavaSource buildVirtualPackageImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ProcessorContext processorContext, ProcessorSupport processorSupport)
+    private static StringJavaSource buildVirtualPackageImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, ProcessorContext processorContext, ProcessorSupport processorSupport)
     {
         String classInterfaceName = TypeProcessor.javaInterfaceForType(_class, processorSupport);
         String className = JavaPackageAndImportBuilder.buildLazyVirtualPackageClassName();
         Class<AbstractCompiledLazyVirtualPackage> superClass = AbstractCompiledLazyVirtualPackage.class;
-
-        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorContext);
-        MapIterable<String, CoreInstance> qualifiedProperties = processorSupport.class_getQualifiedPropertiesByName(_class);
 
         processorContext.setClassImplSuffix(CLASS_VIRTUAL_PACKAGE_SUFFIX);
 
