@@ -2249,7 +2249,7 @@ public class M3LazyCoreInstanceGenerator
         return buildLazyClassReferenceFromUserPath(userPath, CLASS_LAZY_COMPONENT_SUFFIX);
     }
 
-    static String buildLazyVirtualPackageClassReference()
+    public static String buildLazyVirtualPackageClassReference()
     {
         return ROOT_PACKAGE + ".Package" + CLASS_VIRTUAL_PACKAGE_SUFFIX;
     }

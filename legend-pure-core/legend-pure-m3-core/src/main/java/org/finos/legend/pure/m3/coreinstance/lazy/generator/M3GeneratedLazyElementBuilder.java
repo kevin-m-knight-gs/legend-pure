@@ -57,7 +57,7 @@ public class M3GeneratedLazyElementBuilder implements ElementBuilder
     private final AtomicReference<Constructor<? extends CoreInstance>> virtualPackageConstructor = new AtomicReference<>();
     private final AtomicReference<Constructor<? extends CoreInstance>> enumConstructor = new AtomicReference<>();
 
-    private M3GeneratedLazyElementBuilder(ClassLoader classLoader, ModelRepository repository)
+    protected M3GeneratedLazyElementBuilder(ClassLoader classLoader, ModelRepository repository)
     {
         this.classLoader = Objects.requireNonNull(classLoader);
         this.repository = Objects.requireNonNull(repository);
@@ -179,14 +179,19 @@ public class M3GeneratedLazyElementBuilder implements ElementBuilder
     {
         try
         {
-            String javaClassName = M3LazyCoreInstanceGenerator.buildLazyConcreteElementClassReferenceFromUserPath(classifierPath);
-            Class<? extends CoreInstance> javaClass = loadJavaClass(javaClassName);
+            Class<? extends CoreInstance> javaClass = getConcreteElementClass(classifierPath);
             return javaClass.getConstructor(ModelRepository.class, ConcreteElementMetadata.class, MetadataIndex.class, ElementBuilder.class, ReferenceIdResolvers.class, PrimitiveValueResolver.class, Supplier.class, Supplier.class);
         }
         catch (Exception e)
         {
             throw new RuntimeException("Error getting concrete element constructor for " + classifierPath, e);
         }
+    }
+
+    protected Class<? extends CoreInstance> getConcreteElementClass(String classifierPath) throws ClassNotFoundException
+    {
+        String javaClassName = M3LazyCoreInstanceGenerator.buildLazyConcreteElementClassReferenceFromUserPath(classifierPath);
+        return loadJavaClass(javaClassName);
     }
 
     private Constructor<? extends CoreInstance> getComponentElementConstructorFromCache(String classifierPath)
@@ -198,14 +203,19 @@ public class M3GeneratedLazyElementBuilder implements ElementBuilder
     {
         try
         {
-            String javaClassName = M3LazyCoreInstanceGenerator.buildLazyComponentInstanceClassReferenceFromUserPath(classifierPath);
-            Class<? extends CoreInstance> javaClass = loadJavaClass(javaClassName);
+            Class<? extends CoreInstance> javaClass = getComponentElementClass(classifierPath);
             return getComponentElementConstructor(javaClass);
         }
         catch (Exception e)
         {
             throw new RuntimeException("Error getting component element constructor for " + classifierPath, e);
         }
+    }
+
+    protected Class<? extends CoreInstance> getComponentElementClass(String classifierPath) throws ClassNotFoundException
+    {
+        String javaClassName = M3LazyCoreInstanceGenerator.buildLazyComponentInstanceClassReferenceFromUserPath(classifierPath);
+        return loadJavaClass(javaClassName);
     }
 
     private <T> Constructor<T> getComponentElementConstructor(Class<T> javaClass) throws NoSuchMethodException
@@ -242,7 +252,7 @@ public class M3GeneratedLazyElementBuilder implements ElementBuilder
     }
 
     @SuppressWarnings("unchecked")
-    private Class<? extends CoreInstance> loadJavaClass(String javaClassName) throws ClassNotFoundException
+    protected Class<? extends CoreInstance> loadJavaClass(String javaClassName) throws ClassNotFoundException
     {
         return (Class<? extends CoreInstance>) this.classLoader.loadClass(javaClassName);
     }
