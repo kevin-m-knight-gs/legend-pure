@@ -31,10 +31,12 @@ import org.finos.legend.pure.m3.coreinstance.lazy.ManyValues;
 import org.finos.legend.pure.m3.coreinstance.lazy.OneValue;
 import org.finos.legend.pure.m3.coreinstance.lazy.PrimitiveValueResolver;
 import org.finos.legend.pure.m3.coreinstance.lazy.PropertyValue;
+import org.finos.legend.pure.m3.coreinstance.lazy.generator.M3LazyCoreInstanceGenerator;
 import org.finos.legend.pure.m3.navigation.Instance;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.navigation.M3PropertyPaths;
+import org.finos.legend.pure.m3.navigation.PackageableElement.PackageableElement;
 import org.finos.legend.pure.m3.navigation.PrimitiveUtilities;
 import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation._class._Class;
@@ -66,6 +68,7 @@ import org.finos.legend.pure.runtime.java.compiled.generation.ProcessorContext;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.AbstractCompiledLazyComponentInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.AbstractCompiledLazyConcreteElement;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.AbstractCompiledLazyVirtualPackage;
+import org.finos.legend.pure.runtime.java.compiled.generation.processors.support.coreinstance.JavaCompiledCoreInstance;
 import org.finos.legend.pure.runtime.java.compiled.generation.processors.type.TypeProcessor;
 
 import java.util.function.Consumer;
@@ -78,6 +81,9 @@ public class ClassPeltImplProcessor
     public static final String CLASS_LAZY_COMPONENT_SUFFIX = "_LazyComponent";
     public static final String CLASS_VIRTUAL_PACKAGE_SUFFIX = "_LazyVirtual";
 
+    public static final String CLASS_LAZY_CONCRETE_COMP_SUFFIX = CLASS_LAZY_CONCRETE_SUFFIX + "Comp";
+    public static final String CLASS_LAZY_COMPONENT_COMP_SUFFIX = CLASS_LAZY_COMPONENT_SUFFIX + "Comp";
+
     static void buildImplementation(String javaPackage, CoreInstance classGenericType, ProcessorContext processorContext, ProcessorSupport processorSupport, Consumer<? super StringJavaSource> consumer)
     {
         CoreInstance _class = Instance.getValueForMetaPropertyToOneResolved(classGenericType, M3Properties.rawType, processorSupport);
@@ -88,21 +94,40 @@ public class ClassPeltImplProcessor
         }
         ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorContext);
         MapIterable<String, CoreInstance> qualifiedProperties = processorSupport.class_getQualifiedPropertiesByName(_class);
+        boolean requiresEquals = simpleProperties.anySatisfy(p -> p.equalityKey);
         if (_class == processorSupport.package_getByUserPath(M3Paths.Package))
         {
             // Special handling for Package, which can be virtual
-            consumer.accept(buildConcreteElementImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, processorContext, processorSupport));
-            consumer.accept(buildVirtualPackageImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, processorContext, processorSupport));
+            consumer.accept(buildConcreteElementImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, requiresEquals, processorContext, processorSupport));
+            consumer.accept(buildVirtualPackageImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, requiresEquals, processorContext, processorSupport));
             return;
         }
         if (processorSupport.type_subTypeOf(_class, processorSupport.package_getByUserPath(M3Paths.PackageableElement)))
         {
-            consumer.accept(buildConcreteElementImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, processorContext, processorSupport));
+            consumer.accept(buildConcreteElementImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, requiresEquals, processorContext, processorSupport));
         }
-        consumer.accept(buildComponentInstanceImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, processorContext, processorSupport));
+        consumer.accept(buildComponentInstanceImplementation(javaPackage, classGenericType, _class, simpleProperties, qualifiedProperties, requiresEquals, processorContext, processorSupport));
     }
 
-    private static StringJavaSource buildConcreteElementImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, ProcessorContext processorContext, ProcessorSupport processorSupport)
+    static void buildCompImplementation(String javaPackage, CoreInstance classGenericType, ProcessorContext processorContext, ProcessorSupport processorSupport, Consumer<? super StringJavaSource> consumer)
+    {
+        CoreInstance _class = Instance.getValueForMetaPropertyToOneResolved(classGenericType, M3Properties.rawType, processorSupport);
+        if (_class == processorSupport.type_BottomType())
+        {
+            // Nothing can instantiate Nil, so no need to generate implementations
+            return;
+        }
+        ListIterable<PropertyInfo> simpleProperties = getSimplePropertiesSortedByName(classGenericType, _class, processorContext);
+        MapIterable<String, CoreInstance> qualifiedProperties = processorSupport.class_getQualifiedPropertiesByName(_class);
+        boolean requiresEquals = simpleProperties.anySatisfy(p -> p.equalityKey);
+        if (processorSupport.type_subTypeOf(_class, processorSupport.package_getByUserPath(M3Paths.PackageableElement)))
+        {
+            consumer.accept(buildConcreteElementCompImplementation(javaPackage, _class, simpleProperties, qualifiedProperties, requiresEquals, processorContext, processorSupport));
+        }
+        consumer.accept(buildComponentInstanceCompImplementation(javaPackage, _class, simpleProperties, qualifiedProperties, requiresEquals, processorContext, processorSupport));
+    }
+
+    private static StringJavaSource buildConcreteElementImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, boolean requiresEquals, ProcessorContext processorContext, ProcessorSupport processorSupport)
     {
         String classInterfaceName = TypeProcessor.javaInterfaceForType(_class, processorSupport);
         String className = JavaPackageAndImportBuilder.buildLazyConcreteElementClassNameFromType(_class, processorSupport);
@@ -134,7 +159,10 @@ public class ClassPeltImplProcessor
         appendConcreteElementConstructor(builder, className, simpleProperties).append('\n');
         appendCopyConstructor(builder, className, classNamePlusTypeParams, simpleProperties, superClass).append('\n');
         appendStandardMethods(builder, simpleProperties, superClass).append('\n');
-        appendEquals(builder, simpleProperties, classInterfaceName);
+        if (requiresEquals)
+        {
+            appendEquals(builder, simpleProperties, classInterfaceName).append('\n');
+        }
         appendCopy(builder, classNamePlusTypeParams, interfaceNamePlusTypeParams, true);
         appendSimpleProperties(builder, simpleProperties, interfaceNamePlusTypeParams, superClass, processorContext).append('\n');
         if (qualifiedProperties.notEmpty())
@@ -147,7 +175,39 @@ public class ClassPeltImplProcessor
         return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
     }
 
-    private static StringJavaSource buildComponentInstanceImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, ProcessorContext processorContext, ProcessorSupport processorSupport)
+    private static StringJavaSource buildConcreteElementCompImplementation(String javaPackage, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, boolean requiresEquals, ProcessorContext processorContext, ProcessorSupport processorSupport)
+    {
+        String className = JavaPackageAndImportBuilder.buildLazyConcreteElementCompClassNameFromType(_class, processorSupport);
+        String typeParams = ClassProcessor.typeParameters(_class);
+        String typeParamsString = typeParams.isEmpty() ? "" : ("<" + typeParams + ">");
+        String classNamePlusTypeParams = className + typeParamsString;
+        String interfaceNamePlusTypeParams = TypeProcessor.javaInterfaceForType(_class, processorSupport) + typeParamsString;
+        String superClassName = M3LazyCoreInstanceGenerator.buildLazyConcreteElementClassReferenceFromUserPath(PackageableElement.getUserPathForPackageableElement(_class)) + typeParamsString;
+
+        processorContext.setClassImplSuffix(CLASS_LAZY_CONCRETE_COMP_SUFFIX);
+        ImmutableList<Class<?>> additionalImports = Lists.immutable.with(
+                BackReferenceProvider.class,
+                ConcreteElementMetadata.class,
+                DeserializedConcreteElement.class,
+                MetadataIndex.class,
+                ReferenceIdResolvers.class,
+                Supplier.class);
+        StringBuilder builder = initCompClass(javaPackage, additionalImports, qualifiedProperties, requiresEquals, classNamePlusTypeParams, superClassName).append('\n');
+        appendConcreteElementCompConstructor(builder, className).append('\n');
+        appendCompCopyConstructor(builder, className, classNamePlusTypeParams).append('\n');
+        if (requiresEquals)
+        {
+            appendEquals(builder, simpleProperties, TypeProcessor.javaInterfaceForType(_class, processorSupport)).append('\n');
+        }
+        if (qualifiedProperties.notEmpty())
+        {
+            ClassImplProcessor.appendQualifiedProperties(builder, _class, qualifiedProperties, processorContext);
+        }
+        appendCopy(builder, classNamePlusTypeParams, interfaceNamePlusTypeParams, true);
+        return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
+    }
+
+    private static StringJavaSource buildComponentInstanceImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, boolean requiresEquals, ProcessorContext processorContext, ProcessorSupport processorSupport)
     {
         String classInterfaceName = TypeProcessor.javaInterfaceForType(_class, processorSupport);
         String className = JavaPackageAndImportBuilder.buildLazyComponentInstanceClassNameFromType(_class, processorSupport);
@@ -179,7 +239,10 @@ public class ClassPeltImplProcessor
         appendCopyConstructor(builder, className, classNamePlusTypeParams, simpleProperties, superClass).append('\n');
 
         appendStandardMethods(builder, simpleProperties, superClass).append('\n');
-        appendEquals(builder, simpleProperties, classInterfaceName);
+        if (requiresEquals)
+        {
+            appendEquals(builder, simpleProperties, classInterfaceName).append('\n');
+        }
         appendCopy(builder, classNamePlusTypeParams, interfaceNamePlusTypeParams, false);
         appendSimpleProperties(builder, simpleProperties, interfaceNamePlusTypeParams, superClass, processorContext).append('\n');
         if (qualifiedProperties.notEmpty())
@@ -191,7 +254,40 @@ public class ClassPeltImplProcessor
         return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
     }
 
-    private static StringJavaSource buildVirtualPackageImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, ProcessorContext processorContext, ProcessorSupport processorSupport)
+    private static StringJavaSource buildComponentInstanceCompImplementation(String javaPackage, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, boolean requiresEquals, ProcessorContext processorContext, ProcessorSupport processorSupport)
+    {
+        String className = JavaPackageAndImportBuilder.buildLazyComponentInstanceCompClassNameFromType(_class, processorSupport);
+        String typeParams = ClassProcessor.typeParameters(_class);
+        String typeParamsString = typeParams.isEmpty() ? "" : ("<" + typeParams + ">");
+        String classNamePlusTypeParams = className + typeParamsString;
+        String interfaceNamePlusTypeParams = TypeProcessor.javaInterfaceForType(_class, processorSupport) + typeParamsString;
+        String superClassName = M3LazyCoreInstanceGenerator.buildLazyComponentInstanceClassReferenceFromUserPath(PackageableElement.getUserPathForPackageableElement(_class)) + typeParamsString;
+
+        processorContext.setClassImplSuffix(CLASS_LAZY_COMPONENT_COMP_SUFFIX);
+
+        MutableList<Class<?>> additionalImports = Lists.mutable.with(
+                BackReference.class,
+                CoreInstance.class,
+                InstanceData.class,
+                IntFunction.class,
+                ListIterable.class,
+                ReferenceIdResolver.class);
+        StringBuilder builder = initCompClass(javaPackage, additionalImports, qualifiedProperties, requiresEquals, classNamePlusTypeParams, superClassName).append('\n');
+        appendComponentInstanceCompConstructor(builder, className).append('\n');
+        appendCompCopyConstructor(builder, className, classNamePlusTypeParams).append('\n');
+        if (requiresEquals)
+        {
+            appendEquals(builder, simpleProperties, TypeProcessor.javaInterfaceForType(_class, processorSupport)).append('\n');
+        }
+        if (qualifiedProperties.notEmpty())
+        {
+            ClassImplProcessor.appendQualifiedProperties(builder, _class, qualifiedProperties, processorContext);
+        }
+        appendCopy(builder, classNamePlusTypeParams, interfaceNamePlusTypeParams, false);
+        return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
+    }
+
+    private static StringJavaSource buildVirtualPackageImplementation(String javaPackage, CoreInstance classGenericType, CoreInstance _class, ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties, boolean requiresEquals, ProcessorContext processorContext, ProcessorSupport processorSupport)
     {
         String classInterfaceName = TypeProcessor.javaInterfaceForType(_class, processorSupport);
         String className = JavaPackageAndImportBuilder.buildLazyVirtualPackageClassName();
@@ -212,7 +308,10 @@ public class ClassPeltImplProcessor
         appendVirtualPackageConstructor(builder, className).append('\n');
         appendCopyConstructor(builder, className, className, simpleProperties, superClass).append('\n');
         appendStandardMethods(builder, simpleProperties, superClass);
-        appendEquals(builder, simpleProperties, classInterfaceName);
+        if (requiresEquals)
+        {
+            appendEquals(builder, simpleProperties, classInterfaceName).append('\n');
+        }
         appendCopy(builder, className, classInterfaceName, true);
         appendSimpleProperties(builder, simpleProperties, classInterfaceName, superClass, processorContext).append('\n');
         if (qualifiedProperties.notEmpty())
@@ -225,7 +324,7 @@ public class ClassPeltImplProcessor
         return StringJavaSource.newStringJavaSource(javaPackage, className, builder.append("}\n").toString());
     }
 
-    private static StringBuilder initClass(String javaPackage, RichIterable<? extends Class<?>> additionalImports, boolean addFunctionImports, String className, Class<? extends AbstractLazyCoreInstance> superClass, String _interface, CoreInstance _class, ProcessorContext processorContext, ProcessorSupport processorSupport)
+    private static StringBuilder initClass(String javaPackage, RichIterable<? extends Class<?>> additionalImports, boolean hasQualifiedProperties, String className, Class<? extends AbstractLazyCoreInstance> superClass, String _interface, CoreInstance _class, ProcessorContext processorContext, ProcessorSupport processorSupport)
     {
         StringBuilder builder = new StringBuilder("package ").append(javaPackage).append(";\n\n");
 
@@ -239,7 +338,7 @@ public class ClassPeltImplProcessor
                 .with(IndexSpecification.class.getName())
                 .with(IDConflictException.class.getName())
                 .with(ConsoleCompiled.class.getName());
-        if (addFunctionImports)
+        if (hasQualifiedProperties)
         {
             imports.addAll(ClassImplProcessor.FUNCTION_IMPORTS_LIST.castToList());
         }
@@ -256,6 +355,37 @@ public class ClassPeltImplProcessor
         ClassImplProcessor.appendTempTypeInfo(builder, _class);
         ClassImplProcessor.appendKeyIndex(builder, _class, processorSupport);
         return ClassImplProcessor.appendTypeVariables(builder, _class, className, processorSupport, processorContext);
+    }
+
+    private static StringBuilder initCompClass(String javaPackage, RichIterable<? extends Class<?>> additionalImports, MapIterable<String, CoreInstance> qualifiedProperties, boolean requiresEquals, String className, String superClassName)
+    {
+        StringBuilder builder = new StringBuilder("package ").append(javaPackage).append(";\n\n");
+        MutableList<String> imports = ClassImplProcessor.IMPORTS_LIST.toList()
+                .with(ElementBuilder.class.getName())
+                .with(ModelRepository.class.getName())
+                .with(PrimitiveValueResolver.class.getName());
+        boolean implementsJavaCompiledCoreInstance = requiresEquals || qualifiedProperties.containsKey("toString");
+        if (implementsJavaCompiledCoreInstance)
+        {
+            imports.add(JavaCompiledCoreInstance.class.getName());
+        }
+        if (qualifiedProperties.notEmpty())
+        {
+            imports.addAll(ClassImplProcessor.FUNCTION_IMPORTS_LIST.castToList());
+        }
+        additionalImports.collect(Class::getName, imports);
+        if (imports.notEmpty())
+        {
+            JavaTools.sortReduceAndPrintImports(builder, imports).append('\n');
+        }
+
+        builder.append("public class ").append(className).append(" extends ").append(superClassName);
+        if (implementsJavaCompiledCoreInstance)
+        {
+            builder.append(" implements ").append(JavaCompiledCoreInstance.class.getSimpleName());
+        }
+        builder.append("\n{\n");
+        return builder;
     }
 
     private static StringBuilder appendStandardMethods(StringBuilder builder, ListIterable<PropertyInfo> simpleProperties, Class<? extends AbstractLazyCoreInstance> superClass)
@@ -293,6 +423,14 @@ public class ClassPeltImplProcessor
         }
         builder.append("    }\n");
         return builder;
+    }
+
+    private static StringBuilder appendConcreteElementCompConstructor(StringBuilder builder, String className)
+    {
+        return builder.append("    public ").append(className).append("(ModelRepository repository, ConcreteElementMetadata metadata, MetadataIndex index, ElementBuilder elementBuilder, ReferenceIdResolvers referenceIds, PrimitiveValueResolver primitiveValueResolver, Supplier<? extends DeserializedConcreteElement> deserializer, Supplier<? extends BackReferenceProvider> backRefProviderDeserializer)\n")
+                .append("    {\n")
+                .append("        super(repository, metadata, index, elementBuilder, referenceIds, primitiveValueResolver, deserializer, backRefProviderDeserializer);\n")
+                .append("    }\n");
     }
 
     private static StringBuilder appendComponentInstanceConstructor(StringBuilder builder, String className, ListIterable<PropertyInfo> simpleProperties)
@@ -343,6 +481,14 @@ public class ClassPeltImplProcessor
         return builder.append("    }\n");
     }
 
+    private static StringBuilder appendComponentInstanceCompConstructor(StringBuilder builder, String className)
+    {
+        return builder.append("    public ").append(className).append("(ModelRepository repository, InstanceData instanceData, ListIterable<? extends BackReference> backReferences, ReferenceIdResolver referenceIdResolver, IntFunction<? extends CoreInstance> internalIdResolver, PrimitiveValueResolver primitiveValueResolver, ElementBuilder elementBuilder)\n")
+                .append("    {\n")
+                .append("        super(repository, instanceData, backReferences, referenceIdResolver, internalIdResolver, primitiveValueResolver, elementBuilder);\n")
+                .append("    }\n");
+    }
+
     private static StringBuilder appendVirtualPackageConstructor(StringBuilder builder, String className)
     {
         builder.append("    public ").append(className).append("(ModelRepository repository, VirtualPackageMetadata metadata, MetadataIndex index, ElementBuilder elementBuilder, ReferenceIdResolvers referenceIds, Supplier<? extends BackReferenceProvider> backRefProviderDeserializer)\n");
@@ -368,6 +514,14 @@ public class ClassPeltImplProcessor
             }
         });
         return builder.append("    }\n");
+    }
+
+    private static StringBuilder appendCompCopyConstructor(StringBuilder builder, String className, String classNamePlusTypeParams)
+    {
+        return builder.append("    public ").append(className).append('(').append(classNamePlusTypeParams).append(" source)\n")
+                .append("    {\n")
+                .append("        super(source);\n")
+                .append("    }\n");
     }
 
     private static StringBuilder appendRemovePropertyForConcreteElementOrVirtualPackage(StringBuilder builder)
@@ -873,14 +1027,9 @@ public class ClassPeltImplProcessor
         }
     }
 
-    private static void appendEquals(StringBuilder builder, ListIterable<PropertyInfo> simpleProperties, String interfaceName)
+    private static StringBuilder appendEquals(StringBuilder builder, ListIterable<PropertyInfo> simpleProperties, String interfaceName)
     {
         ListIterable<PropertyInfo> equalityProperties = simpleProperties.select(p -> p.equalityKey);
-        if (equalityProperties.isEmpty())
-        {
-            return;
-        }
-
         builder.append("    @Override\n");
         builder.append("    public boolean pureEquals(Object obj)\n");
         builder.append("    {\n");
@@ -923,7 +1072,7 @@ public class ClassPeltImplProcessor
                 builder.append("        return hash;\n");
             }
         }
-        builder.append("    }\n\n");
+        return builder.append("    }\n");
     }
 
     private static void appendCopy(StringBuilder builder, String classNamePlusTypeParams, String interfaceNamePlusTypeParams, boolean isConcreteElementOrVirtualPackage)
@@ -1095,6 +1244,16 @@ public class ClassPeltImplProcessor
     private static boolean isVirtualPackage(Class<? extends AbstractLazyCoreInstance> superClass)
     {
         return AbstractLazyVirtualPackage.class.isAssignableFrom(superClass);
+    }
+
+    private static boolean requiresEquals(ListIterable<PropertyInfo> simpleProperties)
+    {
+        return simpleProperties.anySatisfy(p -> p.equalityKey);
+    }
+
+    private static boolean requiresCompImplementation(ListIterable<PropertyInfo> simpleProperties, MapIterable<String, CoreInstance> qualifiedProperties)
+    {
+        return qualifiedProperties.notEmpty() || requiresEquals(simpleProperties);
     }
 
     private static ListIterable<PropertyInfo> getSimplePropertiesSortedByName(CoreInstance classGenericType, CoreInstance _class, ProcessorContext processorContext)

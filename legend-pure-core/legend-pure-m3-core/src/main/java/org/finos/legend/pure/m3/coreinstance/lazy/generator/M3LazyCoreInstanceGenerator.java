@@ -2239,12 +2239,12 @@ public class M3LazyCoreInstanceGenerator
         return false;
     }
 
-    static String buildLazyConcreteElementClassReferenceFromUserPath(String userPath)
+    public static String buildLazyConcreteElementClassReferenceFromUserPath(String userPath)
     {
         return buildLazyClassReferenceFromUserPath(userPath, CLASS_LAZY_CONCRETE_SUFFIX);
     }
 
-    static String buildLazyComponentInstanceClassReferenceFromUserPath(String userPath)
+    public static String buildLazyComponentInstanceClassReferenceFromUserPath(String userPath)
     {
         return buildLazyClassReferenceFromUserPath(userPath, CLASS_LAZY_COMPONENT_SUFFIX);
     }

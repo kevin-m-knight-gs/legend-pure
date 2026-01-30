@@ -61,6 +61,7 @@ public class ClassProcessor
             if (requiresCompilationImpl(processorContext.getSupport(), _class))
             {
                 processorContext.addJavaSource(ClassImplIncrementalCompilationProcessor.buildImplementation(_package, imports, classGenericType, processorContext, processorSupport));
+                ClassPeltImplProcessor.buildCompImplementation(_package, classGenericType, processorContext, processorSupport, processorContext::addJavaSource);
             }
             processorContext.addJavaSource(ClassImplProcessor.buildImplementation(_package, imports, classGenericType, processorContext, processorSupport, useJavaInheritance, addJavaSerializationSupport, pureExternalPackage));
             if (isLazy(_class))

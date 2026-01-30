@@ -257,9 +257,19 @@ public class JavaPackageAndImportBuilder
         return buildLazyConcreteElementClassReferenceFromType(new StringBuilder(64), type, processorSupport).toString();
     }
 
+    public static String buildLazyConcreteElementCompClassReferenceFromType(CoreInstance type, ProcessorSupport processorSupport)
+    {
+        return buildLazyConcreteElementCompClassReferenceFromType(new StringBuilder(64), type, processorSupport).toString();
+    }
+
     public static String buildLazyConcreteElementClassNameFromType(CoreInstance type, ProcessorSupport processorSupport)
     {
         return buildLazyConcreteElementClassNameFromType(new StringBuilder(64), type, processorSupport).toString();
+    }
+
+    public static String buildLazyConcreteElementCompClassNameFromType(CoreInstance type, ProcessorSupport processorSupport)
+    {
+        return buildLazyConcreteElementCompClassNameFromType(new StringBuilder(64), type, processorSupport).toString();
     }
 
     public static String buildLazyComponentInstanceClassReferenceFromType(CoreInstance type, ProcessorSupport processorSupport)
@@ -267,9 +277,19 @@ public class JavaPackageAndImportBuilder
         return buildLazyComponentInstanceClassReferenceFromType(new StringBuilder(64), type, processorSupport).toString();
     }
 
+    public static String buildLazyComponentInstanceCompClassReferenceFromType(CoreInstance type, ProcessorSupport processorSupport)
+    {
+        return buildLazyComponentInstanceCompClassReferenceFromType(new StringBuilder(64), type, processorSupport).toString();
+    }
+
     public static String buildLazyComponentInstanceClassNameFromType(CoreInstance type, ProcessorSupport processorSupport)
     {
         return buildLazyComponentInstanceClassNameFromType(new StringBuilder(64), type, processorSupport).toString();
+    }
+
+    public static String buildLazyComponentInstanceCompClassNameFromType(CoreInstance type, ProcessorSupport processorSupport)
+    {
+        return buildLazyComponentInstanceCompClassNameFromType(new StringBuilder(64), type, processorSupport).toString();
     }
 
 
@@ -302,9 +322,20 @@ public class JavaPackageAndImportBuilder
         return appendable;
     }
 
+    public static <T extends Appendable> T buildLazyConcreteElementCompClassReferenceFromType(T appendable, CoreInstance type, ProcessorSupport processorSupport)
+    {
+        buildLazyConcreteElementCompClassNameFromType(appendCodeGenPackage(appendable), type, processorSupport);
+        return appendable;
+    }
+
     public static <T extends Appendable> T buildLazyConcreteElementClassNameFromType(T appendable, CoreInstance type, ProcessorSupport processorSupport)
     {
         return buildImplClassNameFromType(appendable, type, ClassPeltImplProcessor.CLASS_LAZY_CONCRETE_SUFFIX, processorSupport);
+    }
+
+    public static <T extends Appendable> T buildLazyConcreteElementCompClassNameFromType(T appendable, CoreInstance type, ProcessorSupport processorSupport)
+    {
+        return buildImplClassNameFromType(appendable, type, ClassPeltImplProcessor.CLASS_LAZY_CONCRETE_COMP_SUFFIX, processorSupport);
     }
 
     public static <T extends Appendable> T buildLazyComponentInstanceClassReferenceFromType(T appendable, CoreInstance type, ProcessorSupport processorSupport)
@@ -313,9 +344,20 @@ public class JavaPackageAndImportBuilder
         return appendable;
     }
 
+    public static <T extends Appendable> T buildLazyComponentInstanceCompClassReferenceFromType(T appendable, CoreInstance type, ProcessorSupport processorSupport)
+    {
+        buildLazyComponentInstanceCompClassNameFromType(appendCodeGenPackage(appendable), type, processorSupport);
+        return appendable;
+    }
+
     public static <T extends Appendable> T buildLazyComponentInstanceClassNameFromType(T appendable, CoreInstance type, ProcessorSupport processorSupport)
     {
         return buildImplClassNameFromType(appendable, type, ClassPeltImplProcessor.CLASS_LAZY_COMPONENT_SUFFIX, processorSupport);
+    }
+
+    public static <T extends Appendable> T buildLazyComponentInstanceCompClassNameFromType(T appendable, CoreInstance type, ProcessorSupport processorSupport)
+    {
+        return buildImplClassNameFromType(appendable, type, ClassPeltImplProcessor.CLASS_LAZY_COMPONENT_COMP_SUFFIX, processorSupport);
     }
 
     // JAVA INTERFACES
