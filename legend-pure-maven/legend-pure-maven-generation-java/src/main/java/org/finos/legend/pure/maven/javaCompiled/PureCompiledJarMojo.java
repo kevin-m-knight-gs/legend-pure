@@ -64,7 +64,7 @@ public class PureCompiledJarMojo extends AbstractMojo
     @Parameter(defaultValue = "org.finos.legend.pure.generated")
     private String externalAPIPackage;
 
-    @Parameter(defaultValue = "true")
+    @Parameter(defaultValue = "false")
     private boolean generateMetadata;
 
     @Parameter(defaultValue = "monolithic")
