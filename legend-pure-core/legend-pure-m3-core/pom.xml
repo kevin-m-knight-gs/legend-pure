@@ -194,21 +194,6 @@
                         </configuration>
                     </execution>
                     <execution>
-                        <id>Generate PAR</id>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>java</goal>
-                        </goals>
-                        <configuration>
-                            <mainClass>org.finos.legend.pure.m3.generator.par.PureJarGenerator</mainClass>
-                            <arguments>
-                                <argument>${project.version}</argument>
-                                <argument>platform</argument>
-                                <argument>${project.build.outputDirectory}</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                    <execution>
                         <id>Generate PCT Essential</id>
                         <phase>process-classes</phase>
                         <goals>

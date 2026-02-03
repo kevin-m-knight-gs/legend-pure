@@ -232,11 +232,6 @@
                 </plugin>
                 <plugin>
                     <groupId>org.finos.legend.pure</groupId>
-                    <artifactId>legend-pure-maven-generation-par</artifactId>
-                    <version>${project.version}</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.finos.legend.pure</groupId>
                     <artifactId>legend-pure-maven-compiler</artifactId>
                     <version>${project.version}</version>
                     <executions>
