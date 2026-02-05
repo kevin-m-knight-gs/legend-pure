@@ -1042,12 +1042,19 @@ public class ClassPeltImplProcessor
         builder.append("            return false;\n");
         builder.append("        }\n");
         builder.append("        ").append(interfaceName).append(" that = (").append(interfaceName).append(") obj;\n");
-        builder.append("        return CompiledSupport.equal(this._").append(equalityProperties.get(0).name).append("(), that._").append(equalityProperties.get(0).name).append("())");
-        if (equalityProperties.size() > 1)
+        builder.append("        return this.getFullSystemPath().equals(that.getFullSystemPath())");
+        equalityProperties.forEach(p ->
         {
-            equalityProperties.forEach(1, equalityProperties.size() - 1,
-                    p -> builder.append(" &&\n                CompiledSupport.equal(this._").append(p.name).append("(), that._").append(p.name).append("())"));
-        }
+            builder.append(" &&\n                ");
+            if (double.class.getName().equals(p.returnTypeJava) || long.class.getName().equals(p.returnTypeJava) || boolean.class.getName().equals(p.returnTypeJava))
+            {
+                builder.append("this._").append(p.name).append("() == that._").append(p.name).append("()");
+            }
+            else
+            {
+                builder.append("CompiledSupport.equal(this._").append(p.name).append("(), that._").append(p.name).append("())");
+            }
+        });
         builder.append(";\n");
         builder.append("    }\n\n");
         builder.append("    @Override\n");
