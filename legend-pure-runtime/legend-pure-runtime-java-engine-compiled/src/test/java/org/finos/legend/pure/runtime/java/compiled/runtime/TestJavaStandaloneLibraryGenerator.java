@@ -239,7 +239,7 @@ public class TestJavaStandaloneLibraryGenerator extends AbstractPureTestWithCore
     }
 
     @Test
-    public void testStandaloneLibraryExternalExecution() throws Exception
+    public void testStandaloneLibraryExternalExecutionDistributedMetadata() throws Exception
     {
         String externalPackage = "org.finos.legend.pure.runtime.java.compiled";
         JavaStandaloneLibraryGenerator generator = JavaStandaloneLibraryGenerator.newGenerator(runtime, CompiledExtensionLoader.extensions(), true, externalPackage, new VoidLog());
@@ -248,14 +248,33 @@ public class TestJavaStandaloneLibraryGenerator extends AbstractPureTestWithCore
         generator.compileAndWriteClasses(classesDir, new VoidLog());
         try (URLClassLoader classLoader = new URLClassLoader(new URL[]{classesDir.toUri().toURL()}, Thread.currentThread().getContextClassLoader()))
         {
-            String className = externalPackage + ".PureExternal";
-            Class<?> testClass = classLoader.loadClass(className);
-
-            Method joinWithCommas = testClass.getMethod("joinWithCommas", RichIterable.class);
-            Assert.assertEquals("a, b, c", joinWithCommas.invoke(null, Lists.immutable.with("a", "b", "c")));
-
-            Method testWithReflection = testClass.getMethod("testWithReflection", String.class);
-            Assert.assertEquals("_*_testWithReflection", testWithReflection.invoke(null, "_*_"));
+            testStandaloneLibraryExternalExecution(classLoader, externalPackage);
         }
+    }
+
+    @Test
+    public void testStandaloneLibraryExternalExecutionPeltMetadata() throws Exception
+    {
+        String externalPackage = "org.finos.legend.pure.runtime.java.compiled";
+        JavaStandaloneLibraryGenerator generator = JavaStandaloneLibraryGenerator.newGenerator(runtime, CompiledExtensionLoader.extensions(), true, externalPackage, false, false, new VoidLog());
+        Path classesDir = TMP.newFolder().toPath();
+        generator.serializeAndWriteMetadata(classesDir);
+        generator.compileAndWriteClasses(classesDir, new VoidLog());
+        try (URLClassLoader classLoader = new URLClassLoader(new URL[]{classesDir.toUri().toURL()}, Thread.currentThread().getContextClassLoader()))
+        {
+            testStandaloneLibraryExternalExecution(classLoader, externalPackage);
+        }
+    }
+
+    private void testStandaloneLibraryExternalExecution(ClassLoader classLoader, String externalPackage) throws Exception
+    {
+        String className = externalPackage + ".PureExternal";
+        Class<?> testClass = classLoader.loadClass(className);
+
+        Method joinWithCommas = testClass.getMethod("joinWithCommas", RichIterable.class);
+        Assert.assertEquals("a, b, c", joinWithCommas.invoke(null, Lists.immutable.with("a", "b", "c")));
+
+        Method testWithReflection = testClass.getMethod("testWithReflection", String.class);
+        Assert.assertEquals("_*_testWithReflection", testWithReflection.invoke(null, "_*_"));
     }
 }

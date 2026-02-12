@@ -61,15 +61,17 @@ public class JavaStandaloneLibraryGenerator
     private final Iterable<? extends CompiledExtension> extensions;
     private final boolean addExternalAPI;
     private final String externalAPIPackage;
+    private final boolean useLegacyMetadataForExternalAPI;
     private final Log log;
     private final boolean generatePureTests;
 
-    private JavaStandaloneLibraryGenerator(PureRuntime runtime, Iterable<? extends CompiledExtension> extensions, boolean addExternalAPI, String externalAPIPackage, boolean generatePureTests, Log log)
+    private JavaStandaloneLibraryGenerator(PureRuntime runtime, Iterable<? extends CompiledExtension> extensions, boolean addExternalAPI, String externalAPIPackage, boolean useLegacyMetadataForExternalAPI, boolean generatePureTests, Log log)
     {
         this.runtime = runtime;
         this.extensions = extensions;
         this.addExternalAPI = addExternalAPI;
         this.externalAPIPackage = externalAPIPackage;
+        this.useLegacyMetadataForExternalAPI = useLegacyMetadataForExternalAPI;
         this.log = log;
         this.generatePureTests = generatePureTests;
     }
@@ -310,7 +312,7 @@ public class JavaStandaloneLibraryGenerator
     private JavaSourceCodeGenerator getSourceCodeGenerator(String compileGroup, boolean writeJavaSourcesToDisk, Path pathToWriteTo)
     {
         IdBuilder idBuilder = DistributedBinaryGraphSerializer.newIdBuilder(compileGroup, this.runtime.getProcessorSupport());
-        JavaSourceCodeGenerator javaSourceCodeGenerator = new JavaSourceCodeGenerator(this.runtime.getProcessorSupport(), idBuilder, this.runtime.getCodeStorage(), writeJavaSourcesToDisk, pathToWriteTo, false, this.extensions, "UserCode", this.externalAPIPackage, false);
+        JavaSourceCodeGenerator javaSourceCodeGenerator = new JavaSourceCodeGenerator(this.runtime.getProcessorSupport(), idBuilder, this.runtime.getCodeStorage(), writeJavaSourcesToDisk, pathToWriteTo, false, this.extensions, "UserCode", this.externalAPIPackage, false, this.useLegacyMetadataForExternalAPI);
         javaSourceCodeGenerator.collectClassesToSerialize();
         return javaSourceCodeGenerator;
     }
@@ -368,14 +370,19 @@ public class JavaStandaloneLibraryGenerator
         return sourcesByRepo;
     }
 
-    public static JavaStandaloneLibraryGenerator newGenerator(PureRuntime runtime, Iterable<? extends CompiledExtension> extensions, boolean addExternalAPI, String externalAPIPackage, Log log)
+    public static JavaStandaloneLibraryGenerator newGenerator(PureRuntime runtime, Iterable<? extends CompiledExtension> extensions, boolean addExternalAPI, String externalAPIPackage, boolean useLegacyMetadataForExternalAPI, boolean generatePureTests, Log log)
     {
-        return new JavaStandaloneLibraryGenerator(runtime, extensions, addExternalAPI, externalAPIPackage, true, log);
+        return new JavaStandaloneLibraryGenerator(runtime, extensions, addExternalAPI, externalAPIPackage, useLegacyMetadataForExternalAPI, generatePureTests, log);
     }
 
     public static JavaStandaloneLibraryGenerator newGenerator(PureRuntime runtime, Iterable<? extends CompiledExtension> extensions, boolean addExternalAPI, String externalAPIPackage, boolean generatePureTests, Log log)
     {
-        return new JavaStandaloneLibraryGenerator(runtime, extensions, addExternalAPI, externalAPIPackage, generatePureTests, log);
+        return newGenerator(runtime, extensions, addExternalAPI, externalAPIPackage, true, generatePureTests, log);
+    }
+
+    public static JavaStandaloneLibraryGenerator newGenerator(PureRuntime runtime, Iterable<? extends CompiledExtension> extensions, boolean addExternalAPI, String externalAPIPackage, Log log)
+    {
+        return newGenerator(runtime, extensions, addExternalAPI, externalAPIPackage, true, log);
     }
 
     public static PureJavaCompiler compileOnly(MapIterable<? extends String, ? extends Iterable<? extends StringJavaSource>> javaSources, ListIterable<? extends StringJavaSource> externalizableSources, boolean addExternalAPI, Log log) throws PureJavaCompileException
