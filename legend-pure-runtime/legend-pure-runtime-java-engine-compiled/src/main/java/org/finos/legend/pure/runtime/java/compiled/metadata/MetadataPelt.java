@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Objects;
 
 public class MetadataPelt implements Metadata
@@ -159,10 +160,20 @@ public class MetadataPelt implements Metadata
         return this.elementLoader.loadElement(path);
     }
 
+    public static MetadataPelt fromClassLoader(ClassLoader classLoader, String... repositories)
+    {
+        return fromClassLoader(classLoader, Arrays.asList(repositories));
+    }
+
     public static MetadataPelt fromClassLoader(ClassLoader classLoader, Iterable<? extends String> repositories)
     {
         Objects.requireNonNull(classLoader, "class loader may not be null");
         return builder().withClassLoader(classLoader).withRepositories(repositories).build();
+    }
+
+    public static MetadataPelt fromDirectory(ClassLoader classLoader, Path directory, String... repositories)
+    {
+        return fromDirectory(classLoader, directory, Arrays.asList(repositories));
     }
 
     public static MetadataPelt fromDirectory(ClassLoader classLoader, Path directory, Iterable<? extends String> repositories)
