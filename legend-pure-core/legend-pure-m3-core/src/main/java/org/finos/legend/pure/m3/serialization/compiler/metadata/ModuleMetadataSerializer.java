@@ -21,7 +21,11 @@ import org.finos.legend.pure.m3.serialization.compiler.strings.StringIndexer;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.serialization.Reader;
 import org.finos.legend.pure.m4.serialization.Writer;
+import org.finos.legend.pure.m4.serialization.binary.BinaryReaders;
+import org.finos.legend.pure.m4.serialization.binary.BinaryWriters;
 
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 
 public class ModuleMetadataSerializer extends ExtensibleSerializer<ModuleMetadataSerializerExtension>
@@ -42,167 +46,192 @@ public class ModuleMetadataSerializer extends ExtensibleSerializer<ModuleMetadat
 
     // Manifest
 
-    public void serializeManifest(Writer writer, ModuleManifest manifest)
+    public void serializeManifest(OutputStream stream, ModuleManifest manifest)
     {
-        serializeManifest(writer, manifest, getDefaultExtension());
+        serializeManifest(stream, manifest, getDefaultExtension());
     }
 
-    public void serializeManifest(Writer writer, ModuleManifest manifest, int version)
+    public void serializeManifest(OutputStream stream, ModuleManifest manifest, int version)
     {
-        serializeManifest(writer, manifest, getExtension(version));
+        serializeManifest(stream, manifest, getExtension(version));
     }
 
-    private void serializeManifest(Writer writer, ModuleManifest manifest, ModuleMetadataSerializerExtension extension)
+    private void serializeManifest(OutputStream stream, ModuleManifest manifest, ModuleMetadataSerializerExtension extension)
     {
-        writer.writeLong(PURE_MODULE_MANIFEST_SIGNATURE);
-        writer.writeInt(extension.version());
-        Writer stringIndexedWriter = this.stringIndexer.writeStringIndex(writer, collectStrings(manifest));
-        extension.serializeManifest(stringIndexedWriter, manifest);
-    }
-
-    public ModuleManifest deserializeManifest(Reader reader)
-    {
-        long signature = reader.readLong();
-        if (signature != PURE_MODULE_MANIFEST_SIGNATURE)
+        try (Writer writer = BinaryWriters.newBinaryWriter(stream, false))
         {
-            throw new IllegalArgumentException("Invalid file format: not a Legend module manifest file");
+            writer.writeLong(PURE_MODULE_MANIFEST_SIGNATURE);
+            writer.writeInt(extension.version());
         }
-        int version = reader.readInt();
+        extension.serializeManifest(stream, manifest, this.stringIndexer, ModuleMetadataSerializer::collectStrings);
+    }
+
+    public ModuleManifest deserializeManifest(InputStream stream)
+    {
+        int version;
+        try (Reader reader = BinaryReaders.newBinaryReader(stream, false))
+        {
+            long signature = reader.readLong();
+            if (signature != PURE_MODULE_MANIFEST_SIGNATURE)
+            {
+                throw new IllegalArgumentException("Invalid file format: not a Legend module manifest file");
+            }
+            version = reader.readInt();
+        }
         ModuleMetadataSerializerExtension extension = getExtension(version);
-        Reader stringIndexedReader = this.stringIndexer.readStringIndex(reader);
-        return extension.deserializeManifest(stringIndexedReader);
+        return extension.deserializeManifest(stream, this.stringIndexer);
     }
 
     // Source metadata
 
-    public void serializeSourceMetadata(Writer writer, ModuleSourceMetadata sourceMetadata)
+    public void serializeSourceMetadata(OutputStream stream, ModuleSourceMetadata sourceMetadata)
     {
-        serializeSourceMetadata(writer, sourceMetadata, getDefaultExtension());
+        serializeSourceMetadata(stream, sourceMetadata, getDefaultExtension());
     }
 
-    public void serializeSourceMetadata(Writer writer, ModuleSourceMetadata sourceMetadata, int version)
+    public void serializeSourceMetadata(OutputStream stream, ModuleSourceMetadata sourceMetadata, int version)
     {
-        serializeSourceMetadata(writer, sourceMetadata, getExtension(version));
+        serializeSourceMetadata(stream, sourceMetadata, getExtension(version));
     }
 
-    private void serializeSourceMetadata(Writer writer, ModuleSourceMetadata sourceMetadata, ModuleMetadataSerializerExtension extension)
+    private void serializeSourceMetadata(OutputStream stream, ModuleSourceMetadata sourceMetadata, ModuleMetadataSerializerExtension extension)
     {
-        writer.writeLong(PURE_MODULE_SOURCE_METADATA_SIGNATURE);
-        writer.writeInt(extension.version());
-        Writer stringIndexedWriter = this.stringIndexer.writeStringIndex(writer, collectStrings(sourceMetadata));
-        extension.serializeSourceMetadata(stringIndexedWriter, sourceMetadata);
-    }
-
-    public ModuleSourceMetadata deserializeSourceMetadata(Reader reader)
-    {
-        long signature = reader.readLong();
-        if (signature != PURE_MODULE_SOURCE_METADATA_SIGNATURE)
+        try (Writer writer = BinaryWriters.newBinaryWriter(stream, false))
         {
-            throw new IllegalArgumentException("Invalid file format: not a Legend module source metadata file");
+            writer.writeLong(PURE_MODULE_SOURCE_METADATA_SIGNATURE);
+            writer.writeInt(extension.version());
         }
-        int version = reader.readInt();
+        extension.serializeSourceMetadata(stream, sourceMetadata, this.stringIndexer, ModuleMetadataSerializer::collectStrings);
+    }
+
+    public ModuleSourceMetadata deserializeSourceMetadata(InputStream stream)
+    {
+        int version;
+        try (Reader reader = BinaryReaders.newBinaryReader(stream, false))
+        {
+            long signature = reader.readLong();
+            if (signature != PURE_MODULE_SOURCE_METADATA_SIGNATURE)
+            {
+                throw new IllegalArgumentException("Invalid file format: not a Legend module source metadata file");
+            }
+            version = reader.readInt();
+        }
         ModuleMetadataSerializerExtension extension = getExtension(version);
-        Reader stringIndexedReader = this.stringIndexer.readStringIndex(reader);
-        return extension.deserializeSourceMetadata(stringIndexedReader);
+        return extension.deserializeSourceMetadata(stream, this.stringIndexer);
     }
 
     // External reference metadata
 
-    public void serializeExternalReferenceMetadata(Writer writer, ModuleExternalReferenceMetadata externalReferenceMetadata)
+    public void serializeExternalReferenceMetadata(OutputStream stream, ModuleExternalReferenceMetadata externalReferenceMetadata)
     {
-        serializeExternalReferenceMetadata(writer, externalReferenceMetadata, getDefaultExtension());
+        serializeExternalReferenceMetadata(stream, externalReferenceMetadata, getDefaultExtension());
     }
 
-    public void serializeExternalReferenceMetadata(Writer writer, ModuleExternalReferenceMetadata externalReferenceMetadata, int version)
+    public void serializeExternalReferenceMetadata(OutputStream stream, ModuleExternalReferenceMetadata externalReferenceMetadata, int version)
     {
-        serializeExternalReferenceMetadata(writer, externalReferenceMetadata, getExtension(version));
+        serializeExternalReferenceMetadata(stream, externalReferenceMetadata, getExtension(version));
     }
 
-    private void serializeExternalReferenceMetadata(Writer writer, ModuleExternalReferenceMetadata externalReferenceMetadata, ModuleMetadataSerializerExtension extension)
+    private void serializeExternalReferenceMetadata(OutputStream stream, ModuleExternalReferenceMetadata externalReferenceMetadata, ModuleMetadataSerializerExtension extension)
     {
-        writer.writeLong(PURE_MODULE_EXT_REFS_SIGNATURE);
-        writer.writeInt(extension.version());
-        Writer stringIndexedWriter = this.stringIndexer.writeStringIndex(writer, collectStrings(externalReferenceMetadata));
-        extension.serializeExternalReferenceMetadata(stringIndexedWriter, externalReferenceMetadata);
-    }
-
-    public ModuleExternalReferenceMetadata deserializeExternalReferenceMetadata(Reader reader)
-    {
-        long signature = reader.readLong();
-        if (signature != PURE_MODULE_EXT_REFS_SIGNATURE)
+        try (Writer writer = BinaryWriters.newBinaryWriter(stream, false))
         {
-            throw new IllegalArgumentException("Invalid file format: not a Legend module external reference metadata file");
+            writer.writeLong(PURE_MODULE_EXT_REFS_SIGNATURE);
+            writer.writeInt(extension.version());
         }
-        int version = reader.readInt();
+        extension.serializeExternalReferenceMetadata(stream, externalReferenceMetadata, this.stringIndexer, ModuleMetadataSerializer::collectStrings);
+    }
+
+    public ModuleExternalReferenceMetadata deserializeExternalReferenceMetadata(InputStream stream)
+    {
+        int version;
+        try (Reader reader = BinaryReaders.newBinaryReader(stream, false))
+        {
+            long signature = reader.readLong();
+            if (signature != PURE_MODULE_EXT_REFS_SIGNATURE)
+            {
+                throw new IllegalArgumentException("Invalid file format: not a Legend module external reference metadata file");
+            }
+            version = reader.readInt();
+        }
         ModuleMetadataSerializerExtension extension = getExtension(version);
-        Reader stringIndexedReader = this.stringIndexer.readStringIndex(reader);
-        return extension.deserializeExternalReferenceMetadata(stringIndexedReader);
+        return extension.deserializeExternalReferenceMetadata(stream, this.stringIndexer);
     }
 
     // Element back references
 
-    public void serializeBackReferenceMetadata(Writer writer, ElementBackReferenceMetadata backReferenceMetadata)
+    public void serializeBackReferenceMetadata(OutputStream stream, ElementBackReferenceMetadata backReferenceMetadata)
     {
-        serializeBackReferenceMetadata(writer, backReferenceMetadata, getDefaultExtension());
+        serializeBackReferenceMetadata(stream, backReferenceMetadata, getDefaultExtension());
     }
 
-    public void serializeBackReferenceMetadata(Writer writer, ElementBackReferenceMetadata backReferenceMetadata, int version)
+    public void serializeBackReferenceMetadata(OutputStream stream, ElementBackReferenceMetadata backReferenceMetadata, int version)
     {
-        serializeBackReferenceMetadata(writer, backReferenceMetadata, getExtension(version));
+        serializeBackReferenceMetadata(stream, backReferenceMetadata, getExtension(version));
     }
 
-    private void serializeBackReferenceMetadata(Writer writer, ElementBackReferenceMetadata backReferenceMetadata, ModuleMetadataSerializerExtension extension)
+    private void serializeBackReferenceMetadata(OutputStream stream, ElementBackReferenceMetadata backReferenceMetadata, ModuleMetadataSerializerExtension extension)
     {
-        writer.writeLong(PURE_ELEMENT_BACK_REFS_SIGNATURE);
-        writer.writeInt(extension.version());
-        Writer stringIndexedWriter = this.stringIndexer.writeStringIndex(writer, collectStrings(backReferenceMetadata));
-        extension.serializeBackReferenceMetadata(stringIndexedWriter, backReferenceMetadata);
-    }
-
-    public ElementBackReferenceMetadata deserializeBackReferenceMetadata(Reader reader)
-    {
-        long signature = reader.readLong();
-        if (signature != PURE_ELEMENT_BACK_REFS_SIGNATURE)
+        try (Writer writer = BinaryWriters.newBinaryWriter(stream, false))
         {
-            throw new IllegalArgumentException("Invalid file format: not a Legend element back reference metadata file");
+            writer.writeLong(PURE_ELEMENT_BACK_REFS_SIGNATURE);
+            writer.writeInt(extension.version());
         }
-        int version = reader.readInt();
+        extension.serializeBackReferenceMetadata(stream, backReferenceMetadata, this.stringIndexer, ModuleMetadataSerializer::collectStrings);
+    }
+
+    public ElementBackReferenceMetadata deserializeBackReferenceMetadata(InputStream stream)
+    {
+        int version;
+        try (Reader reader = BinaryReaders.newBinaryReader(stream, false))
+        {
+            long signature = reader.readLong();
+            if (signature != PURE_ELEMENT_BACK_REFS_SIGNATURE)
+            {
+                throw new IllegalArgumentException("Invalid file format: not a Legend element back reference metadata file");
+            }
+            version = reader.readInt();
+        }
         ModuleMetadataSerializerExtension extension = getExtension(version);
-        Reader stringIndexedReader = this.stringIndexer.readStringIndex(reader);
-        return extension.deserializeBackReferenceMetadata(stringIndexedReader);
+        return extension.deserializeBackReferenceMetadata(stream, this.stringIndexer);
     }
     
     // Function name metadata
     
-    public void serializeFunctionNameMetadata(Writer writer, ModuleFunctionNameMetadata functionNameMetadata)
+    public void serializeFunctionNameMetadata(OutputStream stream, ModuleFunctionNameMetadata functionNameMetadata)
     {
-        serializeFunctionNameMetadata(writer, functionNameMetadata, getDefaultExtension());
+        serializeFunctionNameMetadata(stream, functionNameMetadata, getDefaultExtension());
     }
 
-    public void serializeFunctionNameMetadata(Writer writer, ModuleFunctionNameMetadata sourceMetadata, int version)
+    public void serializeFunctionNameMetadata(OutputStream stream, ModuleFunctionNameMetadata functionNameMetadata, int version)
     {
-        serializeFunctionNameMetadata(writer, sourceMetadata, getExtension(version));
+        serializeFunctionNameMetadata(stream, functionNameMetadata, getExtension(version));
     }
 
-    private void serializeFunctionNameMetadata(Writer writer, ModuleFunctionNameMetadata sourceMetadata, ModuleMetadataSerializerExtension extension)
+    private void serializeFunctionNameMetadata(OutputStream stream, ModuleFunctionNameMetadata functionNameMetadata, ModuleMetadataSerializerExtension extension)
     {
-        writer.writeLong(PURE_FUNCTION_NAMES_SIGNATURE);
-        writer.writeInt(extension.version());
-        Writer stringIndexedWriter = this.stringIndexer.writeStringIndex(writer, collectStrings(sourceMetadata));
-        extension.serializeFunctionNameMetadata(stringIndexedWriter, sourceMetadata);
-    }
-
-    public ModuleFunctionNameMetadata deserializeFunctionNameMetadata(Reader reader)
-    {
-        long signature = reader.readLong();
-        if (signature != PURE_FUNCTION_NAMES_SIGNATURE)
+        try (Writer writer = BinaryWriters.newBinaryWriter(stream, false))
         {
-            throw new IllegalArgumentException("Invalid file format: not a Legend module function name metadata file");
+            writer.writeLong(PURE_FUNCTION_NAMES_SIGNATURE);
+            writer.writeInt(extension.version());
         }
-        int version = reader.readInt();
+        extension.serializeFunctionNameMetadata(stream, functionNameMetadata, this.stringIndexer, ModuleMetadataSerializer::collectStrings);
+    }
+
+    public ModuleFunctionNameMetadata deserializeFunctionNameMetadata(InputStream stream)
+    {
+        int version;
+        try (Reader reader = BinaryReaders.newBinaryReader(stream, false))
+        {
+            long signature = reader.readLong();
+            if (signature != PURE_FUNCTION_NAMES_SIGNATURE)
+            {
+                throw new IllegalArgumentException("Invalid file format: not a Legend module function name metadata file");
+            }
+            version = reader.readInt();
+        }
         ModuleMetadataSerializerExtension extension = getExtension(version);
-        Reader stringIndexedReader = this.stringIndexer.readStringIndex(reader);
-        return extension.deserializeFunctionNameMetadata(stringIndexedReader);
+        return extension.deserializeFunctionNameMetadata(stream, this.stringIndexer);
     }
 
 
