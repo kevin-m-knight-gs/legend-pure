@@ -35,6 +35,8 @@ import java.util.zip.InflaterInputStream;
 
 public class ModuleMetadataSerializerV3 implements ModuleMetadataSerializerExtension
 {
+    private static final int COMPRESSION_LEVEL = 7;
+
     private final ModuleMetadataSerializerV2 v2 = new ModuleMetadataSerializerV2();
 
     @Override
@@ -215,7 +217,7 @@ public class ModuleMetadataSerializerV3 implements ModuleMetadataSerializerExten
 
     private Deflater newDeflater()
     {
-        return new Deflater(Deflater.BEST_COMPRESSION, true);
+        return new Deflater(COMPRESSION_LEVEL, true);
     }
 
     private Inflater newInflater()
