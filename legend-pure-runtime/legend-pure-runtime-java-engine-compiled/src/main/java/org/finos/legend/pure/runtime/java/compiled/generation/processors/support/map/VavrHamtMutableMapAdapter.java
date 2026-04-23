@@ -21,16 +21,19 @@ import org.eclipse.collections.api.block.HashingStrategy;
 import org.eclipse.collections.api.block.function.Function;
 import org.eclipse.collections.api.block.function.Function0;
 import org.eclipse.collections.api.block.procedure.Procedure2;
+import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.map.ImmutableMap;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.tuple.Pair;
-import org.eclipse.collections.impl.factory.Maps;
 import org.eclipse.collections.impl.map.mutable.AbstractMutableMap;
+import org.eclipse.collections.impl.map.strategy.mutable.UnifiedMapWithHashingStrategy;
+import org.eclipse.collections.impl.tuple.ImmutableEntry;
 import org.eclipse.collections.impl.tuple.Tuples;
 import org.eclipse.collections.impl.utility.LazyIterate;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -76,7 +79,6 @@ public class VavrHamtMutableMapAdapter<K, V> extends AbstractMutableMap<K, V>
      * Build a new adapter from an existing {@link Map}, preserving the hashing
      * strategy if the source is a {@code UnifiedMapWithHashingStrategy}.
      */
-    @SuppressWarnings("unchecked")
     public static <K, V> VavrHamtMutableMapAdapter<K, V> fromMap(Map<K, V> source)
     {
         if (source instanceof VavrHamtMutableMapAdapter)
@@ -84,11 +86,7 @@ public class VavrHamtMutableMapAdapter<K, V> extends AbstractMutableMap<K, V>
             VavrHamtMutableMapAdapter<K, V> src = (VavrHamtMutableMapAdapter<K, V>) source;
             return new VavrHamtMutableMapAdapter<>(src.hamtMap, src.hashingStrategy);
         }
-        HashingStrategy<? super K> strategy = null;
-        if (source instanceof org.eclipse.collections.impl.map.strategy.mutable.UnifiedMapWithHashingStrategy)
-        {
-            strategy = ((org.eclipse.collections.impl.map.strategy.mutable.UnifiedMapWithHashingStrategy<K, V>) source).hashingStrategy();
-        }
+        HashingStrategy<? super K> strategy = (source instanceof UnifiedMapWithHashingStrategy) ? ((UnifiedMapWithHashingStrategy<K, V>) source).hashingStrategy() : null;
         VavrHamtMutableMapAdapter<K, V> adapter = new VavrHamtMutableMapAdapter<>(HashMap.empty(), strategy);
         source.forEach((k, v) -> adapter.hamtMap = adapter.hamtMap.put(adapter.wrap(k), v));
         return adapter;
@@ -102,16 +100,16 @@ public class VavrHamtMutableMapAdapter<K, V> extends AbstractMutableMap<K, V>
     public static <K, V> VavrHamtMutableMapAdapter<K, V> withHashingStrategy(HashingStrategy<? super K> strategy, Map<K, V> source)
     {
         VavrHamtMutableMapAdapter<K, V> adapter = new VavrHamtMutableMapAdapter<>(HashMap.empty(), strategy);
-        source.forEach((k, v) -> adapter.hamtMap = adapter.hamtMap.put(adapter.wrap(k), v));
+        adapter.putAll(source);
         return adapter;
     }
 
     /**
-     * Build a HAMT adapter by bulk-loading entries from a {@link java.util.HashMap}.
+     * Build a HAMT adapter by bulk-loading entries from a {@link Map}.
      * This constructs the HAMT in a single pass via {@code HashMap.ofAll()},
      * avoiding the overhead of individual path-copies for each entry.
      */
-    public static <K, V> VavrHamtMutableMapAdapter<K, V> fromJavaMap(java.util.HashMap<HamtKey<K>, V> javaMap, HashingStrategy<? super K> strategy)
+    public static <K, V> VavrHamtMutableMapAdapter<K, V> fromJavaMap(Map<HamtKey<K>, V> javaMap, HashingStrategy<? super K> strategy)
     {
         io.vavr.collection.Map<HamtKey<K>, V> hamt = HashMap.ofAll(javaMap);
         return new VavrHamtMutableMapAdapter<>(hamt, strategy);
@@ -403,7 +401,7 @@ public class VavrHamtMutableMapAdapter<K, V> extends AbstractMutableMap<K, V>
     @Override
     public Set<K> keySet()
     {
-        java.util.LinkedHashSet<K> result = new java.util.LinkedHashSet<>();
+        Set<K> result = new LinkedHashSet<>(this.hamtMap.size());
         this.hamtMap.forEach(tuple -> result.add(tuple._1.key));
         return result;
     }
@@ -417,8 +415,8 @@ public class VavrHamtMutableMapAdapter<K, V> extends AbstractMutableMap<K, V>
     @Override
     public Set<Map.Entry<K, V>> entrySet()
     {
-        java.util.LinkedHashSet<Map.Entry<K, V>> result = new java.util.LinkedHashSet<>();
-        this.hamtMap.forEach(tuple -> result.add(new java.util.AbstractMap.SimpleEntry<>(tuple._1.key, tuple._2)));
+        Set<Map.Entry<K, V>> result = new LinkedHashSet<>(this.hamtMap.size());
+        this.hamtMap.forEach(tuple -> result.add(ImmutableEntry.of(tuple._1.key, tuple._2)));
         return result;
     }
 
@@ -534,4 +532,3 @@ public class VavrHamtMutableMapAdapter<K, V> extends AbstractMutableMap<K, V>
         return sb.toString();
     }
 }
-
