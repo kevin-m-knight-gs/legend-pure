@@ -30,17 +30,19 @@ import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeReposito
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositoryProviderHelper;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.CodeRepositorySet;
 import org.finos.legend.pure.m3.serialization.filesystem.repository.GenericCodeRepository;
+import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.MutableRepositoryCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.classpath.ClassLoaderCodeStorage;
 import org.finos.legend.pure.m3.serialization.filesystem.usercodestorage.composite.CompositeCodeStorage;
 import org.finos.legend.pure.m3.serialization.grammar.Parser;
 import org.finos.legend.pure.m3.serialization.grammar.m3parser.inlinedsl.InlineDSL;
+import org.finos.legend.pure.m3.serialization.runtime.GraphLoader;
 import org.finos.legend.pure.m3.serialization.runtime.Message;
 import org.finos.legend.pure.m3.serialization.runtime.ParserService;
 import org.finos.legend.pure.m3.serialization.runtime.PureCompilerLoader;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntime;
 import org.finos.legend.pure.m3.serialization.runtime.PureRuntimeBuilder;
-import org.finos.legend.pure.m3.serialization.runtime.cache.CacheState;
-import org.finos.legend.pure.m3.serialization.runtime.cache.ClassLoaderPureGraphCache;
+import org.finos.legend.pure.m3.serialization.runtime.binary.PureRepositoryJar;
+import org.finos.legend.pure.m3.serialization.runtime.binary.SimplePureRepositoryJarLibrary;
 import org.finos.legend.pure.runtime.java.compiled.compiler.PureJavaCompileException;
 import org.finos.legend.pure.runtime.java.compiled.compiler.PureJavaCompiler;
 import org.finos.legend.pure.runtime.java.compiled.extension.CompiledExtensionLoader;
@@ -384,7 +386,8 @@ public class JavaCodeGeneration
         {
             log.info("  Beginning Pure initialization");
             RichIterable<CodeRepository> repositoriesForCompilation = allRepositories.subset(selectedRepositories).getRepositories();
-
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+            MutableRepositoryCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(classLoader, repositoriesForCompilation));
             Message message = new Message("")
             {
                 @Override
@@ -394,26 +397,25 @@ public class JavaCodeGeneration
                 }
             };
 
-            // Initialize from PAR files cache
-            CompositeCodeStorage codeStorage = new CompositeCodeStorage(new ClassLoaderCodeStorage(Thread.currentThread().getContextClassLoader(), repositoriesForCompilation));
-            ClassLoaderPureGraphCache graphCache = new ClassLoaderPureGraphCache(Thread.currentThread().getContextClassLoader());
-            PureRuntime runtime = new PureRuntimeBuilder(codeStorage).withMessage(message).withCache(graphCache).setTransactionalByDefault(false).buildAndTryToInitializeFromCache();
-            if (!runtime.isInitialized())
+            PureRuntime peltRuntime = tryInitializeFromPelt(classLoader, codeStorage, message, log);
+            if (peltRuntime != null)
             {
-                CacheState cacheState = graphCache.getCacheState();
-                if (cacheState != null)
-                {
-                    String lastStackTrace = cacheState.getLastStackTrace();
-                    if (lastStackTrace != null)
-                    {
-                        log.warn("    Cache initialization failure: " + lastStackTrace);
-                    }
-                }
-                log.debug("    Initialization from caches failed - compiling from scratch");
-                runtime.reset();
-                runtime.loadAndCompileCore(message);
-                runtime.loadAndCompileSystem(message);
+                log.info(String.format("    Finished Pure initialization (%.9fs)", durationSinceInSeconds(start)));
+                return peltRuntime;
             }
+
+            PureRuntime parRuntime = tryInitializeFromPar(classLoader, codeStorage, message, log);
+            if (parRuntime != null)
+            {
+                log.info(String.format("    Finished Pure initialization (%.9fs)", durationSinceInSeconds(start)));
+                return parRuntime;
+            }
+
+            log.debug("    Initialization from caches failed - compiling from scratch");
+            PureRuntime runtime = new PureRuntimeBuilder(codeStorage)
+                    .withMessage(message)
+                    .setTransactionalByDefault(false)
+                    .buildAndInitialize();
             log.info(String.format("    Finished Pure initialization (%.9fs)", durationSinceInSeconds(start)));
             return runtime;
         }
@@ -422,6 +424,51 @@ public class JavaCodeGeneration
             log.error(String.format("    Error initializing Pure (%.9fs)", durationSinceInSeconds(start)), e);
             throw e;
         }
+    }
+
+    private static PureRuntime tryInitializeFromPelt(ClassLoader classLoader, MutableRepositoryCodeStorage codeStorage, Message message, Log log)
+    {
+        long initStart = System.nanoTime();
+        MutableList<String> repoNames = codeStorage.getAllRepositories().collect(CodeRepository::getName, Lists.mutable.empty());
+        PureCompilerLoader loader = PureCompilerLoader.newLoader(classLoader);
+        if (!repoNames.allSatisfy(loader::canLoad))
+        {
+            log.warn(repoNames.reject(loader::canLoad).sortThis().makeString("  Cannot load repositories from PELTs: [", ", ", "]"));
+            return null;
+        }
+
+        PureRuntime runtime = new PureRuntimeBuilder(codeStorage)
+                .withMessage(message)
+                .setTransactionalByDefault(false)
+                .build();
+        log.info(codeStorage.getAllRepositories().asLazy().collect(CodeRepository::getName).makeString("    Loading repositories: [", ", ", "]"));
+        loader.load(runtime, codeStorage.getAllRepositories().asLazy().collect(CodeRepository::getName), false);
+        long initEnd = System.nanoTime();
+        log.info(String.format("    Finished loading repositories in %.9fs", (initEnd - initStart) / 1_000_000_000.0));
+        return runtime;
+    }
+
+    private static PureRuntime tryInitializeFromPar(ClassLoader classLoader, MutableRepositoryCodeStorage codeStorage, Message message, Log log)
+    {
+        MutableSet<String> repoNames = codeStorage.getAllRepositories().collect(CodeRepository::getName, Sets.mutable.empty());
+        MutableList<PureRepositoryJar> pureJars = GraphLoader.findJars(repoNames, classLoader, message, false);
+        if (pureJars.size() < repoNames.size())
+        {
+            MutableList<String> missingPars = pureJars.collectIf(
+                    pj -> !repoNames.contains(pj.getMetadata().getRepositoryName()),
+                    pj -> pj.getMetadata().getRepositoryName(),
+                    Lists.mutable.empty());
+            log.warn(missingPars.sortThis().makeString("  Cannot load repositories from PARs: [", ", ", "]"));
+            return null;
+        }
+
+        PureRuntime runtime = new PureRuntimeBuilder(codeStorage)
+                .withMessage(message)
+                .setTransactionalByDefault(false)
+                .build();
+        GraphLoader graphLoader = new GraphLoader(runtime.getModelRepository(), runtime.getContext(), runtime.getIncrementalCompiler().getParserLibrary(), runtime.getIncrementalCompiler().getDslLibrary(), runtime.getSourceRegistry(), runtime.getURLPatternLibrary(), SimplePureRepositoryJarLibrary.newLibrary(pureJars));
+        graphLoader.loadAll(message);
+        return runtime;
     }
 
     private static void validateMetadata(RichIterable<String> repositoriesForMetadata, Log log)
