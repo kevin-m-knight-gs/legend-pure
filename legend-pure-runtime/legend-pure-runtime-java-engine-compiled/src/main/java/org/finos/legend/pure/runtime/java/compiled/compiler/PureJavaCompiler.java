@@ -139,7 +139,7 @@ public class PureJavaCompiler
                 throw new IllegalArgumentException("Source version must be at least 7, got: " + sourceVersion);
             }
         }
-        else if (currentJavaVersion >= 20)
+        else if (currentJavaVersion > 8)
         {
             resolvedVersion = 8;
         }
