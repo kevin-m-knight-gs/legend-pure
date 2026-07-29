@@ -187,7 +187,7 @@ Class meta::mypackage::Thing
 #### The five processing rules
 
 Given the raw text between the delimiters, the parser applies these steps in
-order (`AntlrContextToM3CoreInstance.processMultilineString`):
+order (`ParsingUtils.processMultilineString`):
 
 1. **Line terminators are normalized** — `\r\n` and `\r` both become `\n`.
 2. **The opening delimiter line is dropped.** The opening `'''` *must* be
@@ -298,7 +298,7 @@ whitespace survives them intact.
 **Implementation:** lexer fragment `MultilineString` in `M4Fragment.g4`; token
 `MULTILINE_STRING` in `M3CoreLexer.g4`; parser rules `instanceLiteralToken` and
 `taggedValue` in `M3CoreParser.g4`; processing in
-`AntlrContextToM3CoreInstance.processMultilineString`. Tests:
+`ParsingUtils.processMultilineString`. Tests: `TestParsingUtils`,
 `TestStringParsing` and `TestProfile`.
 
 ### `Any` and `Nil`
