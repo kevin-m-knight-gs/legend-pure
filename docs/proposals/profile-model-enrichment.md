@@ -218,19 +218,12 @@ element. `Function` is a legitimate entry even though a `Function` cannot itself
 
 | | Option | Pros | Cons |
 |---|---|---|---|
-| **1-i** | **Metamodel type references** (`Class`, `Property`, `Enumeration`, `ConcreteFunctionDefinition`, `Measure`, `Mapping`, `Database`, …) | Open-ended: DSL element types work with no further change; uses `instanceOf`, which modelers already understand; reuses `ImportStub` resolution as-is | Introduces a source dependency from profiles to types (new for profiles); `Class` is `Class<T>`, so the grammar must accept a bare raw type; invites the M1/M3 confusion below |
+| **1-i** | **Metamodel type references** (`Class`, `Property`, `Enumeration`, `ConcreteFunctionDefinition`, `Measure`, `Mapping`, `Database`, …) | Open-ended: DSL element types work with no further change; uses `instanceOf`, which modelers already understand; reuses `ImportStub` resolution as-is | Introduces a source dependency from profiles to types (new for profiles); `Class` is `Class<T>`, so the grammar must accept a bare raw type |
 | **1-ii** | **A closed `ElementKind` enumeration** (`ElementKind.Class`, `ElementKind.Property`, …) | Trivially renderable in Studio as a checkbox list; no new dependency edge; no bootstrap ordering questions | Not extensible — every new DSL element type needs a new enum value in the platform; loses subtype semantics (`Function` covering both function kinds) |
 
 **Recommendation: 1-i.** Reference real types. The only well-formedness check on the list is that
 each entry resolves to a `Type` — `appliesTo: [my::someFunction]` is an error, `appliesTo: [Any]` is
 a legal way to spell "unrestricted".
-
-Two notes to put in the user documentation:
-
-- **The list names metamodel types, not domain types.** `appliesTo: [Class]` means "class
-  *definitions*", not "instances of some class". This will be misread at least once.
-- **`Enumeration` is not a `Class`** in the M3 hierarchy, so `appliesTo: [Class]` does not cover
-  enumerations. That is the correct behaviour but is worth stating.
 
 Bootstrap ordering is fine: `m3.pure` is loaded before `access.pure` / `milestoning.pure`, so
 platform profiles can reference M3 types.
@@ -892,7 +885,7 @@ which is the concrete argument for eventually adopting 3C.
 |---|---|---|
 | Profile well-formedness | `m3/tests/validation/TestProfileValidation.java` | Applicable-type entry that is not a type; lower bound rejected; `maxOccurrences` ≤ 0; ownership rule; ambiguous bare annotation reference; degenerate set warning |
 | Grammar | `m3/tests/elements/profile/TestProfile.java` | Every clause, all orders, repeated clauses, plain profiles unchanged; new keywords still usable as identifiers |
-| Usage | new `TestAnnotationApplicability` / `TestAnnotationOccurrence` / `TestAnnotationExclusivity` | Positive/negative per feature; profile-level vs annotation-level override; **subtype acceptance through a supertype that is not itself annotatable** — `appliesTo: [Function]` accepting both function kinds, `appliesTo: [Type]` accepting `Class` and `Enumeration` (§4.3); repetition not counted for F3 but counted for F2; cross-profile and mixed sets |
+| Usage | new `TestAnnotationApplicability` / `TestAnnotationOccurrence` / `TestAnnotationExclusivity` | Positive/negative per feature; profile-level vs annotation-level override; **subtype acceptance through a supertype that is not itself annotatable** — `appliesTo: [Function]` accepting both function kinds, `appliesTo: [Type]` accepting both a class and an enumeration (§4.3); repetition not counted for F3 but counted for F2; cross-profile and mixed sets |
 | Existing behaviour | `m3/tests/validation/TestAccess.java` | Update the multi-access-stereotype expectations when step 2 of §10 lands |
 | Incremental | `m3/tests/incremental/profile/` | Edit/delete a referenced type; edit a profile's constraints and confirm dependent elements are re-validated; delete a cross-referenced profile |
 | Engine | grammar round-trip + compiler tests | Parse → protocol → compose → parse fidelity; compiler rejects the same models legend-pure rejects |
