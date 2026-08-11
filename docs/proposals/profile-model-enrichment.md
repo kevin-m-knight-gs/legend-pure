@@ -241,7 +241,7 @@ modeler will want to name:
 
 | Type | Is an `AnnotatedElement`? | Annotatable subtypes | Non-annotatable subtypes |
 |---|---|---|---|
-| `Function<T>` | **No** — `extends Referenceable` | `ConcreteFunctionDefinition`, `NativeFunction` (via `PackageableFunction → PackageableElement → ModelElement`) | `LambdaFunction` |
+| `Function<T>` | **No** — `extends Referenceable` | `ConcreteFunctionDefinition`, `NativeFunction` (via `PackageableFunction → PackageableElement → ModelElement`); `AbstractProperty` (via `ModelElement`); `Column` (via `AnnotatedElement` directly) | `LambdaFunction` |
 | `Type` | **No** — `extends Any` | `Class`, `Enumeration`, `PrimitiveType`, `Measure` (via `PackageableElement`) | `Unit` |
 | `DataType` | **No** — `extends Type` | `Enumeration`, `PrimitiveType`, `Measure` | `Unit` |
 
@@ -331,16 +331,107 @@ Profile meta::pure::profiles::temporal
 
 Profile meta::pure::profiles::access
 {
-    appliesTo: [Class, Function];
-    stereotypes: [public, protected, private, externalizable];
+    appliesTo: [Class, PackageableFunction];
+    stereotypes:
+    [
+        public,
+        protected,
+        private,
+        externalizable appliesTo [ConcreteFunctionDefinition]
+    ];
 }
 ```
 
-The second is not quite the whole rule that `AccessLevelValidator` enforces —
-`externalizable` additionally requires a *non-property concrete* function with a package, primitive
-parameter types and a primitive return type. Applicability lists express the element-type part; the
-rest stays a hard-coded compiler rule. Worth stating explicitly in the design: **`appliesTo`
-replaces "wrong kind of element" checks, not arbitrary well-formedness checks.**
+`access` is the case that exercises the profile-level default *and* the annotation-level override:
+three of its stereotypes apply to classes and functions, while `externalizable` applies only to
+`ConcreteFunctionDefinition`.
+
+**`AccessLevelValidator` states that rule in terms of a hierarchy that has since changed, and should
+be rewritten against the current one** — a correction worth making on its own, before and
+independently of anything proposed here:
+
+- The `externalizable` branch tests `!(instance instanceof ConcreteFunctionDefinition) || instance
+  instanceof AbstractProperty`. **The second half is dead.** `Property extends AbstractProperty` and
+  `QualifiedProperty extends FunctionDefinition, AbstractProperty` — neither reaches
+  `ConcreteFunctionDefinition`, so the first half already excludes them. The test reduces to
+  `instanceof ConcreteFunctionDefinition`.
+- The other three levels are tested as "a `Class` or a `Function`, but not an `AbstractProperty`".
+  The intent was always classes and packageable functions; the subtraction was the only way to say
+  that when `PackageableFunction` did not yet exist. It does now, so the test should be
+  `instanceof Class || instanceof PackageableFunction`, which says the intended thing directly.
+
+That rewrite is also what makes the declarations above exact rather than approximate: once the
+validator says `Class || PackageableFunction`, `appliesTo: [Class, PackageableFunction]` is the same
+rule moved from Java into the profile.
+
+Neither example captures the whole of what the validator enforces: `externalizable` additionally
+requires a function with a name and package, primitive parameter types and a primitive return type,
+and no name conflict. Applicability lists express the element-type part; the rest stays a hard-coded
+compiler rule. Worth stating explicitly in the design: **`appliesTo` replaces "wrong kind of element"
+checks, not arbitrary well-formedness checks.**
+
+### 4.6 Negative type constraints — `appliesTo: [Class, Function, !Property]`?
+
+"A `Function` but not a property" is a real shape, and a subtraction is not always expressible as a
+union of named types. Proposed semantics would be the obvious ones: an element must match **at least
+one positive entry and no negative entry**.
+
+The case that suggests it, though, argues against it on inspection. The subtraction in
+`AccessLevelValidator` was never the intended rule — it was a workaround for a hierarchy that had no
+name for "function that is a packageable element" — and the two spellings are not equivalent:
+
+| Spelling | Admits |
+|---|---|
+| `[Class, Function, !AbstractProperty]` | `Class`, `ConcreteFunctionDefinition`, `NativeFunction`, **and `Column`** |
+| `[Class, PackageableFunction]` | `Class`, `ConcreteFunctionDefinition`, `NativeFunction` |
+
+They differ on exactly the type nobody was thinking about. `Column` — the relation DSL's column — is
+declared `Column<U,V> extends AnnotatedElement, Function<Object>`: annotatable, a `Function`, not a
+property, not packageable. It arrived long after the access rule was written and joined the
+subtractive reading silently, which is not what anyone intended: an access level on a relation column
+is meaningless.
+
+So the general lesson is about **which direction you prefer silent drift to run**:
+
+- **Subtraction is open.** "Every `Function` except properties" keeps meaning what it says as the
+  hierarchy grows — and automatically picks up new annotatable `Function` subtypes, whether or not
+  the annotation makes sense for them.
+- **Positive enumeration is closed at the named types.** It picks up new *subtypes of what it names*
+  (that is `instanceOf`, and it is what makes `[Function]` work at all), but never a new sibling
+  branch. A new element kind that should carry the annotation has to be added deliberately.
+
+A subtraction is the more robust spelling when the intent really is "all of K except X" and X is
+stable. It is the more dangerous one when, as here, the subtraction was standing in for a positive
+concept that the hierarchy had not yet grown.
+
+#### Options
+
+| | Option | Pros | Cons |
+|---|---|---|---|
+| **1-α** | **Positives only** (as specified in §4.1) | Monotone — adding an entry can only ever admit more elements; nothing to specify about precedence; renders as a checkbox list | Some intents need a type that does not exist yet in the hierarchy; if the hierarchy lacks the concept, the modeler must enumerate branches |
+| **1-β** | **`!T` entries in the same list** | Compact; expresses the subtractive intent directly; additive to the grammar | Needs a spec for negative-only lists and for how a negative interacts with the profile→annotation override; non-monotone, so a modeler must reason about an element's whole ancestry, not just the branch named |
+| **1-γ** | **A separate `doesNotApplyTo:` clause** | Precedence is explicit; a profile-level exclusion can be inherited by every annotation | Twice the grammar for the same power; two clauses to keep consistent |
+| **1-δ** | **Reserve `!` in the grammar, reject it for now** | Keeps the syntax available without committing to semantics | A reserved-but-unusable syntax is its own kind of confusing |
+
+**Recommendation: 1-α now.** The one concrete case that looked like it needed negation turns out to
+be a stale workaround with a positive spelling that is strictly better, and the `Column` example
+shows the choice between the two is a semantic decision about future subtypes rather than a syntax
+convenience. There is currently no use case for negation that survives inspection. It is additive if
+one appears — at which point the wrinkles below have to be settled, and they are easier to settle
+against a real example than in the abstract.
+
+If negation is adopted, three things need deciding:
+
+1. **Negative-only lists.** Does `appliesTo: [!Property]` mean "anything but a property", or is at
+   least one positive entry required? "Unrestricted minus the negatives" is the more useful reading
+   and the one that makes a profile-level `appliesTo: [!Property]` worth writing.
+2. **Override interaction.** §4.1 says an annotation's list replaces the profile's wholesale. With
+   negation, is a negative-only annotation list still a wholesale replacement (dropping the profile's
+   positives) or a refinement of the profile's list? Wholesale is consistent; refinement is what
+   people will expect.
+3. **Error messages.** "`my::Foo` is a `Property`, which `appliesTo` excludes" has to be
+   distinguishable from "no positive entry matched", or the diagnostic sends the reader to the wrong
+   half of the list.
 
 ---
 
@@ -788,7 +879,7 @@ Implementation facts that make this cheaper than it looks:
 | Unbind | **new** `ProfileUnbind` | Reset those stubs on source change, alongside `ElementWithStereotypesUnbind` |
 | Validate | `ProfileValidator` | Well-formedness of declarations: applicable-type entries resolve to types (§4.3 — nothing more); no lower bounds; `maxOccurrences > 0`; ownership rule (§6.5.3); degenerate-set warnings |
 | Validate | **new** `AnnotationUsageValidator` | The three usage rules, registered in `M3AntlrParser.getValidators()` |
-| Validate | `AccessLevelValidator` (62-88) | Delete the `default:` branch once `access.pure` declares exclusivity; keep `validateExplicitAccessLevel` |
+| Validate | `AccessLevelValidator` (62-88, 91-203) | Independently of this proposal, rewrite the element-type tests against the current hierarchy (§4.5): `instanceof ConcreteFunctionDefinition` for `externalizable`, `instanceof Class \|\| instanceof PackageableFunction` for the rest. Then, once `access.pure` carries the declarations, delete the `default:` branch (superseded by `exclusive`) and those element-type tests (superseded by `appliesTo`), keeping the rest of `validateExplicitAccessLevel` |
 | Platform | `access.pure`, `milestoning.pure`, `documentation.pure` | See §10 — separately from the machinery |
 
 **Dispatch nuance.** Stereotype rules must fire for things that are `ElementWithStereotypes` but not
@@ -849,10 +940,13 @@ only a public, `default`-safe API surface, per the API-stability rule in `CLAUDE
 - **Platform profile tightening should be a separate, announced change.** The machinery is
   behaviour-preserving; declaring `doc[0..1]` on `meta::pure::profiles::doc` is not — any model that
   currently attaches two `doc.doc` values stops compiling. Suggested sequencing:
+  0. Rewrite `AccessLevelValidator`'s element-type tests against the current hierarchy (§4.5). This
+     does not depend on anything else here and should land first, so that step 2 moves a rule that
+     is already correct rather than migrating a stale one.
   1. Land metamodel + grammar + validators (no platform profile changes). Nothing breaks.
   2. Declare `appliesTo` and `exclusive` on `access` and `temporal`; delete the corresponding
-     hard-coded validator branches. Behaviour changes only in that *more* things are rejected — plus the deliberate
-     relaxation that a repeated identical access stereotype is no longer an error.
+     hard-coded validator branches. Behaviour changes only in that *more* things are rejected — plus
+     the deliberate relaxation that a repeated identical access stereotype is no longer an error.
   3. Consider `doc[0..1]`, announced separately, after surveying real models.
 
 ---
@@ -906,3 +1000,4 @@ which is the concrete argument for eventually adopting 3C.
 | **Q8** | Keyword spellings: `appliesTo` vs `applicableTo`; `exclusive` vs `mutuallyExclusive` vs `atMostOne`. | `appliesTo` / `exclusive` — shortest that still read as English. |
 | **Q9** | Should there be a middle, clause-level `appliesTo` (`stereotypes appliesTo [Class]: [...]`) between profile-level and annotation-level? | No — two levels are enough; a third is easy to add later. |
 | **Q10** | Should `appliesTo` also constrain where a *profile-level* stereotype may be used, i.e. does the profile's own list apply to tags as well as stereotypes? | Yes, both — as stated in the brief. |
+| **Q11** | Negative type constraints (`appliesTo: [Class, Function, !Property]`)? | Positives only for now (§4.6). The case that suggested it was a stale workaround for a missing type, not a genuine subtraction, and the `Column` example shows the two readings differ on which future subtypes get admitted silently. Additive later if a real case appears. |
