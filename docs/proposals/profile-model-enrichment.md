@@ -499,7 +499,7 @@ support can be designed later with the whole-model pass it actually needs.
 | **R1** | All stereotypes of a profile mutually exclusive | Yes — `meta::pure::profiles::access`, `meta::pure::profiles::temporal` |
 | **R2** | A proper subset of a profile's stereotypes mutually exclusive | Expected |
 | **R3** | At most *N* of a set | Speculative |
-| **R4** | Annotation of profile Q incompatible with annotation of profile R | Speculative |
+| **R4** | Annotation of profile Q incompatible with annotation of profile R | Speculative — **deferred**, see §6.6 |
 | **R5** | The same for tags | Speculative |
 | **R6** | Mixed — a stereotype incompatible with a tag | Speculative |
 
@@ -541,8 +541,11 @@ Profile meta::pure::profiles::access
 ```
 
 - **+** Mirrors the natural-language statement "if A then not B" one-to-one.
-- **+** Cross-profile and cross-kind fall out for free (`incompatibleWith [other::Prof@x, other::Prof%t]`).
+- **+** Cross-kind falls out for free (`incompatibleWith [my::Prof%t]`), and cross-profile would too, subject to §6.6.
 - **+** No new profile-level clause; the declaration sits next to the annotation it constrains.
+- **+** **Anchored by construction.** The declaration hangs off an annotation the profile owns, so it
+  cannot express a constraint that binds elements never referencing the declaring profile — the
+  problem §6.6 has to rule out by hand for 3B and 3C.
 - **−** Quadratic in the common case. Four stereotypes need six pairs; the reader has to
   mentally close the relation to see it is a clique.
 - **−** Silent under-constraint: forget one pair and you get a *partial* clique with no diagnostic.
@@ -562,7 +565,7 @@ Profile my::Prof
     stereotypes: [a, b, c, d];
     tags: [t1, t2];
     exclusive: [a, b];                                   // R2
-    exclusive: [c, other::Prof@x];                       // R4
+    exclusive: [c, other::Prof@x];                       // R4 - deferred, see §6.6
     exclusive: [t1, t2];                                 // R5
     exclusive: [d, t1];                                  // R6
 }
@@ -576,6 +579,9 @@ Profile my::Prof
 - **−** The `exclusive stereotypes:` shorthand is *dynamic*: a stereotype added to the profile later
   silently joins the exclusive set. Usually what you want (it is what `access` wants); occasionally
   a surprise. The remedy is to switch that profile to the explicit set form; worth documenting.
+- **−** **A set can express a constraint that binds elements never referencing the declaring
+  profile** — `exclusive: [b1, A@a1, A@a2]` makes `a1` and `a2` exclusive on their own. This has to
+  be ruled out explicitly (§6.6), where 3A cannot state it in the first place.
 
 #### Option 3C — named groups with a bound
 
@@ -600,6 +606,8 @@ Profile my::Prof
 - **−** A new modeling concept ("group") to teach, on top of profile / stereotype / tag.
 - **−** Reuses multiplicity syntax, so it inherits the lower-bound question (§5.4) more visibly.
 - **−** More grammar and metamodel than the known use cases require.
+- **−** Same external-annotation hazard as 3B, and the bound makes the condition subtler: a group may
+  name at most `N` external annotations, not at most one (§6.6).
 
 #### Option 3D — profile-level modifier only
 
@@ -661,9 +669,9 @@ covers today's cases.
 
 | | R1 all | R2 subset | R3 at most N | R4 cross-profile | R5 tags | R6 mixed | New concepts | Impl cost |
 |---|---|---|---|---|---|---|---|---|
-| **3A** pairwise | ✔ but O(n²) | ✔ | ✘ | ✔ | ✔ | ✔ | 1 (relation) | Low |
-| **3B** exclusion sets | ✔ (1 word) | ✔ | via 3C | ✔ | ✔ | ✔ | 1 (set) | Low–medium |
-| **3C** named groups | ✔ (1 word) | ✔ | ✔ | ✔ | ✔ | ✔ | 2 (group, bound) | Medium |
+| **3A** pairwise | ✔ but O(n²) | ✔ | ✘ | deferred (§6.6); anchored by construction | ✔ | ✔ | 1 (relation) | Low |
+| **3B** exclusion sets | ✔ (1 word) | ✔ | via 3C | deferred (§6.6) | ✔ | ✔ | 1 (set) | Low–medium |
+| **3C** named groups | ✔ (1 word) | ✔ | ✔ | deferred (§6.6) | ✔ | ✔ | 2 (group, bound) | Medium |
 | **3D** profile modifier | ✔ | ✘ | ✘ | ✘ | kind-wide only | ✘ | 0–1 | Very low |
 | **3E** meta-annotations | ✔ | partly | ✘ | ✘ | ✔ | ✘ | 1 (annotatable annotations) | Medium (metamodel) |
 
@@ -672,21 +680,22 @@ covers today's cases.
 Adopt **3B now, designed so that 3C is a strictly compatible extension later**:
 
 - **Tier 1 (sugar, R1):** `exclusive` modifier on the `stereotypes:` / `tags:` clause.
-- **Tier 2 (R2, R4, R5, R6):** repeatable `exclusive: [ … ];` clause — at most one of the listed
-  annotations.
+- **Tier 2 (R2, R5, R6):** repeatable `exclusive: [ … ];` clause — at most one of the listed
+  annotations, all of which its own profile defines (§6.6 defers R4).
 - **Tier 3 (R3, better messages, deferred):** `groups: [ name[0..n]: [ … ] ];`. Tier 2 is exactly a
   Tier 3 group with no name and a bound of 1, so adding Tier 3 later adds syntax without changing
   any existing meaning.
 
-Rationale: Tier 1 covers every case we can actually name today at minimum cost; Tier 2 covers every
-case listed as speculative except R3; Tier 3 is where the sole missing requirement and the best
-tooling/error story live, and there is no use case yet to pay for it.
+Rationale: Tier 1 covers every case we can actually name today at minimum cost; Tier 2 covers the
+speculative cases that are expressible within a single profile. That leaves two deferred, each for
+its own reason — **R3** for want of a use case (Tier 3), and **R4** because it needs a metamodel
+change as well as a rule (§6.6).
 
-Because there is no expression-based escape hatch (§6.3), the deferral of Tier 3 is only acceptable
-*because* it is a strictly compatible extension: if R3 ever turns up, `exclusive: [a, b]` keeps
-meaning what it means and `groups:` is added beside it. This rules out picking 3A or 3D on cost
-grounds — under either, supporting R3 later means a second, unrelated mechanism rather than a
-generalisation of the first.
+Because there is no expression-based escape hatch (§6.3), both deferrals are only acceptable
+*because* they are strictly compatible extensions: if R3 turns up, `exclusive: [a, b]` keeps meaning
+what it means and `groups:` is added beside it; if R4 turns up, the same clause gains external
+members under the anchoring rule. This rules out picking 3A or 3D on cost grounds — under either,
+supporting R3 later means a second, unrelated mechanism rather than a generalisation of the first.
 
 ### 6.5 Semantics to pin down
 
@@ -695,13 +704,9 @@ generalisation of the first.
 2. **Symmetry.** Structural in 3B/3C. Under 3A the compiler must close the relation, and closure
    across profiles means profile R's declaration changes profile Q's meaning — one more reason to
    prefer sets.
-3. **The ownership rule.** *Every exclusion set must reference at least one annotation defined by
-   the declaring profile.* This is what preserves **P3**: an element can only violate "at most 1 of
-   S" by using ≥ 2 members of S, so the constraint is reachable from the profile of *any* member the
-   element uses — provided the declaring profile owns a member. A set declared in a profile owning
-   none of its members would be invisible to element validation and, worse, would not trigger
-   re-validation when edited, since `ProfileUnloaderWalk` walks the declaring profile's own
-   annotations' `modelElements`. Make it a compile error on the profile.
+3. **No external annotations** — see §6.6. *An exclusion set may name only annotations defined by the
+   declaring profile.* Compile error otherwise. This defers R4; when it is wanted, the rule that
+   replaces this one is the anchoring rule, `|Ext| ≤ N`.
 4. **Degenerate sets.** `|S| < 2`, or bound ≥ `|S|`: harmless no-ops; warn.
 5. **Overlapping sets.** Allowed; each evaluated independently; report the first violation with
    deterministic ordering (source order) so error messages are stable.
@@ -709,6 +714,115 @@ generalisation of the first.
 7. **No inheritance.** Annotations are not inherited; the milestoning hierarchy rules
    ("temporal stereotypes must be applied at all levels") are a genuinely different, hierarchy-aware
    rule and stay in `MilestoningClassValidator`.
+
+### 6.6 External annotations in an exclusion set
+
+Cross-profile exclusion (R4) raises two independent problems: one of meaning, which a validation rule
+fixes, and one of incremental compilation, which needs a metamodel change. Together they are the
+reason to leave external annotations out of the first version.
+
+#### The problem of meaning
+
+A set-based mechanism can express something a pairwise one cannot, and it is not something we want:
+
+```pure
+Profile A { stereotypes: [a1, a2]; }
+Profile B { stereotypes: [b1, b2]; exclusive: [b1, A@a1, A@a2]; }
+```
+
+`B` here declares `a1` and `a2` mutually exclusive **for elements that never mention `B` at all**.
+An element carrying `<<A.a1, A.a2>>` violates the set without using a single annotation of `B`.
+
+That is undesirable on its face — a profile should not be able to reach into another profile's
+semantics — and it breaks **P3** in three separate ways:
+
+- **Undetectable.** Validation of an element gathers constraints from the profiles of the annotations
+  the element uses. An element with only `a1` and `a2` reaches `A`, which declares nothing. The
+  violation is never seen.
+- **Not re-validated.** `ProfileUnloaderWalk` walks the changed profile's own annotations'
+  `modelElements`. Editing `B` does not re-walk elements that use no annotation of `B`, so even a
+  full recompile of `B` would not revisit them.
+- **Inconsistent.** Where the element happens to carry some *other* annotation of `B` — say `b2` —
+  `B`'s constraints do get gathered and the same `a1`+`a2` combination is rejected. Whether the model
+  compiles would depend on an unrelated annotation being present.
+
+#### The condition
+
+Let `S` be an exclusion set declared in `P` with bound `N`, and let `Ext` be the members of `S` that
+`P` does not define. A violating element uses `N + 1` distinct members of `S`. The constraint is
+reachable exactly when every such combination includes a member `P` defines, which holds precisely
+when:
+
+> **`|Ext| ≤ N`**
+
+For `exclusive:` (`N = 1`) that is *at most one external annotation*. `exclusive: [b1, A@a1]` is
+fine — `B` saying its own `b1` is incompatible with `A`'s `a1`, which is R4 and the thing worth
+having. `exclusive: [b1, A@a1, A@a2]` is rejected. Under Tier 3 the same condition scales with the
+bound.
+
+The rule earns its keep twice over, because reachability and propriety turn out to be the same
+condition: an anchored constraint can only bite on an element that references the declaring profile,
+so **whether a model compiles never depends on which other profiles happen to be loaded**. An
+unanchored set would make an element using only `A` valid or invalid according to whether some
+unrelated `B` was on the classpath.
+
+#### The second cost: annotations are not `Referenceable`
+
+Anchoring fixes the semantics, but *any* external annotation — under 3A, 3B or 3C alike — creates a
+second problem that anchoring does not touch. `B`'s exclusion set holds a reference to `A@a1`. What
+re-processes `B` when `A` changes?
+
+Nothing, today. The only back-link an annotation has is `Annotation.modelElements`, populated by
+`AnnotatedElementProcessor` with the elements that *carry* it, and walked by `ProfileUnloaderWalk`.
+`B` does not carry `a1`; it mentions it. So deleting `a1` from `A`, or deleting `A` outright, would
+leave `B`'s set holding a stale reference with nothing to invalidate it.
+
+The mechanism that exists for exactly this is `ReferenceUsage`:
+`Referenceable.referenceUsages` records who refers to an instance, and `ReferenceableUnloaderWalk`
+walks them — `referenceable._referenceUsages().forEach(r -> matcher.fullMatch(r._ownerCoreInstance(), state))`
+— re-processing every referrer when the referent changes. `PackageableElement extends Referenceable`,
+so a profile is covered. **`Annotation extends Any` only, so stereotypes and tags are not.**
+
+Making them `Referenceable` is a non-negligible change:
+
+- `m3.pure` bootstrap: `Annotation` gains a generalisation and the inherited `referenceUsages`
+  property, in raw M4 syntax.
+- The profile processor must create the usages, and `ProfileUnbind` must clean them up via
+  `Shared.cleanUpReferenceUsage`, matching the pattern every other referring processor follows.
+- `legend-engine` constructs `Root_meta_pure_metamodel_extension_Stereotype_Impl` and `…Tag_Impl`
+  directly in `ProfileCompilerExtension`; those paths have to keep the new invariant.
+- `AbstractCompiledStateIntegrityTest.testReferenceUsages` and its neighbours check reference-usage
+  consistency across the whole compiled graph, so this has to be right rather than approximately
+  right.
+- Every stereotype and tag in every model gains a back-link collection, and every cross-profile
+  mention allocates a `ReferenceUsage` instance.
+
+That is a real piece of work to enable a requirement (R4) for which there is **no use case on hand**.
+
+#### Recommendation and alternatives
+
+**Recommend 6-b: no external annotations in exclusion sets, for now.** An exclusion set may name only
+annotations its own profile defines. R1, R2, R3, R5 and R6 are all expressible within one profile and
+are unaffected; only R4 is deferred, and it is the one requirement nobody has needed yet.
+
+The grammar keeps `stereotypeReference` / `tagReference` in `annotationReference` — they are still
+wanted for disambiguating a name a profile defines as both a stereotype and a tag — and validation
+rejects a reference to another profile with a message that names the restriction. That way lifting it
+later is a validation change, not a grammar change.
+
+| | Option | Verdict |
+|---|---|---|
+| **6-b** | **No external annotations** — exclusion sets are same-profile only | **Recommended now.** Sound, one sentence to state, and defers the `Referenceable` work until something needs it |
+| **6-a** | **The anchoring rule** (`\|Ext\| ≤ N`) | **The design to adopt when R4 is wanted**, together with the `Referenceable` change. Keeps R4 in its useful form and keeps the surface syntax meaning what it says |
+| **6-c** | **Scoped semantics** — the set's *owned* members act as a trigger; elements using none of them are not checked | Sound and strictly more expressive: `exclusive: [b1, A@a1, A@a2]` would mean "if `b1`, then neither `a1` nor `a2`". But the surface syntax stops meaning what it says — a set called "at most one of these three" that ignores two of them together |
+| **6-d** | **A directed form** — `b1 excludes [A@a1, A@a2];`, anchored on an owned annotation by construction | Honest and local, and the compact way to say "`b1` excludes everything in `A`", which 6-a can only say one clause at a time. It is Option 3A's shape, reintroduced for the cross-profile case only. Same `Referenceable` prerequisite |
+| **6-e** | **Index constraints on their member annotations**, so `A`'s annotations carry `B`'s constraint | Fixes detection and nothing else. The propriety objection stands, and it makes an element's validity depend on the loaded profile set — the worst of the three failures above rather than a fix for it |
+
+Note what this says about **3A**: a pairwise `incompatibleWith` declaration hangs off an annotation
+the profile owns, so it is anchored by construction and cannot express the bad case at all. That is a
+genuine structural advantage — but it does not exempt 3A from the `Referenceable` prerequisite, since
+`incompatibleWith [other::Prof@x]` is an external reference like any other. Under 6-b, 3A's
+cross-profile form is deferred on the same terms.
 
 ---
 
@@ -747,7 +861,7 @@ Profile my::Prof
     ];
     tags: [owner[0..1], reviewer];
     exclusive: [draft, published];
-    exclusive: [audited, other::Governance@unaudited];
+    exclusive: [audited, reviewer];                     // R6, mixed stereotype and tag
 }
 ```
 
@@ -805,6 +919,9 @@ Notes and gotchas:
   **ambiguous → error**, fixable with the explicit `my::Prof@name` / `my::Prof%name` form. (Nothing
   today prevents a profile from having a same-named stereotype and tag, and this proposal should not
   start.)
+- The qualified forms are therefore in the grammar for *disambiguation within the declaring profile*.
+  A reference naming any other profile parses and is then rejected by validation (§6.6), so lifting
+  that restriction when R4 is wanted is a validation change rather than a grammar change.
 - Changing `stereotypeDefinitions? tagDefinitions?` to `profileElement*` makes the two clauses
   order-independent and repeatable — which **aligns legend-pure with legend-engine**, whose grammar
   already allows this. Strict superset, so backward compatible. Decide whether repeated clauses of
@@ -877,7 +994,7 @@ Implementation facts that make this cheaper than it looks:
 | Parse | `AntlrContextToM3CoreInstance.profile/buildStereoTypes/buildTags` (3432-3483) | Build the new values; create `ImportStub`s for type and annotation references |
 | Post-process | **new** `ProfileProcessor` | Resolve the profile's stubs (there is no processor for `Profile` today) |
 | Unbind | **new** `ProfileUnbind` | Reset those stubs on source change, alongside `ElementWithStereotypesUnbind` |
-| Validate | `ProfileValidator` | Well-formedness of declarations: applicable-type entries resolve to types (§4.3 — nothing more); no lower bounds; `maxOccurrences > 0`; ownership rule (§6.5.3); degenerate-set warnings |
+| Validate | `ProfileValidator` | Well-formedness of declarations: applicable-type entries resolve to types (§4.3 — nothing more); no lower bounds; `maxOccurrences > 0`; no external annotations in exclusion sets (§6.6); degenerate-set warnings |
 | Validate | **new** `AnnotationUsageValidator` | The three usage rules, registered in `M3AntlrParser.getValidators()` |
 | Validate | `AccessLevelValidator` (62-88, 91-203) | Independently of this proposal, rewrite the element-type tests against the current hierarchy (§4.5): `instanceof ConcreteFunctionDefinition` for `externalizable`, `instanceof Class \|\| instanceof PackageableFunction` for the rest. Then, once `access.pure` carries the declarations, delete the `default:` branch (superseded by `exclusive`) and those element-type tests (superseded by `appliesTo`), keeping the rest of `validateExplicitAccessLevel` |
 | Platform | `access.pure`, `milestoning.pure`, `documentation.pure` | See §10 — separately from the machinery |
@@ -895,7 +1012,8 @@ one validator class registered twice with a mode:
   an `ElementWithStereotypes` (otherwise the first registration already covered it).
 
 **Incremental compilation** needs no new machinery: `ProfileUnloaderWalk` already re-walks every
-model element of every annotation of a changed profile, which — given the ownership rule — is
+model element of every annotation of a changed profile, which — with exclusion sets confined to a
+single profile (§6.6) — is
 exactly the set of elements whose validity can change.
 
 ### 9.2 legend-engine
@@ -977,7 +1095,7 @@ which is the concrete argument for eventually adopting 3C.
 
 | Layer | Location | Coverage |
 |---|---|---|
-| Profile well-formedness | `m3/tests/validation/TestProfileValidation.java` | Applicable-type entry that is not a type; lower bound rejected; `maxOccurrences` ≤ 0; ownership rule; ambiguous bare annotation reference; degenerate set warning |
+| Profile well-formedness | `m3/tests/validation/TestProfileValidation.java` | Applicable-type entry that is not a type; lower bound rejected; `maxOccurrences` ≤ 0; exclusion set naming another profile's annotation rejected; ambiguous bare annotation reference; degenerate set warning |
 | Grammar | `m3/tests/elements/profile/TestProfile.java` | Every clause, all orders, repeated clauses, plain profiles unchanged; new keywords still usable as identifiers |
 | Usage | new `TestAnnotationApplicability` / `TestAnnotationOccurrence` / `TestAnnotationExclusivity` | Positive/negative per feature; profile-level vs annotation-level override; **subtype acceptance through a supertype that is not itself annotatable** — `appliesTo: [Function]` accepting both function kinds, `appliesTo: [Type]` accepting both a class and an enumeration (§4.3); repetition not counted for F3 but counted for F2; cross-profile and mixed sets |
 | Existing behaviour | `m3/tests/validation/TestAccess.java` | Update the multi-access-stereotype expectations when step 2 of §10 lands |
@@ -1001,3 +1119,4 @@ which is the concrete argument for eventually adopting 3C.
 | **Q9** | Should there be a middle, clause-level `appliesTo` (`stereotypes appliesTo [Class]: [...]`) between profile-level and annotation-level? | No — two levels are enough; a third is easy to add later. |
 | **Q10** | Should `appliesTo` also constrain where a *profile-level* stereotype may be used, i.e. does the profile's own list apply to tags as well as stereotypes? | Yes, both — as stated in the brief. |
 | **Q11** | Negative type constraints (`appliesTo: [Class, Function, !Property]`)? | Positives only for now (§4.6). The case that suggested it was a stale workaround for a missing type, not a genuine subtraction, and the `Column` example shows the two readings differ on which future subtypes get admitted silently. Additive later if a real case appears. |
+| **Q12** | Cross-profile exclusion (R4) — defer it, or pay for it now? | Defer (§6.6). It needs both a validation rule and `Annotation extends Referenceable`, and there is no use case on hand. When it is wanted, adopt the anchoring rule (6-a), plus 6-d if "this stereotype excludes everything in profile A" turns out to be a real want. |
