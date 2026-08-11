@@ -210,17 +210,20 @@ An element carrying the annotation must be an instance of at least one type in t
 (`Instance.instanceOf`, so generalisation is honoured: `appliesTo: [Function]` accepts both
 `ConcreteFunctionDefinition` and `NativeFunction`). Otherwise: compilation error.
 
-### 4.2 What is a "type" here — three readings
+Note what that test does *not* say: nothing is required of the listed type itself, only of the
+element. `Function` is a legitimate entry even though a `Function` cannot itself carry an annotation
+— see §4.3.
+
+### 4.2 What is a "type" here — two readings
 
 | | Option | Pros | Cons |
 |---|---|---|---|
 | **1-i** | **Metamodel type references** (`Class`, `Property`, `Enumeration`, `ConcreteFunctionDefinition`, `Measure`, `Mapping`, `Database`, …) | Open-ended: DSL element types work with no further change; uses `instanceOf`, which modelers already understand; reuses `ImportStub` resolution as-is | Introduces a source dependency from profiles to types (new for profiles); `Class` is `Class<T>`, so the grammar must accept a bare raw type; invites the M1/M3 confusion below |
 | **1-ii** | **A closed `ElementKind` enumeration** (`ElementKind.Class`, `ElementKind.Property`, …) | Trivially renderable in Studio as a checkbox list; no new dependency edge; no bootstrap ordering questions | Not extensible — every new DSL element type needs a new enum value in the platform; loses subtype semantics (`Function` covering both function kinds) |
-| **1-iii** | **1-i restricted to annotatable types** | Everything from 1-i, plus a declaration that can never match is rejected up front | One more validation rule to specify (error or warning — see Q4) |
 
-**Recommendation: 1-iii.** Reference real types; additionally validate that each listed type is a
-subtype of `ElementWithStereotypes` (for stereotypes) or `ElementWithTaggedValues` (for tags), since
-anything else makes the annotation unusable.
+**Recommendation: 1-i.** Reference real types. The only well-formedness check on the list is that
+each entry resolves to a `Type` — `appliesTo: [my::someFunction]` is an error, `appliesTo: [Any]` is
+a legal way to spell "unrestricted".
 
 Two notes to put in the user documentation:
 
@@ -232,7 +235,41 @@ Two notes to put in the user documentation:
 Bootstrap ordering is fine: `m3.pure` is loaded before `access.pure` / `milestoning.pure`, so
 platform profiles can reference M3 types.
 
-### 4.3 Grammar options
+### 4.3 Why the list is *not* restricted to annotatable types
+
+It is tempting to add one more check — that every listed type is a subtype of
+`ElementWithStereotypes` (for stereotypes) or `ElementWithTaggedValues` (for tags) — on the grounds
+that anything else makes the annotation unusable. **That check is wrong**, and it is worth recording
+why, because it will be proposed again.
+
+Pure has multiple inheritance, so `T` not being annotated-element-derived says nothing about its
+subtypes. This is not a corner case; it is the shape of the M3 hierarchy at exactly the points a
+modeler will want to name:
+
+| Type | Is an `AnnotatedElement`? | Annotatable subtypes | Non-annotatable subtypes |
+|---|---|---|---|
+| `Function<T>` | **No** — `extends Referenceable` | `ConcreteFunctionDefinition`, `NativeFunction` (via `PackageableFunction → PackageableElement → ModelElement`) | `LambdaFunction` |
+| `Type` | **No** — `extends Any` | `Class`, `Enumeration`, `PrimitiveType`, `Measure` (via `PackageableElement`) | `Unit` |
+| `DataType` | **No** — `extends Type` | `Enumeration`, `PrimitiveType`, `Measure` | `Unit` |
+
+So the check would reject `appliesTo: [Function]` and `appliesTo: [Type]` — two of the most natural
+things anyone would write, and the first is this document's own worked example. `AbstractProperty`
+makes the same point from the other direction: it reaches `AnnotatedElement` through `ModelElement`,
+not through `Function`, so which of a type's several supertypes carries annotatability is not
+something a modeler should have to know.
+
+The general argument is stronger than the counterexamples, and it is **P3** again: *the subtype set
+is open*. A repository compiled later can declare `U extends T, AnnotatedElement`, so "no annotatable
+subtype of `T` exists" is not a stable property of the profile's own compilation unit. Computing it
+over the currently-known graph would make a profile's validity depend on which repositories happen
+to have been compiled, which is exactly what the locality principle exists to prevent — and would
+misfire as a warning for the same reason.
+
+The cost of dropping the check is a declaration that can never match. That is self-punishing and
+locally diagnosed: every attempt to use the annotation fails with a message naming the element's
+actual type against the declared list. No global reasoning required.
+
+### 4.4 Grammar options
 
 All three examples express the same thing: the profile applies to classes and properties by default,
 but stereotype `internal` applies only to functions.
@@ -290,7 +327,7 @@ most two inline modifiers and stays on one line. If we expect a steady stream of
 per-annotation attributes, 1B is the more honest choice; 1A can be migrated into 1B later
 (1A becomes sugar for a single-property body) without breaking models.
 
-### 4.4 Worked examples
+### 4.5 Worked examples
 
 ```pure
 Profile meta::pure::profiles::temporal
@@ -756,7 +793,7 @@ Implementation facts that make this cheaper than it looks:
 | Parse | `AntlrContextToM3CoreInstance.profile/buildStereoTypes/buildTags` (3432-3483) | Build the new values; create `ImportStub`s for type and annotation references |
 | Post-process | **new** `ProfileProcessor` | Resolve the profile's stubs (there is no processor for `Profile` today) |
 | Unbind | **new** `ProfileUnbind` | Reset those stubs on source change, alongside `ElementWithStereotypesUnbind` |
-| Validate | `ProfileValidator` | Well-formedness of declarations: applicable types are annotatable; no lower bounds; `maxOccurrences > 0`; ownership rule (§6.5.3); degenerate-set warnings |
+| Validate | `ProfileValidator` | Well-formedness of declarations: applicable-type entries resolve to types (§4.3 — nothing more); no lower bounds; `maxOccurrences > 0`; ownership rule (§6.5.3); degenerate-set warnings |
 | Validate | **new** `AnnotationUsageValidator` | The three usage rules, registered in `M3AntlrParser.getValidators()` |
 | Validate | `AccessLevelValidator` (62-88) | Delete the `default:` branch once `access.pure` declares exclusivity; keep `validateExplicitAccessLevel` |
 | Platform | `access.pure`, `milestoning.pure`, `documentation.pure` | See §10 — separately from the machinery |
@@ -853,9 +890,9 @@ which is the concrete argument for eventually adopting 3C.
 
 | Layer | Location | Coverage |
 |---|---|---|
-| Profile well-formedness | `m3/tests/validation/TestProfileValidation.java` | Non-annotatable applicable type; lower bound rejected; `maxOccurrences` ≤ 0; ownership rule; ambiguous bare annotation reference; degenerate set warning |
+| Profile well-formedness | `m3/tests/validation/TestProfileValidation.java` | Applicable-type entry that is not a type; lower bound rejected; `maxOccurrences` ≤ 0; ownership rule; ambiguous bare annotation reference; degenerate set warning |
 | Grammar | `m3/tests/elements/profile/TestProfile.java` | Every clause, all orders, repeated clauses, plain profiles unchanged; new keywords still usable as identifiers |
-| Usage | new `TestAnnotationApplicability` / `TestAnnotationOccurrence` / `TestAnnotationExclusivity` | Positive/negative per feature; profile-level vs annotation-level override; subtype acceptance (`Function` accepting both function kinds); repetition not counted for F3 but counted for F2; cross-profile and mixed sets |
+| Usage | new `TestAnnotationApplicability` / `TestAnnotationOccurrence` / `TestAnnotationExclusivity` | Positive/negative per feature; profile-level vs annotation-level override; **subtype acceptance through a supertype that is not itself annotatable** — `appliesTo: [Function]` accepting both function kinds, `appliesTo: [Type]` accepting `Class` and `Enumeration` (§4.3); repetition not counted for F3 but counted for F2; cross-profile and mixed sets |
 | Existing behaviour | `m3/tests/validation/TestAccess.java` | Update the multi-access-stereotype expectations when step 2 of §10 lands |
 | Incremental | `m3/tests/incremental/profile/` | Edit/delete a referenced type; edit a profile's constraints and confirm dependent elements are re-validated; delete a cross-referenced profile |
 | Engine | grammar round-trip + compiler tests | Parse → protocol → compose → parse fidelity; compiler rejects the same models legend-pure rejects |
@@ -869,7 +906,7 @@ which is the concrete argument for eventually adopting 3C.
 | **Q1** | Does an annotation-level `appliesTo` **override** the profile-level list (as stated in the brief) or **intersect** with it? | Override, per the brief. Optionally lint when the annotation list is not a subset, since that is usually a mistake. |
 | **Q2** | Lower bounds / required annotations? | Out of scope (§5.4); reserve the syntax, reject with a clear message. |
 | **Q3** | Occurrence limits on stereotypes, and/or a global "duplicate stereotype" diagnostic? | Allow the syntax on stereotypes; make bare duplicates a warning, not an error, initially. |
-| **Q4** | A declaration that can never match (non-annotatable applicable type, bound ≥ set size) — error or warning? | Error for non-annotatable types (certainly a mistake); warning for degenerate bounds. |
+| **Q4** | Degenerate declarations (bound ≥ set size, single-member exclusion set) — error, warning, or silent? | Warning. Note that the other "can never match" case, an applicable-type list nothing could satisfy, is deliberately *not* diagnosed — see §4.3. |
 | **Q5** | Tier 3 named groups now, or later? | Later, but only as the compatible extension described in §6.4 — with no expression fallback, R3 has no other route. Doing it now is worth it if a Studio single-select UI is wanted in the same release. |
 | **Q6** | Repeated `stereotypes:` clauses in one profile — merge or error? | Merge, matching legend-engine's existing behaviour. |
 | **Q7** | `AnnotationConstraint.stereotypes`/`tags` split, or a unified `annotations : Annotation[*]`? | Unified reads better and costs one line in `M3ToJavaGenerator`; the split needs no generator change. Weak preference for unified. |
