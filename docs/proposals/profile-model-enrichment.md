@@ -118,6 +118,14 @@ stereotypeReference: qualifiedName AT identifier      // my::Prof@public
 tagReference:        qualifiedName PERCENT identifier // my::Prof%doc
 ```
 
+This proposal leaves both rules alone and **does not** reuse them for the annotation references it
+introduces; §7.2 and §7.3 give the reasons. The *use*-site rules are the ones it takes after:
+
+```antlr
+stereotype:  qualifiedName DOT identifier                                            // <<my::Prof.public>>
+taggedValue: qualifiedName DOT identifier EQUAL (MULTILINE_STRING | STRING (PLUS STRING)*)  // {my::Prof.doc = 'x'}
+```
+
 `legend-engine` has its own copy of this grammar
 ([`DomainParserGrammar.g4:102-112`](../../../legend-engine/legend-engine-core/legend-engine-core-base/legend-engine-core-language-pure/legend-engine-language-pure-grammar/src/main/antlr4/org/finos/legend/engine/language/pure/grammar/from/antlr4/domain/DomainParserGrammar.g4))
 which differs slightly: it allows the two clauses in any order and repeated. Any grammar change has
@@ -549,7 +557,7 @@ Profile meta::pure::profiles::access
 ```
 
 - **+** Mirrors the natural-language statement "if A then not B" one-to-one.
-- **+** Cross-kind falls out for free (`incompatibleWith [my::Prof%t]`), and cross-profile would too, subject to §6.6.
+- **+** Cross-kind falls out for free (`incompatibleWith [tag:t]`), and cross-profile would too, subject to §6.6.
 - **+** No new profile-level clause; the declaration sits next to the annotation it constrains.
 - **+** **Anchored by construction.** The declaration hangs off an annotation the profile owns, so it
   cannot express a constraint that binds elements never referencing the declaring profile — the
@@ -573,7 +581,7 @@ Profile my::Prof
     stereotypes: [a, b, c, d];
     tags: [t1, t2];
     exclusive: [a, b];                                   // R2
-    exclusive: [c, other::Prof@x];                       // R4 - deferred, see §6.6
+    exclusive: [c, other::Prof.x];                       // R4 - deferred, see §6.6
     exclusive: [t1, t2];                                 // R5
     exclusive: [d, t1];                                  // R6
 }
@@ -588,7 +596,7 @@ Profile my::Prof
   silently joins the exclusive set. Usually what you want (it is what `access` wants); occasionally
   a surprise. The remedy is to switch that profile to the explicit set form; worth documenting.
 - **−** **A set can express a constraint that binds elements never referencing the declaring
-  profile** — `exclusive: [b1, A@a1, A@a2]` makes `a1` and `a2` exclusive on their own. This has to
+  profile** — `exclusive: [b1, A.a1, A.a2]` makes `a1` and `a2` exclusive on their own. This has to
   be ruled out explicitly (§6.6), where 3A cannot state it in the first place.
 
 #### Option 3C — named groups with a bound
@@ -748,7 +756,7 @@ A set-based mechanism can express something a pairwise one cannot, and it is not
 
 ```pure
 Profile A { stereotypes: [a1, a2]; }
-Profile B { stereotypes: [b1, b2]; exclusive: [b1, A@a1, A@a2]; }
+Profile B { stereotypes: [b1, b2]; exclusive: [b1, A.a1, A.a2]; }
 ```
 
 `B` here declares `a1` and `a2` mutually exclusive **for elements that never mention `B` at all**.
@@ -776,9 +784,9 @@ when:
 
 > **`|Ext| ≤ N`**
 
-For `exclusive:` (`N = 1`) that is *at most one external annotation*. `exclusive: [b1, A@a1]` is
+For `exclusive:` (`N = 1`) that is *at most one external annotation*. `exclusive: [b1, A.a1]` is
 fine — `B` saying its own `b1` is incompatible with `A`'s `a1`, which is R4 and the thing worth
-having. `exclusive: [b1, A@a1, A@a2]` is rejected. Under Tier 3 the same condition scales with the
+having. `exclusive: [b1, A.a1, A.a2]` is rejected. Under Tier 3 the same condition scales with the
 bound.
 
 The rule earns its keep twice over, because reachability and propriety turn out to be the same
@@ -790,7 +798,7 @@ unrelated `B` was on the classpath.
 #### The second cost: annotations are not `Referenceable`
 
 Anchoring fixes the semantics, but *any* external annotation — under 3A, 3B or 3C alike — creates a
-second problem that anchoring does not touch. `B`'s exclusion set holds a reference to `A@a1`. What
+second problem that anchoring does not touch. `B`'s exclusion set holds a reference to `A.a1`. What
 re-processes `B` when `A` changes?
 
 Nothing, today. The only back-link an annotation has is `Annotation.modelElements`, populated by
@@ -826,23 +834,25 @@ That is a real piece of work to enable a requirement (R4) for which there is **n
 annotations its own profile defines. R1, R2, R3, R5 and R6 are all expressible within one profile and
 are unaffected; only R4 is deferred, and it is the one requirement nobody has needed yet.
 
-The grammar keeps `stereotypeReference` / `tagReference` in `annotationReference` — they are still
-wanted for disambiguating a name a profile defines as both a stereotype and a tag — and validation
-rejects a reference to another profile with a message that names the restriction. That way lifting it
-later is a validation change, not a grammar change.
+The grammar keeps the qualified reference form `other::Prof.x` in `annotationReference` (§7.3), and
+validation rejects a reference naming any profile but the declaring one, with a message that names
+the restriction. That way lifting it later is a validation change, not a grammar change in two
+repositories. The form is not carried solely for R4's sake either: the same rule provides the
+`stereotype:` / `tag:` disambiguation a profile needs for its own overlapping names (§7.2), so it
+earns its place whether or not R4 ever lands.
 
 | | Option | Verdict |
 |---|---|---|
 | **6-b** | **No external annotations** — exclusion sets are same-profile only | **Recommended now.** Sound, one sentence to state, and defers the `Referenceable` work until something needs it |
 | **6-a** | **The anchoring rule** (`\|Ext\| ≤ N`) | **The design to adopt when R4 is wanted**, together with the `Referenceable` change. Keeps R4 in its useful form and keeps the surface syntax meaning what it says |
-| **6-c** | **Scoped semantics** — the set's *owned* members act as a trigger; elements using none of them are not checked | Sound and strictly more expressive: `exclusive: [b1, A@a1, A@a2]` would mean "if `b1`, then neither `a1` nor `a2`". But the surface syntax stops meaning what it says — a set called "at most one of these three" that ignores two of them together |
-| **6-d** | **A directed form** — `b1 excludes [A@a1, A@a2];`, anchored on an owned annotation by construction | Honest and local, and the compact way to say "`b1` excludes everything in `A`", which 6-a can only say one clause at a time. It is Option 3A's shape, reintroduced for the cross-profile case only. Same `Referenceable` prerequisite |
+| **6-c** | **Scoped semantics** — the set's *owned* members act as a trigger; elements using none of them are not checked | Sound and strictly more expressive: `exclusive: [b1, A.a1, A.a2]` would mean "if `b1`, then neither `a1` nor `a2`". But the surface syntax stops meaning what it says — a set called "at most one of these three" that ignores two of them together |
+| **6-d** | **A directed form** — `b1 excludes [A.a1, A.a2];`, anchored on an owned annotation by construction | Honest and local, and the compact way to say "`b1` excludes everything in `A`", which 6-a can only say one clause at a time. It is Option 3A's shape, reintroduced for the cross-profile case only. Same `Referenceable` prerequisite |
 | **6-e** | **Index constraints on their member annotations**, so `A`'s annotations carry `B`'s constraint | Fixes detection and nothing else. The propriety objection stands, and it makes an element's validity depend on the loaded profile set — the worst of the three failures above rather than a fix for it |
 
 Note what this says about **3A**: a pairwise `incompatibleWith` declaration hangs off an annotation
 the profile owns, so it is anchored by construction and cannot express the bad case at all. That is a
 genuine structural advantage — but it does not exempt 3A from the `Referenceable` prerequisite, since
-`incompatibleWith [other::Prof@x]` is an external reference like any other. Under 6-b, 3A's
+`incompatibleWith [other::Prof.x]` is an external reference like any other. Under 6-b, 3A's
 cross-profile form is deferred on the same terms.
 
 ### 6.7 Incompatibility between profiles (R7)
@@ -871,7 +881,7 @@ to arise for the same underlying reason: the only thing named is a profile.
   of `A` *and* an annotation of `B`. Whichever profile the declaration lives in, the element
   references that profile, so validation of the element reaches the declaration. There is no
   unanchored form to rule out: every well-formed declaration satisfies §6.6's `|Ext| ≤ N` identically
-  (`N = 1`, one external profile per pair). Contrast `exclusive: [b1, A@a1, A@a2]`, whose entire
+  (`N = 1`, one external profile per pair). Contrast `exclusive: [b1, A.a1, A.a2]`, whose entire
   problem was that a violating element need never mention `B`.
 - **Incremental compilation already works.** `ProfileUnloaderWalk` re-walks the changed profile's
   annotations' `modelElements`. Every element that can violate carries an annotation of the declaring
@@ -1040,10 +1050,9 @@ Profile my::Review
 }
 ```
 
-**The one new context where the overlap bites is an `exclusive:` set**, whose members are bare
-identifiers resolved against the declaring profile. `signOff` alone is ambiguous there and is an
-error; the qualified forms that already exist in the grammar resolve it, and both kinds can appear in
-the same set:
+**The one new context where the overlap bites is an `exclusive:` set**, whose members are bare names
+resolved against the declaring profile. `signOff` alone is ambiguous there and is an error; a
+`stereotype:` or `tag:` prefix resolves it, and both kinds can appear in the same set:
 
 ```pure
 Profile my::Review
@@ -1051,8 +1060,8 @@ Profile my::Review
     stereotypes: [reviewed, signOff];
     tags: [signOff[0..1], reviewer];
 
-    exclusive: [reviewed, my::Review%signOff];   // stereotype 'reviewed' vs the TAG 'signOff'
-    exclusive: [my::Review@signOff, reviewer];   // the STEREOTYPE 'signOff' vs tag 'reviewer'
+    exclusive: [reviewed, tag:signOff];          // stereotype 'reviewed' vs the TAG 'signOff'
+    exclusive: [stereotype:signOff, reviewer];   // the STEREOTYPE 'signOff' vs tag 'reviewer'
 }
 ```
 
@@ -1061,10 +1070,23 @@ Under those two sets, the `my::Trade` declaration above still compiles: it carri
 `<<my::Review.reviewed>>` to it would violate the first set, and adding
 `{my::Review.reviewer = 'x'}` would violate the second.
 
-This is why the qualified reference forms earn their place in `annotationReference` even under 6-b,
-where no set may name another profile's annotations (§6.6): their first job is disambiguation
-*within* the declaring profile, and only their second is the cross-profile case that is deferred.
-It also means the ambiguity error has to name the fix — see §11.
+Three decisions are folded into that spelling, and §7.3 gives the grammar:
+
+- **The profile is not named.** An annotation of the declaring profile is referred to by its own name.
+  Requiring `my::Review%signOff` inside `my::Review` would be redundant, and it would make the common
+  case pay for the deferred cross-profile one.
+- **The kind is named by a word, not a sigil.** `%` means "tag" only in `ImportStub` id-paths and in
+  expression position; nothing about it is guessable. `stereotype:` and `tag:` are, and this construct
+  is rare enough — it appears only when a profile has an overlapping name — that guessability is worth
+  more than keystrokes. `st:` is a reasonable synonym to add later if the long form grates; adding one
+  costs a line of validation under §7.3's approach and no grammar change.
+- **A qualified reference uses the dot form**, `other::Prof.signOff`, matching what modelers type at
+  use sites — not `other::Prof@signOff`, which they meet only in expression position. So the prefix and
+  the qualification compose into one spelling, `stereotype:other::Prof.signOff`, rather than the
+  same-profile and cross-profile cases needing unrelated syntaxes when R4 lands (§6.6).
+
+The prefix is **permitted always and required only where the name is ambiguous**, so it can be used
+defensively and emitted unconditionally by tooling. The ambiguity error has to name the fix — §11.
 
 ### 7.3 Proposed ANTLR (legend-pure; mirror in legend-engine)
 
@@ -1103,7 +1125,13 @@ exclusiveDefinition:   EXCLUSIVE COLON
 incompatibleDefinition: INCOMPATIBLE_WITH COLON qualifiedNameList END_LINE
 ;
 
-annotationReference:   identifier | stereotypeReference | tagReference
+annotationReference:   annotationKind? annotationName
+;
+
+annotationKind:        identifier COLON      // 'stereotype' | 'tag' - see below, NOT lexer keywords
+;
+
+annotationName:        qualifiedName (DOT identifier)?
 ;
 
 qualifiedNameList:     BRACKET_OPEN qualifiedName (COMMA qualifiedName)* BRACKET_CLOSE
@@ -1120,25 +1148,39 @@ Notes and gotchas:
   reason. Without it, any existing model with a property or class named `exclusive`, `appliesTo` or
   `incompatibleWith` stops compiling. Same in the engine grammar. **This is the one way this proposal
   could break existing models, and it is avoidable.**
-- `annotationReference` as a bare `identifier` resolves within the declaring profile. If the profile
-  defines both a stereotype and a tag with that name, it is **ambiguous → error**, fixable with the
-  explicit `my::Prof@name` / `my::Prof%name` form — §7.2 works this through. Resolving stereotypes
-  first and tags second would be the alternative, and it is the wrong call: it makes the tag
-  unreachable by its own name and hides a genuine authoring mistake behind a silent preference.
-  (Nothing today prevents a profile from having a same-named stereotype and tag, and this proposal
-  should not start.)
-- The qualified forms are therefore in the grammar for *disambiguation within the declaring profile*.
-  A reference naming any other profile parses and is then rejected by validation (§6.6), so lifting
-  that restriction when R4 is wanted is a validation change rather than a grammar change.
-- Because the only qualified reference a profile can currently write is one to itself, the qualified
-  spelling is redundant on the left of the `@` / `%`. Two ways to spell the disambiguation, then:
-  (i) **fully qualified only** — `my::Review%signOff`, reusing `stereotypeReference` / `tagReference`
-  verbatim, zero new syntax, and identical to what the cross-profile form will look like if R4 lands;
-  (ii) **add a same-profile shorthand** — `%signOff` / `@signOff`, parsed as new alternatives of
-  `annotationReference`. (ii) is terser and unambiguous to parse, but invents a form that exists
-  nowhere else in the language, and it would read oddly beside a qualified external reference in the
-  same set later. **Recommend (i)**; (ii) is additive if the qualified form proves annoying in
-  practice. (Q14.)
+- **`annotationKind` is deliberately not a pair of lexer tokens.** `stereotype` and `tag` are matched
+  as ordinary identifiers and their text is checked in the visitor, which rejects anything else with
+  `"unknown annotation kind 'x'; expected 'stereotype' or 'tag'"`. Three reasons:
+  1. **No reserved-word hazard.** `tag` is a thoroughly plausible property name in existing models
+     (`stereotype` less so, but not impossibly). As lexer tokens both would have to be added to the
+     `identifier` rule in both grammars or those models stop compiling — the hazard flagged in the
+     bullet above, incurred for no benefit.
+  2. **Better diagnostics.** A misspelling produces a message naming the legal kinds, rather than a
+     parser error pointing at a bracket.
+  3. **The spelling stays cheap to revise.** Accepting `st:` as a synonym later is one line in a
+     validator instead of a coordinated change to two ANTLR grammars. (Q14.)
+
+  The cost is that the grammar file no longer enumerates the legal prefixes, so the rule needs the
+  comment shown above.
+- `annotationName` covers all four cases with one rule: `signOff` (this profile), `other::Prof.signOff`
+  (another profile), and either with a kind prefix. A reference naming any profile but the declaring
+  one parses and is then rejected by validation (§6.6), so lifting that restriction when R4 is wanted
+  is a validation change rather than a grammar change.
+- **The dot spelling, not `@` / `%`.** `annotationName` uses `qualifiedName DOT identifier`, matching
+  the `stereotype` and `taggedValue` use-site rules (`M3CoreParser.g4:231, 237`) rather than
+  `stereotypeReference` / `tagReference` (219-223). Those two rules are untouched and stay as they
+  are for expression position. The argument is that an exclusion set talks about annotations *as
+  applied to elements*, so it should read like a use site; a knock-on benefit is that a kind prefix
+  and a qualified name compose (`stereotype:other::Prof.signOff`) where `@` / `%` and a prefix would
+  collide.
+- An unprefixed name that the declaring profile defines as **both** a stereotype and a tag is
+  **ambiguous → error** (§7.2). Resolving stereotypes first and tags second is the obvious
+  alternative and is the wrong call: it makes the tag unreachable by its own name and hides a genuine
+  authoring mistake behind a silent preference. Nothing today prevents a profile from defining a
+  same-named stereotype and tag — `ProfileValidator` checks the two lists separately — and this
+  proposal should not start.
+- One token of lookahead separates all three member shapes: `identifier COLON` (a kind prefix),
+  `identifier PATH_SEPARATOR` (a package path), and a bare `identifier`.
 - `appliesToDefinition` and `incompatibleDefinition` share `qualifiedNameList`: both are lists of
   `ImportStub`s, distinguished only by what validation requires them to resolve to — a `Type` for
   `appliesTo` (§4.3), a `Profile` for `incompatibleWith`. Keeping one rule keeps the two error
@@ -1224,7 +1266,7 @@ Implementation facts that make this cheaper than it looks:
 | Parse | `AntlrContextToM3CoreInstance.profile/buildStereoTypes/buildTags` (3432-3483) | Build the new values; create `ImportStub`s for type, profile and annotation references |
 | Post-process | **new** `ProfileProcessor` | Resolve the profile's stubs (there is no processor for `Profile` today), and register the `ReferenceUsage`s for the type and profile references |
 | Unbind | **new** `ProfileUnbind` | Reset those stubs on source change and clean up their reference usages via `Shared.cleanUpReferenceUsage`, alongside `ElementWithStereotypesUnbind` |
-| Validate | `ProfileValidator` | Well-formedness of declarations: applicable-type entries resolve to types (§4.3 — nothing more); `incompatibleWith` entries resolve to profiles and none is the declaring profile (§6.7); no lower bounds; `maxOccurrences > 0`; no external annotations in exclusion sets (§6.6); ambiguous bare annotation references (§7.2); degenerate-set warnings |
+| Validate | `ProfileValidator` | Well-formedness of declarations: applicable-type entries resolve to types (§4.3 — nothing more); `incompatibleWith` entries resolve to profiles and none is the declaring profile (§6.7); no lower bounds; `maxOccurrences > 0`; no external annotations in exclusion sets (§6.6); unknown annotation kind and ambiguous unprefixed annotation references (§7.2); degenerate-set warnings |
 | Validate | **new** `AnnotationUsageValidator` | The four usage rules — applicability, occurrence, exclusion sets, profile incompatibility — registered in `M3AntlrParser.getValidators()` |
 | Validate | `AccessLevelValidator` (62-88, 91-203) | Independently of this proposal, rewrite the element-type tests against the current hierarchy (§4.5): `instanceof ConcreteFunctionDefinition` for `externalizable`, `instanceof Class \|\| instanceof PackageableFunction` for the rest. Then, once `access.pure` carries the declarations, delete the `default:` branch (superseded by `exclusive`) and those element-type tests (superseded by `appliesTo`), keeping the rest of `validateExplicitAccessLevel` |
 | Platform | `access.pure`, `milestoning.pure`, `documentation.pure` | See §10 — separately from the machinery |
@@ -1327,7 +1369,7 @@ Profiles my::internal and my::published are incompatible; my::Foo has stereotype
 my::internal (line:4 column:12) and tag 'approvedBy' of my::published (line:4 column:44)
 (declared at /model/internal.pure line:9 column:5)
 
-'signOff' is both a stereotype and a tag of my::Review; use my::Review@signOff or my::Review%signOff
+'signOff' is both a stereotype and a tag of my::Review; use stereotype:signOff or tag:signOff
 ```
 
 With Tier 3 named groups the third becomes `... 2 stereotypes from group 'visibility' of profile ...`,
@@ -1336,8 +1378,9 @@ which is the concrete argument for eventually adopting 3C.
 The fourth is the profile-level form (§6.7). Note it names one annotation from each side rather than
 all of them: the pair is what is illegal, and quoting the first offending annotation from each
 profile is enough to locate the conflict without dumping both annotation lists. The last is the
-name-overlap diagnostic from §7.2 — it has to state the fix, because the two spellings differ by one
-character in a position most readers will not have met before.
+name-overlap diagnostic from §7.2. It has to state the fix rather than merely report the ambiguity:
+the reader has almost certainly never needed a kind prefix before, so the message is where they learn
+the syntax exists.
 
 ---
 
@@ -1346,7 +1389,7 @@ character in a position most readers will not have met before.
 | Layer | Location | Coverage |
 |---|---|---|
 | Profile well-formedness | `m3/tests/validation/TestProfileValidation.java` | Applicable-type entry that is not a type; `incompatibleWith` entry that is not a profile; self-incompatibility rejected; lower bound rejected; `maxOccurrences` ≤ 0; exclusion set naming another profile's annotation rejected; ambiguous bare annotation reference; degenerate set warning |
-| Grammar | `m3/tests/elements/profile/TestProfile.java` | Every clause, all orders, repeated clauses, plain profiles unchanged; new keywords still usable as identifiers; **a profile defining a same-named stereotype and tag** — declaration clauses, qualified `@`/`%` references in exclusion sets, and both used on one element (§7.2) |
+| Grammar | `m3/tests/elements/profile/TestProfile.java` | Every clause, all orders, repeated clauses, plain profiles unchanged; new keywords still usable as identifiers; **a profile defining a same-named stereotype and tag** — declaration clauses, `stereotype:`/`tag:` prefixes in exclusion sets, both used on one element, and `stereotype` and `tag` still usable as ordinary identifiers elsewhere in the same model (§7.2, §7.3) |
 | Usage | new `TestAnnotationApplicability` / `TestAnnotationOccurrence` / `TestAnnotationExclusivity` / `TestProfileIncompatibility` | Positive/negative per feature; profile-level vs annotation-level override; **subtype acceptance through a supertype that is not itself annotatable** — `appliesTo: [Function]` accepting both function kinds, `appliesTo: [Type]` accepting both a class and an enumeration (§4.3); repetition not counted for F3 but counted for F2; mixed sets. For R7: stereotype+stereotype, tag+tag and stereotype+tag across the pair; one declaration binding both directions with no reverse declaration; non-transitivity across three profiles; a *profile* carrying annotations of both (§6.7, item 7) |
 | Existing behaviour | `m3/tests/validation/TestAccess.java` | Update the multi-access-stereotype expectations when step 2 of §10 lands |
 | Incremental | `m3/tests/incremental/profile/` | Edit/delete a referenced type; edit a profile's constraints and confirm dependent elements are re-validated; delete or rename a profile named in another profile's `incompatibleWith`, and confirm the referring profile is re-processed rather than left holding a stale stub |
@@ -1371,4 +1414,4 @@ character in a position most readers will not have met before.
 | **Q11** | Negative type constraints (`appliesTo: [Class, Function, !Property]`)? | Positives only for now (§4.6). The case that suggested it was a stale workaround for a missing type, not a genuine subtraction, and the `Column` example shows the two readings differ on which future subtypes get admitted silently. Additive later if a real case appears. |
 | **Q12** | Cross-profile exclusion (R4) — defer it, or pay for it now? | Defer (§6.6). It needs both a validation rule and `Annotation extends Referenceable`, and there is no use case on hand. When it is wanted, adopt the anchoring rule (6-a), plus 6-d if "this stereotype excludes everything in profile A" turns out to be a real want. |
 | **Q13** | Profile incompatibility (R7) — include it, and if so how should a self-reference read? | Include it as 7-a (§6.7): it is the only cross-profile capability that is sound *and* free of the `Referenceable` prerequisite, so its cost is one property, one `StubDef` line and one clause. Reject self-reference; if "at most one annotation of this profile, stereotypes and tags pooled" is wanted, it is worth its own spelling rather than a reflexive reading nobody would guess. |
-| **Q14** | A same-profile shorthand for annotation references — `%signOff` beside `my::Review%signOff`? | Not now (§7.3). Reuse the existing qualified forms; the shorthand is additive and better judged after seeing how often overlapping names actually occur. |
+| **Q14** | Accept `st:` as a synonym for `stereotype:`? | Not initially (§7.2). The prefix appears only where a profile has an overlapping name, so guessability beats brevity; and because `annotationKind` is validated rather than lexed (§7.3), adding the synonym later is a line in a validator, so nothing is lost by waiting to see whether the long form actually grates. |
