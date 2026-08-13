@@ -534,10 +534,10 @@ annotation; F3 counts distinct annotations in a set.** That is exactly what make
 harmless for F3 while still being controllable via F2.
 
 **R7 is the same shape one granularity up** — "at most one of the profiles in set *P* may contribute
-any annotation to an element" — and that resemblance is worth noticing, because the anchoring
-arithmetic of §6.6 applies to it unchanged and gives a *different* answer there: at profile
-granularity the pairwise form is the sound one and the set form is not. §6.7 works that through.
-R7 is otherwise independent of everything in §6.3, and nothing below depends on it.
+any annotation to an element" — and that resemblance is worth noticing, because the scoping question
+of §6.6 applies to it unchanged and comes out the other way: at profile granularity the pairwise form
+is the one to have, and a set adds nothing a scoped reading does not immediately collapse. §6.7 works
+that through. R7 is otherwise independent of everything in §6.3, and nothing below depends on it.
 
 ### 6.3 Options
 
@@ -595,9 +595,10 @@ Profile my::Prof
 - **−** The `exclusive stereotypes:` shorthand is *dynamic*: a stereotype added to the profile later
   silently joins the exclusive set. Usually what you want (it is what `access` wants); occasionally
   a surprise. The remedy is to switch that profile to the explicit set form; worth documenting.
-- **−** **A set can express a constraint that binds elements never referencing the declaring
-  profile** — `exclusive: [b1, A.a1, A.a2]` makes `a1` and `a2` exclusive on their own. This has to
-  be ruled out explicitly (§6.6), where 3A cannot state it in the first place.
+- **−** **A set needs its scope stated.** Read naively, `exclusive: [b1, A.a1, A.a2]` makes `a1` and
+  `a2` exclusive on their own, binding elements that never reference the declaring profile. §6.6
+  scopes the set to elements using one of its owned members, which fixes it — but it is a rule to
+  state, where 3A gets the same anchor from where the declaration sits.
 
 #### Option 3C — named groups with a bound
 
@@ -622,8 +623,9 @@ Profile my::Prof
 - **−** A new modeling concept ("group") to teach, on top of profile / stereotype / tag.
 - **−** Reuses multiplicity syntax, so it inherits the lower-bound question (§5.4) more visibly.
 - **−** More grammar and metamodel than the known use cases require.
-- **−** Same external-annotation hazard as 3B, and the bound makes the condition subtler: a group may
-  name at most `N` external annotations, not at most one (§6.6).
+- **−** Same need for a stated scope as 3B, and the bound makes the trigger matter more: with `N > 1`
+  a group can be partly satisfied by external members, so "uses at least one owned member" has to be
+  the trigger rather than any coarser reading (§6.6).
 
 #### Option 3D — profile-level modifier only
 
@@ -723,8 +725,10 @@ change as well as a rule (§6.6).
 Because there is no expression-based escape hatch (§6.3), both deferrals are only acceptable
 *because* they are strictly compatible extensions: if R3 turns up, `exclusive: [a, b]` keeps meaning
 what it means and `groups:` is added beside it; if R4 turns up, the same clause gains external
-members under the anchoring rule. This rules out picking 3A or 3D on cost grounds — under either,
-supporting R3 later means a second, unrelated mechanism rather than a generalisation of the first.
+members under the scoping rule, which leaves every all-owned set — that is, every set expressible
+today — meaning exactly what it means now. This rules out picking 3A or 3D on cost grounds — under
+either, supporting R3 later means a second, unrelated mechanism rather than a generalisation of the
+first.
 
 ### 6.5 Semantics to pin down
 
@@ -732,10 +736,12 @@ supporting R3 later means a second, unrelated mechanism rather than a generalisa
    containing `a`.
 2. **Symmetry.** Structural in 3B/3C. Under 3A the compiler must close the relation, and closure
    across profiles means profile R's declaration changes profile Q's meaning — one more reason to
-   prefer sets.
+   prefer sets. (Symmetry is complete only for all-owned sets; §6.6 notes where scoping makes
+   membership asymmetric, which cannot arise under item 3.)
 3. **No external annotations** — see §6.6. *An exclusion set may name only annotations defined by the
-   declaring profile.* Compile error otherwise. This defers R4; when it is wanted, the rule that
-   replaces this one is the anchoring rule, `|Ext| ≤ N`.
+   declaring profile.* Compile error otherwise. This defers R4; when it is wanted, what replaces this
+   rule is not a restriction but a scope — a set binds only elements using at least one member its own
+   profile defines.
 4. **Degenerate sets.** `|S| < 2`, or bound ≥ `|S|`: harmless no-ops; warn.
 5. **Overlapping sets.** Allowed; each evaluated independently; report the first violation with
    deterministic ordering (source order) so error messages are stable.
@@ -746,9 +752,9 @@ supporting R3 later means a second, unrelated mechanism rather than a generalisa
 
 ### 6.6 External annotations in an exclusion set
 
-Cross-profile exclusion (R4) raises two independent problems: one of meaning, which a validation rule
-fixes, and one of incremental compilation, which needs a metamodel change. Together they are the
-reason to leave external annotations out of the first version.
+Cross-profile exclusion (R4) raises two independent problems: one of meaning, which is fixed by
+saying what an exclusion set's scope is, and one of incremental compilation, which needs a metamodel
+change. Only the second is a reason to leave external annotations out of the first version.
 
 #### The problem of meaning
 
@@ -775,31 +781,99 @@ semantics — and it breaks **P3** in three separate ways:
   `B`'s constraints do get gathered and the same `a1`+`a2` combination is rejected. Whether the model
   compiles would depend on an unrelated annotation being present.
 
-#### The condition
+#### Two ways out: restrict the declaration, or scope the rule
 
-Let `S` be an exclusion set declared in `P` with bound `N`, and let `Ext` be the members of `S` that
-`P` does not define. A violating element uses `N + 1` distinct members of `S`. The constraint is
-reachable exactly when every such combination includes a member `P` defines, which holds precisely
-when:
+Both start from the same arithmetic. Let `S` be an exclusion set declared in `P` with bound `N`; let
+`Own` be the members `P` defines and `Ext = S \ Own` the rest. A violating element uses `N + 1`
+distinct members of `S`. Every such combination includes a member of `Own` — which is what makes the
+constraint reachable from the element, and re-validated when `P` changes — precisely when:
 
 > **`|Ext| ≤ N`**
 
-For `exclusive:` (`N = 1`) that is *at most one external annotation*. `exclusive: [b1, A.a1]` is
-fine — `B` saying its own `b1` is incompatible with `A`'s `a1`, which is R4 and the thing worth
-having. `exclusive: [b1, A.a1, A.a2]` is rejected. Under Tier 3 the same condition scales with the
-bound.
+**Option 6-a restricts the declaration** so the inequality always holds, and keeps "at most `N` of
+`S`" as an unconditional statement. For `exclusive:` (`N = 1`) that means at most one external
+annotation: `exclusive: [b1, A.a1]` is legal — `B` saying its own `b1` is incompatible with `A`'s
+`a1`, which is R4 and the thing worth having — and `exclusive: [b1, A.a1, A.a2]` is rejected.
 
-The rule earns its keep twice over, because reachability and propriety turn out to be the same
-condition: an anchored constraint can only bite on an element that references the declaring profile,
-so **whether a model compiles never depends on which other profiles happen to be loaded**. An
-unanchored set would make an element using only `A` valid or invalid according to whether some
-unrelated `B` was on the classpath.
+**Option 6-c changes the statement instead.** The bound applies only to elements that use at least one
+member of `Own`. Any set is then declarable, and the inequality stops being a legality test: it
+becomes the test for whether the scoping is doing observable work.
+
+**Recommended: 6-c.** The two options agree on every set 6-a permits, and that is exactly the
+objection to 6-a. Where `|Ext| ≤ N`, "at most `N` of `S`" and "at most `N` of `S`, among elements
+using a member of `Own`" pick out the same violations, because every violating combination already
+contains a member of `Own`. So 6-a's restriction is not guarding its semantics; it is **narrowing the
+declarable sets to those on which its semantics coincide with 6-c's.** It charges for a generality it
+then prevents you from using.
+
+Four consequences of taking scope as the semantics:
+
+- **It is the intuitive reading.** A rule declared on a profile is in force where that profile is in
+  use. 6-a's wording implies a rule in force always, including on elements that use nothing of `B`.
+  It does not actually mean that, because the restriction sees to it — but then nothing in 6-a's
+  semantics *motivates* the restriction. It is there only because the unrestricted form misbehaves.
+- **It survives repositories coming and going.** The unscoped reading asks what an exclusion set in a
+  repository nobody has loaded means for an element that uses only `A` — and the honest answer is that
+  the model's validity would depend on which repositories happen to be present. Anchoring makes that
+  unobservable; scoping makes it not arise. Under 6-c the rule travels with `B`, activates when `B`
+  does, and needs no argument about the classpath.
+- **It is a semantic restriction rather than a combinatorial one.** 6-c narrows a rule to the elements
+  where it makes sense to apply it. 6-a narrows which rules may be written, on a ground the modeler
+  cannot derive from what the feature means — the arithmetic above is not something a reader of
+  `access.pure` should have to reconstruct.
+- **It is strictly more expressive, at no cost in soundness.** `exclusive: [b1, A.a1, A.a2]` becomes
+  writable and means "if `b1`, then neither `a1` nor `a2`" — a rule someone might genuinely want, and
+  one 6-a can only spell as two clauses.
+
+#### The trigger is per set, not per profile
+
+The natural way to say 6-c is "`B`'s rules are in scope when `B` is in use", and that is *almost*
+right. It has to be per exclusion set — at least one member of **that set's** `Own` — because the
+per-profile version reintroduces the third failure above.
+
+Take `S = [b1, A.a1, A.a2]` declared in `B`, and an element carrying `b3` (an annotation of `B` that
+is not in `S`) together with `a1` and `a2`. Per-profile: `B` is in use, so `S` applies, and the
+element has two members of `S` — rejected. Per-set: `S` has no owned member on the element, so it
+does not apply. The per-profile reading makes `a1`+`a2` legal or illegal according to whether an
+unrelated `b3` happens to be present, which is the **Inconsistent** failure verbatim. Per-set scoping
+closes all three:
+
+| Failure | Under per-set scoping |
+|---|---|
+| Undetectable | Not a violation by definition — an element with no owned member is outside the rule's scope |
+| Not re-validated | A constrained element carries an owned member, so it is in that annotation's `modelElements` and `ProfileUnloaderWalk` reaches it |
+| Inconsistent | Unrelated annotations of `B` do not bring `S` into scope |
+
+#### What 6-c gives up
+
+**6-a fails loudly; 6-c succeeds quietly.** A modeler who writes `exclusive: [b1, A.a1, A.a2]`
+expecting `a1` and `a2` to be mutually exclusive everywhere gets a weaker rule and no diagnostic;
+under 6-a they get an error telling them it is not expressible. That is the one real advantage 6-a
+has, and it is worth recovering — as a **warning when `|Ext| > N`**, which is exactly the case where
+scoping is observable:
+
+```
+Exclusion set in my::B applies only to elements using 'b1'; my::A.a1 and my::A.a2 are
+not mutually exclusive on their own (at /model/b.pure line:6 column:5)
+```
+
+That keeps the loudness without keeping the restriction, and it puts the arithmetic in a diagnostic
+where it belongs rather than in the language definition.
+
+**Membership becomes asymmetric**, which qualifies §6.5's "symmetry is structural": symmetric among
+owned members, asymmetric between owned and external. For an all-owned set — the only kind 6-b
+permits, and every set in this document's examples — nothing changes at all.
+
+That asymmetry also settles what 6-d is. For a set with one owned member, 6-c's meaning is *precisely*
+6-d's directed reading, so `b1 excludes [A.a1, A.a2];` stops being a rival semantics and becomes a
+question of whether the syntax should advertise the asymmetry that 6-c introduces. That is a syntax
+decision to take alongside R4, not before it.
 
 #### The second cost: annotations are not `Referenceable`
 
-Anchoring fixes the semantics, but *any* external annotation — under 3A, 3B or 3C alike — creates a
-second problem that anchoring does not touch. `B`'s exclusion set holds a reference to `A.a1`. What
-re-processes `B` when `A` changes?
+Scoping settles what an external annotation *means*, but *any* external annotation — under 3A, 3B or
+3C alike, and under 6-a or 6-c alike — creates a second problem that neither touches. `B`'s exclusion
+set holds a reference to `A.a1`. What re-processes `B` when `A` changes?
 
 Nothing, today. The only back-link an annotation has is `Annotation.modelElements`, populated by
 `AnnotatedElementProcessor` with the elements that *carry* it, and walked by `ProfileUnloaderWalk`.
@@ -830,9 +904,11 @@ That is a real piece of work to enable a requirement (R4) for which there is **n
 
 #### Recommendation and alternatives
 
-**Recommend 6-b: no external annotations in exclusion sets, for now.** An exclusion set may name only
-annotations its own profile defines. R1, R2, R3, R5 and R6 are all expressible within one profile and
-are unaffected; only R4 is deferred, and it is the one requirement nobody has needed yet.
+**Recommend 6-b: no external annotations in exclusion sets, for now** — on the strength of the
+`Referenceable` cost alone, not the question of meaning, which §6.6's first half settles. An exclusion
+set may name only annotations its own profile defines. R1, R2, R3, R5 and R6 are all expressible
+within one profile and are unaffected; only R4 is deferred, and it is the one requirement nobody has
+needed yet. **When R4 is wanted, the semantics to adopt with it are 6-c's.**
 
 The grammar keeps the qualified reference form `other::Prof.x` in `annotationReference` (§7.3), and
 validation rejects a reference naming any profile but the declaring one, with a message that names
@@ -843,15 +919,17 @@ earns its place whether or not R4 ever lands.
 
 | | Option | Verdict |
 |---|---|---|
-| **6-b** | **No external annotations** — exclusion sets are same-profile only | **Recommended now.** Sound, one sentence to state, and defers the `Referenceable` work until something needs it |
-| **6-a** | **The anchoring rule** (`\|Ext\| ≤ N`) | **The design to adopt when R4 is wanted**, together with the `Referenceable` change. Keeps R4 in its useful form and keeps the surface syntax meaning what it says |
-| **6-c** | **Scoped semantics** — the set's *owned* members act as a trigger; elements using none of them are not checked | Sound and strictly more expressive: `exclusive: [b1, A.a1, A.a2]` would mean "if `b1`, then neither `a1` nor `a2`". But the surface syntax stops meaning what it says — a set called "at most one of these three" that ignores two of them together |
-| **6-d** | **A directed form** — `b1 excludes [A.a1, A.a2];`, anchored on an owned annotation by construction | Honest and local, and the compact way to say "`b1` excludes everything in `A`", which 6-a can only say one clause at a time. It is Option 3A's shape, reintroduced for the cross-profile case only. Same `Referenceable` prerequisite |
+| **6-b** | **No external annotations** — exclusion sets are same-profile only | **Recommended now**, on the `Referenceable` cost alone. One sentence to state, and it defers that work until something needs it |
+| **6-c** | **Scoped semantics** — an exclusion set binds only elements using at least one member its own profile defines | **The semantics to adopt when R4 is wanted.** Sound, strictly more expressive than 6-a, and it states the scope a rule has instead of restricting which rules may be written. Costs a warning to keep the weakened reading from being silent |
+| **6-a** | **The anchoring rule** (`\|Ext\| ≤ N`) | Sound, and identical to 6-c on every set it permits — which is the objection: the restriction exists to keep the unscoped semantics from ever being observable, so the generality it charges for is one it never delivers |
+| **6-d** | **A directed form** — `b1 excludes [A.a1, A.a2];`, anchored on an owned annotation by construction | Not a rival to 6-c but a spelling of it: for a single owned member the two mean the same thing. The question it raises is whether the syntax should show the asymmetry 6-c introduces. Same `Referenceable` prerequisite; decide it alongside R4 |
 | **6-e** | **Index constraints on their member annotations**, so `A`'s annotations carry `B`'s constraint | Fixes detection and nothing else. The propriety objection stands, and it makes an element's validity depend on the loaded profile set — the worst of the three failures above rather than a fix for it |
 
 Note what this says about **3A**: a pairwise `incompatibleWith` declaration hangs off an annotation
-the profile owns, so it is anchored by construction and cannot express the bad case at all. That is a
-genuine structural advantage — but it does not exempt 3A from the `Referenceable` prerequisite, since
+the profile owns, so it gets 6-c's scoping for free — the owning annotation *is* the trigger, and the
+bad case cannot be stated at all. That is a genuine structural advantage, and it is worth seeing that
+6-c generalises it rather than competing with it: 6-c gives a set the same anchor 3A gets from where
+the declaration sits. It does not exempt 3A from the `Referenceable` prerequisite, though, since
 `incompatibleWith [other::Prof.x]` is an external reference like any other. Under 6-b, 3A's
 cross-profile form is deferred on the same terms.
 
@@ -873,16 +951,18 @@ Profile my::internal
 #### Why this is cheap, and why that is not a coincidence
 
 R4 — cross-profile incompatibility at *annotation* granularity — is deferred for two independent
-reasons (§6.6): a problem of meaning, which the anchoring rule fixes, and a problem of incremental
-compilation, which needs `Annotation extends Referenceable`. **Neither arises here**, and both fail
-to arise for the same underlying reason: the only thing named is a profile.
+reasons (§6.6): a problem of meaning, fixed by scoping the rule to elements that use the declaring
+profile, and a problem of incremental compilation, which needs `Annotation extends Referenceable`.
+**Neither arises here**, and both fail to arise for the same underlying reason: the only thing named
+is a profile.
 
-- **Anchored by construction, with nothing left to check.** A violating element carries an annotation
-  of `A` *and* an annotation of `B`. Whichever profile the declaration lives in, the element
-  references that profile, so validation of the element reaches the declaration. There is no
-  unanchored form to rule out: every well-formed declaration satisfies §6.6's `|Ext| ≤ N` identically
-  (`N = 1`, one external profile per pair). Contrast `exclusive: [b1, A.a1, A.a2]`, whose entire
-  problem was that a violating element need never mention `B`.
+- **Anchored by construction, with no scope to state.** A violating element carries an annotation of
+  `A` *and* an annotation of `B`. Whichever profile the declaration lives in, the element references
+  that profile, so validation of the element reaches the declaration. The scoped and unscoped readings
+  therefore coincide on every declaration that can be written — §6.6's `|Ext| ≤ N` holds identically,
+  with `N = 1` and one external profile per pair — so unlike an exclusion set, this feature needs no
+  statement of scope at all. Contrast `exclusive: [b1, A.a1, A.a2]`, whose entire problem was that a
+  violating element need never mention `B`.
 - **Incremental compilation already works.** `ProfileUnloaderWalk` re-walks the changed profile's
   annotations' `modelElements`. Every element that can violate carries an annotation of the declaring
   profile, so it is in that set; editing or removing the declaration re-validates exactly the
@@ -914,19 +994,21 @@ That, rather than any use case on hand, is the argument for it.
 | | Option | Pros | Cons |
 |---|---|---|---|
 | **7-a** | **`incompatibleWith: [ … ];` — a list of profiles** *(recommended)* | Anchored by construction, because every pair the clause generates contains the declaring profile; one clause, one line, whatever the sizes of the two profiles; symmetric with no closure step (below) | Blunt: all-or-nothing across both profiles, with no way to exempt an annotation |
-| **7-b** | **An exclusion set over profiles** — `exclusive profiles: [A, B, C];` | Uniform with 3B/3C one granularity up; says "at most one of these vocabularies", which 7-a needs one clause per pair to state | **Unanchored as soon as the set exceeds two.** Declared in `A`, the pair `{B, C}` binds elements that never mention `A` — the §6.6 failure exactly, and `\|Ext\| ≤ N` rejects it. Restricting sets to pairs leaves 7-a with heavier syntax |
-| **7-c** | **Annotation-to-profile** — `b1 incompatibleWith [my::A];` | Strictly more expressive: one stereotype of `B` excludes all of `A` without committing the rest of `B`. Still anchored (`b1` is owned) and still needs no `Referenceable` change, since `my::A` is the only thing referenced | A third granularity to teach, with no use case; and it is 6-d's shape, which §6.6 already parks |
+| **7-b** | **An exclusion set over profiles** — `exclusive profiles: [A, B, C];` | Uniform with 3B/3C one granularity up; reads as "at most one of these vocabularies", which 7-a states one pair at a time | **Redundant once scoped.** Read unscoped it is the §6.6 failure — declared in `A`, the pair `{B, C}` binds elements that never mention `A`. Read scoped (§6.6, 6-c) it is sound but collapses: binding only elements that use `A`, `exclusive profiles: [A, B, C]` says exactly `A incompatibleWith [B, C]`. And declared in a profile that is not a member, it is vacuous. So the set form is either wrong or 7-a with more syntax |
+| **7-c** | **Annotation-to-profile** — `b1 incompatibleWith [my::A];` | Strictly more expressive: one stereotype of `B` excludes all of `A` without committing the rest of `B`. Still anchored (`b1` is owned) and still needs no `Referenceable` change, since `my::A` is the only thing referenced | A third granularity to teach, with no use case; and it is 6-d's shape, whose spelling §6.6 defers alongside R4 |
 | **7-d** | **Drop R7 — use annotation-level pairs when R4 lands** | No new syntax now | See above: quadratic, restated on every profile edit, and gated behind the R4 deferral. Not a real alternative |
 
 **Recommendation: 7-a.** It is the shape described in the brief, it is the only one of the four that
 is both sound and available today, and 7-c remains a strictly compatible extension if
 "this stereotype excludes all of that profile" ever turns up as a real want.
 
-Observe that the sound/unsound verdicts here are the **mirror image** of §6.3's. Between annotations,
-the set form (3B) is recommended and the pairwise form (3A) is the awkward one; between profiles, the
-pairwise form (7-a) is sound and the set form (7-b) is not. The anchoring arithmetic is identical in
-both cases — what differs is that a profile-level set is declared *by a member of itself*, so its
-external count grows with the set while a pairwise list's stays at one.
+Observe that the verdicts here come out the **opposite way** to §6.3's. Between annotations the set
+form (3B) is recommended and the pairwise form (3A) is the awkward one; between profiles the pairwise
+form (7-a) wins and the set form (7-b) has nothing to offer. What differs is what scoping buys. An
+exclusion set is scoped by *its own* members, so a set with external members still says something a
+pairwise form cannot say as compactly. A profile-level set is declared *by a member of itself*, so
+scoping it leaves precisely the pairs between the declaring profile and the others — which is the
+pairwise list. The generalisation that pays off one granularity down is a no-op here.
 
 #### Semantics to pin down
 
@@ -1412,6 +1494,6 @@ the syntax exists.
 | **Q9** | Should there be a middle, clause-level `appliesTo` (`stereotypes appliesTo [Class]: [...]`) between profile-level and annotation-level? | No — two levels are enough; a third is easy to add later. |
 | **Q10** | Should `appliesTo` also constrain where a *profile-level* stereotype may be used, i.e. does the profile's own list apply to tags as well as stereotypes? | Yes, both — as stated in the brief. |
 | **Q11** | Negative type constraints (`appliesTo: [Class, Function, !Property]`)? | Positives only for now (§4.6). The case that suggested it was a stale workaround for a missing type, not a genuine subtraction, and the `Column` example shows the two readings differ on which future subtypes get admitted silently. Additive later if a real case appears. |
-| **Q12** | Cross-profile exclusion (R4) — defer it, or pay for it now? | Defer (§6.6). It needs both a validation rule and `Annotation extends Referenceable`, and there is no use case on hand. When it is wanted, adopt the anchoring rule (6-a), plus 6-d if "this stereotype excludes everything in profile A" turns out to be a real want. |
+| **Q12** | Cross-profile exclusion (R4) — defer it, or pay for it now? | Defer (§6.6), but on the `Referenceable` cost alone: the question of meaning is settled, and there is no use case on hand. When it is wanted, adopt 6-c's scoped semantics — an exclusion set binds only elements using at least one member its own profile defines — with a warning where the scoping is observable, and decide 6-d's directed spelling then. |
 | **Q13** | Profile incompatibility (R7) — include it, and if so how should a self-reference read? | Include it as 7-a (§6.7): it is the only cross-profile capability that is sound *and* free of the `Referenceable` prerequisite, so its cost is one property, one `StubDef` line and one clause. Reject self-reference; if "at most one annotation of this profile, stereotypes and tags pooled" is wanted, it is worth its own spelling rather than a reflexive reading nobody would guess. |
 | **Q14** | Accept `st:` as a synonym for `stereotype:`? | Not initially (§7.2). The prefix appears only where a profile has an overlapping name, so guessability beats brevity; and because `annotationKind` is validated rather than lexed (§7.3), adding the synonym later is a line in a validator, so nothing is lost by waiting to see whether the long form actually grates. |
