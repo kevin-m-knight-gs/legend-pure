@@ -141,9 +141,7 @@ public final class StrictDate extends AbstractDateWithDay
 
     public static StrictDate fromSQLDate(java.sql.Date date)
     {
-        GregorianCalendar calendar = new GregorianCalendar(DateFunctions.GMT_TIME_ZONE);
-        calendar.setTime(date);
-        return fromCalendar(calendar);
+        return fromLocalDate(date.toLocalDate());
     }
 
     public static StrictDate fromCalendar(GregorianCalendar calendar)

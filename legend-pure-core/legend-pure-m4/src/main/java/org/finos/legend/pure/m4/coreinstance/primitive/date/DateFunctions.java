@@ -257,15 +257,13 @@ public class DateFunctions extends TimeFunctions
     {
         if (date instanceof java.sql.Date)
         {
-            return fromSQLDate((java.sql.Date)date);
+            return fromSQLDate((java.sql.Date) date);
         }
         if (date instanceof java.sql.Timestamp)
         {
-            return fromSQLTimestamp((java.sql.Timestamp)date);
+            return fromSQLTimestamp((java.sql.Timestamp) date);
         }
-        GregorianCalendar calendar = new GregorianCalendar(GMT_TIME_ZONE);
-        calendar.setTime(date);
-        return fromCalendar(calendar, Calendar.MILLISECOND);
+        return fromInstant(date.toInstant(), 3);
     }
 
     /**

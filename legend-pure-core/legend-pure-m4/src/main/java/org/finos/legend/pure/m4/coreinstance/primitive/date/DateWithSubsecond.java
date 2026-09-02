@@ -18,8 +18,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.Calendar;
-import java.util.GregorianCalendar;
 
 public class DateWithSubsecond extends AbstractDateWithSubsecond
 {
@@ -52,10 +50,7 @@ public class DateWithSubsecond extends AbstractDateWithSubsecond
 
     public static DateTime fromSQLTimestamp(java.sql.Timestamp timestamp)
     {
-        GregorianCalendar calendar = new GregorianCalendar(DateFunctions.GMT_TIME_ZONE);
-        calendar.setTime(timestamp);
-        String subsecond = TimeFunctions.subsecondFromNanoseconds(timestamp.getNanos());
-        return new DateWithSubsecond(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1, calendar.get(Calendar.DAY_OF_MONTH), calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), calendar.get(Calendar.SECOND), subsecond);
+        return fromInstant(timestamp.toInstant(), 9);
     }
 
     public static DateTime fromInstant(Instant instant, int subsecondPrecision)
@@ -65,17 +60,16 @@ public class DateWithSubsecond extends AbstractDateWithSubsecond
 
     static DateTime fromLocalDateTime(LocalDateTime time, int subsecondPrecision)
     {
-        return new DateWithSubsecond(time.getYear(), time.getMonthValue(), time.getDayOfMonth(), time.getHour(), time.getMinute(), time.getSecond(), getSubsecond(time, subsecondPrecision));
-    }
-
-    private static String getSubsecond(LocalDateTime time, int subsecondPrecision)
-    {
         // 0 is not valid here: a date with no subsecond is a DateWithSecond, not a DateWithSubsecond
         if ((subsecondPrecision < 1) || (subsecondPrecision > 9))
         {
             throw new IllegalArgumentException("Invalid subsecond precision: " + subsecondPrecision);
         }
-        String string = TimeFunctions.subsecondFromNanoseconds(time.getNano());
-        return (subsecondPrecision == 9) ? string : string.substring(0, subsecondPrecision);
+        String subsecond = TimeFunctions.subsecondFromNanoseconds(time.getNano());
+        if (subsecondPrecision < 9)
+        {
+            subsecond = subsecond.substring(0, subsecondPrecision);
+        }
+        return new DateWithSubsecond(time.getYear(), time.getMonthValue(), time.getDayOfMonth(), time.getHour(), time.getMinute(), time.getSecond(), subsecond);
     }
 }
