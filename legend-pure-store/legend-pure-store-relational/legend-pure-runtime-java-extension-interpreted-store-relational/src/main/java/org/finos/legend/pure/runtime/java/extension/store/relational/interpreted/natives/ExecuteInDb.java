@@ -15,8 +15,10 @@
 package org.finos.legend.pure.runtime.java.extension.store.relational.interpreted.natives;
 
 import org.eclipse.collections.api.factory.Lists;
+import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.map.ImmutableMap;
 import org.eclipse.collections.api.map.MutableMap;
 import org.eclipse.collections.api.map.primitive.ImmutableIntObjectMap;
 import org.eclipse.collections.api.stack.MutableStack;
@@ -36,7 +38,11 @@ import org.finos.legend.pure.m4.ModelRepository;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.DateFunctions;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.StrictDate;
-import org.finos.legend.pure.runtime.java.extension.store.relational.shared.*;
+import org.finos.legend.pure.runtime.java.extension.store.relational.shared.ConnectionWithDataSourceInfo;
+import org.finos.legend.pure.runtime.java.extension.store.relational.shared.IConnectionManagerHandler;
+import org.finos.legend.pure.runtime.java.extension.store.relational.shared.LoadToDbTableHelper;
+import org.finos.legend.pure.runtime.java.extension.store.relational.shared.PureConnectionUtils;
+import org.finos.legend.pure.runtime.java.extension.store.relational.shared.SQLExceptionHandler;
 import org.finos.legend.pure.runtime.java.interpreted.ExecutionSupport;
 import org.finos.legend.pure.runtime.java.interpreted.VariableContext;
 import org.finos.legend.pure.runtime.java.interpreted.natives.InstantiationContext;
@@ -51,10 +57,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
-import java.util.Collections;
 import java.util.GregorianCalendar;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Stack;
 import java.util.TimeZone;
 
@@ -95,12 +98,7 @@ public class ExecuteInDb extends NativeFunction
             .withKeyValue(Types.LONGVARBINARY, M3Paths.String)
             .toImmutable();
 
-    private static  Map<Integer, Map<String, String>> dbSpecificTypeToPureType = new HashMap<>();
-
-    static
-    {
-        dbSpecificTypeToPureType.put(Types.JAVA_OBJECT, Collections.singletonMap("HUGEINT", M3Paths.Integer));
-    }
+    private static final ImmutableIntObjectMap<ImmutableMap<String, String>> dbSpecificTypeToPureType = IntObjectMaps.immutable.with(Types.JAVA_OBJECT, Maps.immutable.with("HUGEINT", M3Paths.Integer));
 
     private static final IConnectionManagerHandler connectionManagerHandler = IConnectionManagerHandler.CONNECTION_MANAGER_HANDLER;
 
@@ -494,21 +492,14 @@ public class ExecuteInDb extends NativeFunction
     {
         int sqlType = metaData.getColumnType(columnIndex);
         String pureType = sqlTypeToPureType.get(sqlType);
-
         if (pureType == null)
         {
-           String pureTypeDbSpecific = dbSpecificTypeToPureType.get(sqlType).get(metaData.getColumnTypeName(columnIndex));
-
-            if (pureType == null && pureTypeDbSpecific == null)
+            pureType = dbSpecificTypeToPureType.get(sqlType).get(metaData.getColumnTypeName(columnIndex));
+            if (pureType == null)
             {
-                throw new RuntimeException("No compatible PURE type found for column type (java.sql.Types): " + sqlType + ", column: " + columnIndex +
-                        " " + metaData.getColumnName(columnIndex) + " " + metaData.getColumnTypeName(columnIndex));
+                throw new RuntimeException("No compatible PURE type found for column type (java.sql.Types): " + sqlType + ", column: " + columnIndex + " " + metaData.getColumnName(columnIndex) + " " + metaData.getColumnTypeName(columnIndex));
             }
-            return pureTypeDbSpecific;
         }
-        else
-        {
-            return pureType;
-        }
+        return pureType;
     }
 }
