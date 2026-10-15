@@ -266,6 +266,11 @@ gives true byte identity.
 **The encoder must be frozen.** Files carry no marker saying which encoder wrote them. A better encoder later would
 therefore come as a new extension version, so that "canonical" stays well defined for each version.
 
+**Provenance.** Each implementation of the encoder is written from RFC 1951 and the specification, which anyone may
+implement. Copyright does not cover algorithms or parameter values, including those borrowed from zlib. Code
+adapted from an existing library keeps that library's notice; the likely sources (zlib, libdeflate, Go's
+`compress/flate`, and miniz_oxide) are all permissive. The PR that adds an encoder says which applies.
+
 ### Option 2: pin a zlib version, bit for bit
 
 **How it works.** The compressing extensions' specification says "zlib x.y.z, raw, level 7, memLevel 8, default
@@ -283,6 +288,11 @@ strategy, one call with `Z_FINISH`". Every writer must reproduce that zlib's out
   - JNI with a native library for every supported platform.
 - **Languages with their own deflate,** such as Go and JavaScript, need ports or FFI.
 - **The specification is effectively C code.** Behavior is frozen at that version for good.
+- **Licensing.** A port is a derivative work of zlib. The zlib license allows it and is compatible with Apache 2.0,
+  but the ported files must keep zlib's notice and be marked as altered, and the upstream PR calls them out as
+  third-party code. Together with the Apache header, that notice exceeds the checkstyle header rule's limit of two
+  matching lines, so the ported files need a suppression. Writers in other languages that bundle zlib's source
+  keep the same notice; native binaries need none.
 
 **Risks:** port fidelity. Using the JDK's own zlib cannot work, as 1.2 shows.
 
@@ -413,8 +423,9 @@ three benefits above. Whether they are worth more than today's compression is wh
 - **File names.** The 126-unit limit applies to each path segment, extension included. A longer segment is cut so
   that the kept part, a 13-character hash suffix, and the extension fill exactly 126 units, except that the cut
   moves back one unit rather than split a surrogate pair. The hash runs over the code points of the part cut off.
-  Specify `SpreadFunctions.longSpreadOne` exactly, with test vectors; base-32 digits `0-9a-v`
-  (`Long.toUnsignedString(x, 32)`); left-padded with `0` to 13 characters.
+  Specify `SpreadFunctions.longSpreadOne` exactly, with test vectors, and credit Eclipse Collections (EPL-1.0 and
+  EDL-1.0) as its source; base-32 digits `0-9a-v` (`Long.toUnsignedString(x, 32)`); left-padded with `0` to 13
+  characters.
 - **Case-only differences.** Element paths that differ only in letter case, such as `a::B` and `a::b`, map to
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
   directory, the later write silently replaces the earlier file. A build-time error on every platform is the
@@ -539,6 +550,9 @@ for the compiler plan.
 - **Packaging:** a versioned zip, published as a Maven artifact (for example `legend-pure-pelt-conformance`) and
   downloadable for non-Maven CI. Versions follow legend-pure releases, since the Java compiler's output changes
   between releases.
+- **Licensing:** the corpus redistributes Pure sources and the files compiled from them, so it is licensed under
+  Apache 2.0. The zip carries its own LICENSE and NOTICE, since it travels without the POM. It contains only
+  Apache-licensed sources; proprietary models never enter it, even when Phase 4 measures them.
 - **Tests every implementation runs,** where `expected` is a file's expected canonical form:
 
   | Test | Checks |
