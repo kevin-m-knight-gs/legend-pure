@@ -35,10 +35,10 @@ too (see [Phase 7](#phase-7-keeping-it-true)).
 |---|---|---|
 | G1 | Load anywhere | PELTs written in one environment or language load in any other. |
 | G2 | Test serializers by byte comparison | A new reader or writer, in any language, is checked against an existing implementation's output. |
-| G3 | Digests mean the same everywhere | A digest of a PELT file, or of its content, has the same value in every environment, so anything that keys on or compares digests (caches, deduplication, change detection) gives the same answer everywhere. |
+| G3 | Digests mean the same everywhere | A digest of a PELT file's content has the same value in every environment, so anything that keys on or compares digests (caches, deduplication, change detection) gives the same answer everywhere. |
 | G4 | Generic tools work on raw files | `sha256sum`, `diff`, content-addressed build caches, artifact deduplication, and reproducibility checks work without knowing anything about PELT. |
-| G5 | No spurious rewrites | A JDK or zlib change alone does not change output, so incremental builds and `FileSerializer.writeIfModified` do no needless work. |
-| G6 | Size and load speed | At least as good as today, in raw directories and in jars. Size matters especially: the largest models produce jars of many gigabytes. |
+| G5 | No spurious rewrites | A JDK or zlib change alone does not change output, so write-if-modified (`FileWriteTools.writeIfModified`) leaves existing files untouched, and incremental builds do no needless work. Maven's up-to-date checks, IDE incremental compilers, and legend-engine's build go by file timestamps ([ADR-007](../decisions/ADR-007-write-if-modified-for-generated-output.md)). |
+| G6 | Size and load speed | As good as today in raw directories and in jars, or within agreed tolerances (see [section 6](#6-recommendation)). Size matters especially: the largest models produce jars of many gigabytes. |
 | G7 | Low cost per new language | Adding a writer in Rust, C, or another language should be cheap. |
 | G8 | Forward compatibility | Readers in earlier legend-pure versions can still read new files. |
 | G9 | Test a non-Java compiler against Java's | A compiler in another language compiles the same sources, and its binaries are compared with the Java compiler's. |
@@ -50,7 +50,7 @@ Non-goals:
 - **Byte-identical jars or zip containers.** See [Outside this plan](#outside-this-plan).
 - **Fixing compiler nondeterminism.** If the compiled graph turns out to depend on processing order or the
   environment anywhere other than in back-reference properties, that is a compiler bug for a separate plan. This
-  plan only detects it (Phase 1).
+  plan only detects it (Phase 2).
 
 ## 1. Where we are
 
@@ -68,13 +68,13 @@ Nothing above the extensions knows about compression, and this plan keeps it tha
 |---|---|---|
 | Fixed-width integers | `AbstractSimpleBinaryWriter` (big-endian via `ByteBuffer`) | Deterministic. |
 | Variable-width integers | `getIntWidth` and similar helpers: always the minimum width | Deterministic. |
-| String bytes | UTF-8 via `String.getBytes` (`AbstractBinaryReaderWriter.java:56`, `StringWriterV3.java:134`) | Deterministic for valid Unicode. Java silently writes `?` for an unpaired surrogate, and Rust and C strings cannot hold one. |
-| String index order | `StringWriterV3.java:307`: sort by `String.length()`, then `String.compareTo` | Deterministic, but both are defined on UTF-16 code units. Sorting by UTF-8 bytes or code points, the natural order in Rust and C, differs for supplementary characters, and lengths differ for all non-ASCII text. |
+| String bytes | UTF-8 via `String.getBytes` (`AbstractBinaryReaderWriter.java:56`, `StringWriterV3.java:134`) | Deterministic for valid Unicode. Java silently writes `?` for an unpaired surrogate, and a Rust `String` cannot hold one. |
+| String index order | `StringWriterV3.java:307`: sort by `String.length()`, then `String.compareTo` | Deterministic, but both are defined on UTF-16 code units. Sorting by UTF-8 bytes or code points, the natural order in Rust and C, differs for supplementary characters. Lengths differ too: in UTF-8 bytes for all non-ASCII text, and in code points for supplementary characters. |
 | String decomposition | `StringWriterV3.processStrings` splits paths, dotted names, and bracketed IDs | A deterministic function of each string, with ASCII delimiters. |
-| Module metadata ordering | Sorted by path, name, or ID with `String.compareTo` (`ModuleManifest.java:552`, `ModuleExternalReferenceMetadata.java:177`, `ElementBackReferenceMetadata.java:290`, `ModuleFunctionNameMetadata.java:175`, `ModuleSourceMetadata.java:380`) | Deterministic, with the same UTF-16 caveat. |
+| Module metadata ordering | Sorted by path, name, or ID with `String.compareTo` (`ModuleManifest.java:479`, `ModuleExternalReferenceMetadata.java:177`, `ElementBackReferenceMetadata.java:290`, `ModuleFunctionNameMetadata.java:175`, `ModuleSourceMetadata.java:380`) | Deterministic, with the same UTF-16 caveat. |
 | Node order in an element | Breadth-first from the element, properties sorted by name (`SerializerV1.java:544`), values in graph order | Deterministic for a given graph. Back-reference properties, the only ones whose order depends on processing order, are kept out of the element or written sorted (`SerializerV1.java:180` and `:249`). |
 | Numbers | Float and Decimal as digit strings from the instance name (`BaseV1.java:175`); Integer as a minimum-width long, or a digit string for BigInteger (`BaseV1.java:219`) | Deterministic. No binary floating-point formatting is involved. |
-| Element file names | Element path, truncated past 126 UTF-16 units with a base-32 hash suffix (`FilePathTools.java:162`) | Deterministic, but the hash uses Eclipse Collections' `SpreadFunctions.longSpreadOne` (`FilePathTools.java:205`), which a specification must reproduce exactly. |
+| Element file names | Element path, with each segment truncated past 126 UTF-16 units, extension included, and given a base-32 hash suffix (`FilePathTools.java:162`) | Deterministic, but the hash uses Eclipse Collections' `SpreadFunctions.longSpreadOne` (`FilePathTools.java:205`), which a specification must reproduce exactly. |
 
 ### 1.2 Compressed bytes break the invariant
 
@@ -92,7 +92,9 @@ Brotli, LZ4, and xz specify only what a decoder must accept. They leave the enco
 boundaries, and Huffman codes, and libraries change those choices between releases. zlib does not promise
 identical output across versions, and zstd documents the same for its output.
 
-Within one JVM, the output *is* repeatable, which is all `FileSerializer.writeIfModified` needs today.
+In one environment, meaning the same JDK and zlib build, the output *is* repeatable. That is all write-if-modified
+needs today: `FileSerializer` writes through `FileWriteTools.writeIfModified`, which leaves a file untouched when a
+later build produces the same bytes.
 
 ### 1.3 What PELT-level compression buys today
 
@@ -119,7 +121,7 @@ enough to implement elsewhere. That means:
 
 - the specification (Phase 0);
 - the fixes in [section 5](#5-other-details-a-specification-has-to-pin-down);
-- the verification in Phase 1, across repeated builds and across environments.
+- the verification in Phase 2, across repeated builds and across environments.
 
 With F1 in place, compression is the only remaining source of difference, and it lives inside the compressing
 extensions.
@@ -371,8 +373,8 @@ compare canonical forms. This is what F2 delivers on its own.
 | G1 Load anywhere | Yes | Yes | Yes | Yes | Yes |
 | G2 Test by byte comparison | Yes | Yes | Yes | Yes | Yes, of canonical forms |
 | G3 Digests mean the same | Yes | Yes | Yes | Yes | Yes |
-| G4 Generic tools on raw files | Yes | Yes | Yes | Yes, for PELT files | No; with 5a, one index file per module |
-| G5 No spurious rewrites | Yes | Yes | Yes | Yes | If `writeIfModified` compares canonical forms |
+| G4 Generic tools on raw files | Yes | Yes | Yes | Yes | No; with 5a, one index file per module |
+| G5 No spurious rewrites | Yes | Yes | Yes | Yes | If `FileSerializer` compares canonical forms before rewriting |
 | G6 Size and load speed | Close to today, and can be tuned for a better ratio; measure | Same as today | Unknown: likely larger, faster to decode | Expected losses in directories and jars; measure | Same as today |
 | G7 Cost per new language | An encoder of about 1,000 lines | Vendored zlib through FFI, or a port | No compressor, but a new format | None | None |
 | G8 Forward compatibility | Yes | Yes | No | Yes | Yes (5b: no) |
@@ -394,23 +396,30 @@ compare canonical forms. This is what F2 delivers on its own.
   `diff` or `sha256sum` work on PELT files directly.
 - **One notion of equality.** There is no decompression step in tests, and a mismatch is visible with standard
   tools. Canonical forms remain only as a diagnostic.
-- **No version-dependent churn (G5)** without any change to `writeIfModified`.
+- **No version-dependent churn (G5)** without any change to write-if-modified.
 
-Option 5 meets G1 to G3 and G9 equally well, and for G9 what matters most is F3, not the compression choice. What
-it gives up is byte identity itself, and with it the three benefits above. Whether they are worth more than
-today's compression is what the gate in [section 6](#6-recommendation) decides.
+Option 5 meets G1 and G3 equally well, and G2 and G9 by comparing canonical forms rather than files. For G9, what
+matters most is F3, not the compression choice. What Option 5 gives up is byte identity itself, and with it the
+three benefits above. Whether they are worth more than today's compression is what the gate in
+[section 6](#6-recommendation) decides.
 
 ## 5. Other details a specification has to pin down
 
 - **String order and length.** Defined on UTF-16 code units, matching `String.compareTo` and `String.length()`.
   Non-Java implementations must convert or compare accordingly.
 - **Unpaired surrogates.** Writers should reject them with an error naming the element and property. Java's
-  current behavior writes `?` and loses the value. First, scan the existing corpus to confirm none occur.
-- **File-name hash.** Specify `SpreadFunctions.longSpreadOne` exactly, with test vectors; base-32 digits `0-9a-v`
+  current behavior writes `?` and loses the value. First, scan existing models to confirm none occur. The scan has
+  to look at sources or compiled graphs, since existing binaries already hold `?` in their place.
+- **File names.** The 126-unit limit applies to each path segment, extension included. A longer segment is cut so
+  that the kept part, a 13-character hash suffix, and the extension fill exactly 126 units, except that the cut
+  moves back one unit rather than split a surrogate pair. The hash runs over the code points of the part cut off.
+  Specify `SpreadFunctions.longSpreadOne` exactly, with test vectors; base-32 digits `0-9a-v`
   (`Long.toUnsignedString(x, 32)`); left-padded with `0` to 13 characters.
 - **Case-only differences.** Element paths that differ only in letter case, such as `a::B` and `a::b`, map to
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
-  directory, the later write silently replaces the earlier file. A build-time error is the simplest fix.
+  directory, the later write silently replaces the earlier file. A build-time error on every platform is the
+  simplest fix. Such models build today on case-sensitive file systems, so first scan existing models for any that
+  the error would break.
 - **Constants.** File signatures (for example `Long.parseLong("PureManifest", 36)`) and version numbers, listed as
   numbers.
 - **Special strings.** The special-string table in `BaseStringIndex` (`SPECIAL_STRING_IDS`), listed in full.
@@ -421,32 +430,36 @@ today's compression is what the gate in [section 6](#6-recommendation) decides.
 
 ## 6. Recommendation
 
-**Restore byte identity through Option 1, confirmed by measurement, after building the foundations that every
-option needs.**
+**Restore byte identity, after building the foundations that every option needs, through the cheapest option that
+measurement confirms. Option 1 is the likely one.**
 
 1. **Build F1, F2, and F3 first.** They are required whatever the encoder decision. Together they already meet G1
-   to G3 and G9, and with a `writeIfModified` that compares canonical forms, G5 too. That is Option 5: the interim
-   state while the encoder is decided, and the baseline that the measurements compare against.
+   and G3, and G2 and G9 by comparing canonical forms. Once `FileSerializer` compares canonical forms before
+   rewriting a file, they meet G5 too. That is Option 5: the interim state while the encoder is decided, and the
+   baseline that the measurements compare against.
 2. **Prototype Option 1 in Java and measure it, together with Option 4,** against today's level-7 deflate. Phase 4
    lists the measurements. The same run measures what Option 3 needs.
-3. **Decision gate.** Size is the most important criterion, given the multi-gigabyte jars of the largest models.
-   - **Adopt Option 1** if size is within an agreed tolerance (for example 2%), serialization slows by no more than
-     an agreed amount, and load time is unchanged.
+3. **Decision gate.** Each option is held to agreed tolerances on size (for example 2%), serialization time, and
+   load time, measured against Option 5. Size is the most important of the three, given the multi-gigabyte jars of
+   the largest models.
+   - **Adopt Option 4** if it is within the tolerances, after any reader changes that the jar investigation points
+     to. Earlier measurements suggest it will fall short, but it is checked first because it costs the least:
+     adopting it only switches the default versions to element V1 and metadata V2.
+   - **Otherwise, adopt Option 1** if it is within the tolerances.
    - **If it falls short,** tune the encoder first. A deterministic encoder can trade build time for ratio, for
      example with longer chains or better parsing.
-   - **If it still falls short,** consider Option 2, which matches today's ratio exactly at a high porting cost, or
-     Option 4, if the measurements and the jar investigation show that its losses are acceptable.
+   - **If it still falls short,** consider Option 2, which matches today's ratio exactly at a high porting cost.
    - **Otherwise, settle at Option 5,** if keeping today's compression is worth more than byte identity, and the
-     goals byte identity serves can be met another way: 5a for one-digest comparisons, and a `writeIfModified` that
-     compares canonical forms. The invariant then becomes identical canonical forms.
-4. **On adoption,** the compressing extensions switch encoders, and every Java-produced PELT becomes
-   byte-identical across environments. Non-Java writers implement the encoder when they start publishing PELTs.
-   Until then, their output is equivalent by canonical form.
+     goals byte identity serves can be met another way: 5a for one-digest comparisons, and a `FileSerializer` that
+     compares canonical forms before rewriting a file. The invariant then becomes identical canonical forms.
+4. **On adopting Option 1,** the compressing extensions switch encoders (Phase 5), and every Java-produced PELT
+   becomes byte-identical across environments. Whether non-Java writers use the encoder from the start, or stock
+   deflate until they publish PELTs, is [decision 4](#9-decisions-to-make).
 5. **Option 3** is a separate format project, worth starting only if the measurements show that inflate is a large
    share of load time, or that a structural encoding captures most of deflate's gain.
-6. **Option 4 stays on the table.** It is the cheapest route to true byte identity, but earlier measurements suggest
-   it costs size and load time. Phase 4 quantifies both and investigates why compression helps inside jars. If
-   that gain turns out to come mostly from the I/O path, Option 4 becomes much more attractive.
+6. **Option 4 depends on the jar investigation.** Phase 4 investigates why compression helps inside jars. If that
+   gain turns out to come mostly from the I/O path, a reader change might recover it, and Option 4 becomes much
+   more attractive.
 
 ## 7. Phases
 
@@ -464,29 +477,9 @@ Write `docs/reference/pelt-format.md` as a normative description of the current 
 Exit: someone can write a decoder from the document alone, and the document says exactly what a compiler must
 produce. Phase 6 tests the first; a second compiler tests the second.
 
-### Phase 1: canonical uncompressed payloads in Java (F1)
+### Phase 1: canonical-form tooling (F2)
 
-- **Split `SerializerV1` into two steps.** First, graph to logical content: node list, property values, and
-  reference IDs. Second, logical content to bytes.
-  - The deserializer already produces logical content (`InstanceData`), and module metadata already has an object
-    model (`ModuleManifest` and the others).
-  - The second step is what the specification describes and what other languages implement.
-- **Add a round-trip test.** For every file in the corpus, decode, re-encode, and compare canonical forms. This
-  proves that the encoding is a function of the content alone.
-- **Check the compiler's determinism.** Compare canonical digests across two kinds of builds of a fixed set of
-  modules:
-  - *repeated builds in one environment,* which catch run-to-run variation, such as iteration over identity-hashed
-    collections;
-  - *builds across Linux, Windows, and macOS with JDK 11, 17, 21, and 25,* which catch dependence on the
-    environment, such as file listing order.
-
-  Any difference goes to a separate plan for fixing the compiler.
-- **Reject unpaired surrogates.**
-
-Exit: canonical forms are identical across repeated builds and across the matrix, or every difference is recorded
-for the compiler plan.
-
-### Phase 2: canonical-form tooling (F2)
+Phase 2 compares builds with these tools, so they come first.
 
 - **Canonical-form methods** on `ConcreteElementSerializerExtension` and `ModuleMetadataSerializerExtension`, with
   defaults for extensions that do not compress, plus the compressing extensions' overrides and envelope
@@ -498,9 +491,36 @@ for the compiler plan.
 - **A structural diff.** For two files that differ, the tool decodes both and reports the first differences by
   element, node (graph path), property, and value. This is what makes byte comparison useful for debugging a second
   compiler.
-- **Optional:** switch `writeIfModified` to compare canonical forms.
+- **Optional: compare canonical forms before rewriting a file.** `FileSerializer` writes through
+  `FileWriteTools.writeIfModified`, a byte-comparing utility in `legend-pure-m4` that the code generators, `.par`
+  archives, and PCT reports share. The comparison belongs in `FileSerializer`, since m4 cannot see the serializer
+  extensions: a `FileWriteTools` overload takes an equivalence test, and `FileSerializer` passes one that compares
+  bytes first and canonical forms only when the bytes differ. If Option 1 is adopted, Phase 5 removes it again.
 
 Exit: two builds can be checked for equivalence in any environment.
+
+### Phase 2: canonical uncompressed payloads in Java (F1)
+
+- **Split `SerializerV1` into two steps.** First, graph to logical content: node list, property values, and
+  reference IDs. Second, logical content to bytes.
+  - The deserializer already produces logical content (`InstanceData`), and module metadata already has an object
+    model (`ModuleManifest` and the others).
+  - The second step is what the specification describes and what other languages implement.
+- **Add a round-trip test.** For every file in builds of a fixed set of modules (platform, one DSL module, and
+  relational, as in Phase 3), decode, re-encode, and compare canonical forms. This proves that the encoding is a
+  function of the content alone.
+- **Check the compiler's determinism.** Compare canonical digests across two kinds of builds of the same modules:
+  - *repeated builds in one environment,* which catch run-to-run variation, such as iteration over identity-hashed
+    collections;
+  - *builds across Linux, Windows, and macOS with JDK 11, 17, 21, and 25,* which catch dependence on the
+    environment, such as file listing order.
+
+  Any difference goes to a separate plan for fixing the compiler.
+- **Reject unpaired surrogates and case-only path collisions,** each after its scan of existing models (see
+  [section 5](#5-other-details-a-specification-has-to-pin-down)).
+
+Exit: canonical forms are identical across repeated builds and across the matrix, or every difference is recorded
+for the compiler plan.
 
 ### Phase 3: conformance corpus, first version
 
@@ -519,13 +539,13 @@ Exit: two builds can be checked for equivalence in any environment.
 - **Packaging:** a versioned zip, published as a Maven artifact (for example `legend-pure-pelt-conformance`) and
   downloadable for non-Maven CI. Versions follow legend-pure releases, since the Java compiler's output changes
   between releases.
-- **Tests every implementation runs:**
+- **Tests every implementation runs,** where `expected` is a file's expected canonical form:
 
   | Test | Checks |
   |---|---|
   | `decode(file) == dump` | The reader |
   | `canonicalForm(file) == expected` | Decompression, and canonical-form construction |
-  | `encode(dump) == expected payload` | The writer's uncompressed output |
+  | `encode(dump) == expected` | The writer's uncompressed output |
   | `canonicalForm(write(dump)) == expected` | The writer, end to end |
   | `validate(write(dump))` | The compressing extension's envelope rules |
 
@@ -543,7 +563,7 @@ Exit: two builds can be checked for equivalence in any environment.
 
   | Variant | What it represents |
   |---|---|
-  | Uncompressed V1 | Option 4 |
+  | Uncompressed: element V1 and metadata V2 | Option 4 |
   | Level-7 deflate | Today, and Option 5 (the baseline) |
   | The canonical encoder, at a level-7-like setting and at a higher-ratio setting | Option 1 |
 
@@ -555,18 +575,23 @@ Exit: two builds can be checked for equivalence in any environment.
   values, and source information.
 - **Decide** according to [section 6](#6-recommendation).
 
-### Phase 5: adopting the canonical encoder (if the gate passes)
+### Phase 5: adopting the canonical encoder (if the gate chooses Option 1)
 
 - **The compressing extensions switch encoders.** That covers `ConcreteElementSerializerV2`,
   `ModuleMetadataSerializerV3`, and any other extension that compresses.
 - **The corpus gains expected compressed bytes,** and every implementation's tests add `write(dump) == file`.
 - **A canonicality check** re-encodes a file's canonical form with the extension's encoder and compares the result
   with the file.
+- **`FileSerializer` goes back to comparing bytes** before rewriting a file, if Phase 1 made it compare canonical
+  forms. Otherwise, incremental builds would keep every file whose canonical form is unchanged, stock-deflate bytes
+  and all, and output would become byte-identical only after a clean build. Instead, each compressed file is
+  rewritten once.
 
 ### Phase 6: a second implementation
 
-- Write a reader and a writer in one non-Java language; Rust is a good first choice. It passes the corpus, using
-  the canonical encoder if Phase 5 happened and stock deflate otherwise.
+- Write a reader and a writer in one non-Java language; Rust is a good first choice. It passes the corpus. Under
+  Option 1, [decision 4](#9-decisions-to-make) settles whether it starts with the canonical encoder or with stock
+  deflate.
 - Cross-check in CI: each implementation loads the other's files.
 - Spec gaps go back into Phase 0's document.
 - A non-Java compiler, when one exists, builds on this reader and writer. It is tested by compiling the corpus
@@ -577,8 +602,8 @@ Exit: two builds can be checked for equivalence in any environment.
 - **The invariant holds from here on:** byte identity, or identical canonical forms if the plan settles at
   Option 5. A change that breaks it is a bug, and the checks below catch it.
 - **Any format change, new version, or new kind of PELT file** comes with its specification, its canonical-form
-  method, and its corpus entries, in the same PR. A new compressing extension compresses the same way as the
-  existing ones.
+  method, and its corpus entries, in the same PR. Under byte identity, a new compressing extension uses a
+  specified, frozen encoder, as in Option 1.
 - **The Java build runs the corpus tests,** and the determinism checks keep running.
 
 ## 8. Backward compatibility
@@ -589,21 +614,22 @@ Exit: two builds can be checked for equivalence in any environment.
   that they ignore.
 - **Options 3 and 5b** need new extension versions, which earlier readers cannot read.
 - **Adding canonical-form methods** to the extension interfaces is compatible, because they have defaults.
-- **If a Phase 1 fix changes an uncompressed format,** it gets a new version through the existing extension
+- **If a Phase 2 fix changes an uncompressed format,** it gets a new version through the existing extension
   mechanism, and readers keep the old version.
 - **Builds** place no new requirement on dependencies, under any option.
 
 ## 9. Decisions to make
 
-1. **The outcome.** Restore byte identity through Option 1, subject to the gate (recommended), with Option 2 or
-   Option 4 if Option 1 falls short; or settle at Option 5 if byte identity costs more than it is worth.
+1. **The outcome.** Restore byte identity through the gate in section 6 (recommended): Option 4 if it is within
+   the tolerances, otherwise Option 1, with Option 2 if Option 1 falls short. Or settle at Option 5 if byte
+   identity costs more than it is worth.
 2. **Gate tolerances:** how much size, serialization time, and load time byte identity is worth, measured against
    Option 5. Size is the most important of the three.
 3. **Marking canonical files with a new extension version.** Not recommended: canonicality can be checked by
    re-encoding, and avoiding a new version keeps forward compatibility. The price is that the encoder is frozen,
    and any revision comes with a new version.
-4. **Non-Java writers:** require the canonical encoder from the start, or allow stock deflate until they publish
-   PELTs.
+4. **Non-Java writers under Option 1:** require the canonical encoder from the start, or allow stock deflate until
+   they publish PELTs.
 5. **The module index of canonical digests (5a):** needed if the plan settles at Option 5, useful in the interim,
    and unnecessary once byte identity is restored, since raw files then work with generic tools.
 6. **Unpaired surrogates:** reject them (recommended), or encode them, for example as WTF-8, which is a format
@@ -615,10 +641,14 @@ Exit: two builds can be checked for equivalence in any environment.
 
 ## Outside this plan
 
-- **Fixing compiler nondeterminism.** Phase 1 detects any. Fixes belong in a separate plan.
+- **Fixing compiler nondeterminism.** Phase 2 detects any. Fixes belong in a separate plan.
 - **Double compression in jars.** Unless the packaging tool is configured otherwise, PELT entries are deflated a
   second time when packaged, for little gain. Storing them uncompressed (`STORED`) in jars would avoid that work at
   build and load time. Measure before changing.
 - **Byte-identical jars across environments** are out of reach from the PELT side alone. Jar bytes also depend on
   the JDK through compiled class files and the jar's own entry compression. PELT-level identity is the realistic
   scope.
+- **`.par` archives** hold the older binary format and are not PELT files.
+  [ADR-007](../decisions/ADR-007-write-if-modified-for-generated-output.md) made them repeatable in one environment
+  by fixing their entry timestamps, but the JDK's zlib still compresses their entries, so
+  [section 1.2](#12-compressed-bytes-break-the-invariant) applies to them as well.
