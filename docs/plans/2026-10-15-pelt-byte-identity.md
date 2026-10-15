@@ -74,7 +74,7 @@ Nothing above the extensions knows about compression, and this plan keeps it tha
 | Module metadata ordering | Sorted by path, name, or ID with `String.compareTo` (`ModuleManifest.java:479`, `ModuleExternalReferenceMetadata.java:177`, `ElementBackReferenceMetadata.java:290`, `ModuleFunctionNameMetadata.java:175`, `ModuleSourceMetadata.java:380`) | Deterministic, with the same UTF-16 caveat. |
 | Node order in an element | Breadth-first from the element, properties sorted by name (`SerializerV1.java:544`), values in graph order | Deterministic for a given graph. Back-reference properties, the only ones whose order depends on processing order, are kept out of the element or written sorted (`SerializerV1.java:180` and `:249`). |
 | Numbers | Float and Decimal as digit strings from the instance name (`BaseV1.java:175`); Integer as a minimum-width long, or a digit string for BigInteger (`BaseV1.java:219`) | Deterministic. No binary floating-point formatting is involved. |
-| Element file names | Element path, with each segment truncated past 126 UTF-16 units, extension included, and given a base-32 hash suffix (`FilePathTools.java:162`) | Deterministic, but the hash uses Eclipse Collections' `SpreadFunctions.longSpreadOne` (`FilePathTools.java:205`), which a specification must reproduce exactly. |
+| Element file names | Element path, with each segment truncated past 126 UTF-16 units, extension included, and given a base-32 hash suffix (`FilePathTools.java:162`) | Deterministic, but the hash uses Eclipse Collections' `SpreadFunctions.longSpreadOne` (`FilePathTools.java:205`), which a specification must reproduce exactly or replace (see [section 5](#5-other-details-a-specification-has-to-pin-down)). |
 
 ### 1.2 Compressed bytes break the invariant
 
@@ -426,6 +426,16 @@ three benefits above. Whether they are worth more than today's compression is wh
   Specify `SpreadFunctions.longSpreadOne` exactly, with test vectors, and credit Eclipse Collections (EPL-1.0 and
   EDL-1.0) as its source; base-32 digits `0-9a-v` (`Long.toUnsignedString(x, 32)`); left-padded with `0` to 13
   characters.
+- **Replacing the file-name hash.** Instead of specifying `longSpreadOne`, the specification could define a hash
+  function of its own, simple to implement in any language. That removes the dependency on Eclipse Collections,
+  and the credit with it. It also removes a risk: `SpreadFunctions` does not document its output as stable, so two
+  writers with different Eclipse Collections versions could name the same file differently. The price is
+  compatibility. The new hash renames every file with a hashed segment, and readers find files by computing their
+  names. No file records which path provider version wrote it, so a reader with the new hash would not find those
+  files in existing binaries, and an earlier reader would not find them in new ones. A new path provider version
+  does not avoid this, since readers and writers both use the default version. The loss may be only technical:
+  hashing applies only to path segments that exceed 126 units with their extension, and those may not occur in any
+  existing model. A scan of existing models settles it.
 - **Case-only differences.** Element paths that differ only in letter case, such as `a::B` and `a::b`, map to
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
   directory, the later write silently replaces the earlier file. A build-time error on every platform is the
@@ -529,6 +539,8 @@ Exit: two builds can be checked for equivalence in any environment.
   Any difference goes to a separate plan for fixing the compiler.
 - **Reject unpaired surrogates and case-only path collisions,** each after its scan of existing models (see
   [section 5](#5-other-details-a-specification-has-to-pin-down)).
+- **Scan existing models for hashed file names,** which decides what replacing the file-name hash would cost, and
+  replace it if that is the decision.
 
 Exit: canonical forms are identical across repeated builds and across the matrix, or every difference is recorded
 for the compiler plan.
@@ -628,6 +640,9 @@ for the compiler plan.
   that they ignore.
 - **Options 3 and 5b** need new extension versions, which earlier readers cannot read.
 - **Adding canonical-form methods** to the extension interfaces is compatible, because they have defaults.
+- **Replacing the file-name hash** breaks compatibility, in both directions, for files with hashed names (see
+  [section 5](#5-other-details-a-specification-has-to-pin-down)). It breaks nothing in practice if no such files
+  exist.
 - **If a Phase 2 fix changes an uncompressed format,** it gets a new version through the existing extension
   mechanism, and readers keep the old version.
 - **Builds** place no new requirement on dependencies, under any option.
@@ -649,9 +664,13 @@ for the compiler plan.
 6. **Unpaired surrogates:** reject them (recommended), or encode them, for example as WTF-8, which is a format
    change.
 7. **Case-only path collisions:** a build-time error (recommended), or file-name escaping in a new path provider
-   version.
-8. **Where the corpus lives,** and its size budget.
-9. **Which non-Java language comes first.**
+   version. Escaping renames every file it applies to, which depending on the scheme could be nearly all of them,
+   and neither earlier nor later readers would find those files across the change: readers compute file names with
+   the default path provider version, and nothing records which version wrote a module.
+8. **The file-name hash:** specify `longSpreadOne`, or replace it with a function of our own, at a cost to
+   compatibility that depends on whether any existing model has hashed file names.
+9. **Where the corpus lives,** and its size budget.
+10. **Which non-Java language comes first.**
 
 ## Outside this plan
 
