@@ -432,10 +432,12 @@ three benefits above. Whether they are worth more than today's compression is wh
   writers with different Eclipse Collections versions could name the same file differently. The price is
   compatibility. The new hash renames every file with a hashed segment, and readers find files by computing their
   names. No file records which path provider version wrote it, so a reader with the new hash would not find those
-  files in existing binaries, and an earlier reader would not find them in new ones. A new path provider version
-  does not avoid this, since readers and writers both use the default version. The loss may be only technical:
-  hashing applies only to path segments that exceed 126 units with their extension, and those may not occur in any
-  existing model. A scan of existing models settles it.
+  files in existing binaries, and an earlier reader would not find them in new ones. Today, a new path provider
+  version does not avoid this, since readers and writers both use the default version. The
+  [path provider versions plan](2026-10-15-pelt-path-provider-versions.md) would change that: new readers would
+  find files on both sides of the change, and earlier readers would reject only the modules with renamed files. The
+  loss may be only technical anyway: hashing applies only to path segments that exceed 126 units with their
+  extension, and those may not occur in any existing model. A scan of existing models settles it.
 - **Case-only differences.** Element paths that differ only in letter case, such as `a::B` and `a::b`, map to
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
   directory, the later write silently replaces the earlier file. A build-time error on every platform is the
@@ -642,7 +644,8 @@ for the compiler plan.
 - **Adding canonical-form methods** to the extension interfaces is compatible, because they have defaults.
 - **Replacing the file-name hash** breaks compatibility, in both directions, for files with hashed names (see
   [section 5](#5-other-details-a-specification-has-to-pin-down)). It breaks nothing in practice if no such files
-  exist.
+  exist. After the [path provider versions plan](2026-10-15-pelt-path-provider-versions.md), it would break only
+  earlier readers, and only on the modules with hashed names.
 - **If a Phase 2 fix changes an uncompressed format,** it gets a new version through the existing extension
   mechanism, and readers keep the old version.
 - **Builds** place no new requirement on dependencies, under any option.
@@ -666,9 +669,13 @@ for the compiler plan.
 7. **Case-only path collisions:** a build-time error (recommended), or file-name escaping in a new path provider
    version. Escaping renames every file it applies to, which depending on the scheme could be nearly all of them,
    and neither earlier nor later readers would find those files across the change: readers compute file names with
-   the default path provider version, and nothing records which version wrote a module.
+   the default path provider version, and nothing records which version wrote a module. The
+   [path provider versions plan](2026-10-15-pelt-path-provider-versions.md) fixes this for later readers. Earlier
+   readers would then reject each renamed module when they load its manifest.
 8. **The file-name hash:** specify `longSpreadOne`, or replace it with a function of our own, at a cost to
-   compatibility that depends on whether any existing model has hashed file names.
+   compatibility that depends on whether any existing model has hashed file names. The
+   [path provider versions plan](2026-10-15-pelt-path-provider-versions.md) limits that cost to earlier readers,
+   which would reject only the modules with hashed names.
 9. **Where the corpus lives,** and its size budget.
 10. **Which non-Java language comes first.**
 
