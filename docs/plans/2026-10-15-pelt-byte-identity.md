@@ -23,7 +23,8 @@ plan:
 - lays out the goals,
 - describes the ways to restore byte identity, and the alternative,
 - compares their costs and benefits against that baseline,
-- recommends a staged path: foundations that every option needs first, then a measured decision on the encoder.
+- recommends a staged path: measure the cheapest option at once, build the foundations that every option needs,
+  and then decide on the encoder.
 
 "PELT files" means every file the serialization layer writes: element files (`.pelt`), the module files (`.pmf`,
 `.psr`, `.pxr`, `.pbr`, `.pfn`), and any kind added later. Every new kind of PELT file must satisfy the invariant
@@ -74,7 +75,7 @@ Nothing above the extensions knows about compression, and this plan keeps it tha
 | Module metadata ordering | Sorted by path, name, or ID with `String.compareTo` (`ModuleManifest.java:479`, `ModuleExternalReferenceMetadata.java:177`, `ElementBackReferenceMetadata.java:290`, `ModuleFunctionNameMetadata.java:175`, `ModuleSourceMetadata.java:380`) | Deterministic, with the same UTF-16 caveat. |
 | Node order in an element | Breadth-first from the element, properties sorted by name (`SerializerV1.java:544`), values in graph order | Deterministic for a given graph. Back-reference properties, the only ones whose order depends on processing order, are kept out of the element or written sorted (`SerializerV1.java:180` and `:249`). |
 | Numbers | Float and Decimal as digit strings from the instance name (`BaseV1.java:175`); Integer as a minimum-width long, or a digit string for BigInteger (`BaseV1.java:219`) | Deterministic. No binary floating-point formatting is involved. |
-| Element file names | Element path, with each segment truncated past 126 UTF-16 units, extension included, and given a base-32 hash suffix (`FilePathTools.java:162`) | Deterministic, but the hash uses Eclipse Collections' `SpreadFunctions.longSpreadOne` (`FilePathTools.java:205`), which a specification must reproduce exactly or replace (see [section 5](#5-other-details-a-specification-has-to-pin-down)). |
+| Element file names | Element path, with each segment truncated past 126 UTF-16 units, extension included, and given a base-32 hash suffix (`FilePathTools.java:162`) | Deterministic, but the hash uses Eclipse Collections' `SpreadFunctions.longSpreadOne` (`FilePathTools.java:205`), which a specification must reproduce exactly (see [section 5](#5-other-details-a-specification-has-to-pin-down)). |
 
 ### 1.2 Compressed bytes break the invariant
 
@@ -159,8 +160,9 @@ extension.
 - When two files differ, comparing canonical forms tells you whether the content or the encoding diverged.
 - Existing binaries, and any writer not yet using a canonical encoder, can still be compared.
 
-**Digests of content,** as opposed to digests of whole files, should be computed over canonical forms. They then
-agree even where files are not byte-identical, as with existing binaries.
+**Digests of content,** as opposed to digests of whole files, should never be computed over compressed bytes.
+Compute them over canonical forms, or over an encoding of the logical content. They then agree even where files are
+not byte-identical, as with existing binaries.
 
 ### F3. Graph-to-content rules, for a second compiler
 
@@ -206,6 +208,10 @@ Apart from back-reference properties, the compiled graph must be a function of t
 F3 does not depend on the compression decision. Option 5 serves G9 almost as well as true byte identity, by
 comparing canonical forms.
 
+**When each part is needed.** The compiler's determinism is checked in Phase 2, with the foundations, since every
+digest of content that is compared across builds relies on it. The written rules are needed only once a second
+compiler is being built, so they come in Phase 6, off the critical path for the invariant.
+
 ## 3. Options for compression
 
 Every option keeps compression inside the serializer extensions. Options 1 to 4 restore byte identity. Option 5
@@ -221,8 +227,9 @@ gives true byte identity.
 
 **The encoder.** Every choice is fixed. The values below are starting points to tune in the prototype, then freeze.
 
-1. **Input.** The complete uncompressed payload, compressed in one pass. Element files are small, and module files
-   are at most a few megabytes, so buffering is not a problem.
+1. **Input.** The complete uncompressed payload, compressed in one pass. Element files are small, and module
+   metadata is written from an object model that is already fully in memory, so buffering its payload as well is
+   not a problem.
 2. **Matching (LZ77).**
    - 32 KiB window; matches of 3 to 258 bytes.
    - A specified hash of the next three bytes indexes a table of 2^15 chain heads.
@@ -347,7 +354,8 @@ V2, through the existing version selection. Jars compress their entries as usual
   compression itself, for example from the number and size of reads, a reader change might recover it.
 - Which jar settings drive the size difference: compression level and entry method.
 
-**Kept on the table.** Phase 4 measures it alongside Option 1, and the decision follows the numbers.
+**Kept on the table, and measured first.** It needs no new code, so Phase 4 measures it before any encoder is
+built, and the decision follows the numbers.
 
 ### Option 5: stock compression, with equivalence by canonical form
 
@@ -423,21 +431,24 @@ three benefits above. Whether they are worth more than today's compression is wh
 - **File names.** The 126-unit limit applies to each path segment, extension included. A longer segment is cut so
   that the kept part, a 13-character hash suffix, and the extension fill exactly 126 units, except that the cut
   moves back one unit rather than split a surrogate pair. The hash runs over the code points of the part cut off.
-  Specify `SpreadFunctions.longSpreadOne` exactly, with test vectors, and credit Eclipse Collections (EPL-1.0 and
-  EDL-1.0) as its source; base-32 digits `0-9a-v` (`Long.toUnsignedString(x, 32)`); left-padded with `0` to 13
-  characters.
-- **Replacing the file-name hash.** Instead of specifying `longSpreadOne`, the specification could define a hash
-  function of its own, simple to implement in any language. That removes the dependency on Eclipse Collections,
-  and the credit with it. It also removes a risk: `SpreadFunctions` does not document its output as stable, so two
-  writers with different Eclipse Collections versions could name the same file differently. The price is
-  compatibility. The new hash renames every file with a hashed segment, and readers find files by computing their
-  names. No file records which path provider version wrote it, so a reader with the new hash would not find those
-  files in existing binaries, and an earlier reader would not find them in new ones. Today, a new path provider
-  version does not avoid this, since readers and writers both use the default version. The
-  [path provider versions plan](2026-10-15-pelt-path-provider-versions.md) would change that: new readers would
-  find files on both sides of the change, and earlier readers would reject only the modules with renamed files. The
-  loss may be only technical anyway: hashing applies only to path segments that exceed 126 units with their
-  extension, and those may not occur in any existing model. A scan of existing models settles it.
+  Starting from zero, for each code point, the hash applies Eclipse Collections' `SpreadFunctions.longSpreadOne`
+  to the running value and adds the code point. `longSpreadOne` is five operations on a 64-bit value: three
+  xor-shifts and two multiplications by constants. Specify it exactly, with test vectors, and credit Eclipse
+  Collections (EPL-1.0 and EDL-1.0) as its source; base-32 digits `0-9a-v` (`Long.toUnsignedString(x, 32)`);
+  left-padded with `0` to 13 characters.
+- **Keeping the file-name hash.** `SpreadFunctions` does not document its output as stable, so two writers with
+  different Eclipse Collections versions could name the same file differently. A copy of `longSpreadOne` in
+  `FilePathTools`, with tests that pin its output, removes that risk along with the runtime dependency; only the
+  credit remains. Specifying a hash of our own was considered instead, and rejected:
+  - **Hashed names already exist.** legend-pure's own `platform_dsl_mapping` module has one, for the function
+    `propertyMappingByPropertyNameAndTargetIdWithInlineResolution`. A function's element name includes its
+    parameter and return types, so any module can produce one.
+  - **A new hash would rename those files.** Readers find files by computing their names, and no file records which
+    path provider version wrote it, so readers would fail on renamed files partway through loading. With the
+    [path provider and reference ID versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md),
+    new readers would find files on both sides of the change, but every earlier reader would reject each module
+    with a hashed name, the mapping DSL among them.
+  - **Little would be gained.** `longSpreadOne` is already simple to implement in any language.
 - **Case-only differences.** Element paths that differ only in letter case, such as `a::B` and `a::b`, map to
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
   directory, the later write silently replaces the earlier file. A build-time error on every platform is the
@@ -454,15 +465,19 @@ three benefits above. Whether they are worth more than today's compression is wh
 ## 6. Recommendation
 
 **Restore byte identity, after building the foundations that every option needs, through the cheapest option that
-measurement confirms. Option 1 is the likely one.**
+measurement confirms. Option 1 is the likely one, but Option 4 is measured first.**
 
-1. **Build F1, F2, and F3 first.** They are required whatever the encoder decision. Together they already meet G1
-   and G3, and G2 and G9 by comparing canonical forms. Once `FileSerializer` compares canonical forms before
-   rewriting a file, they meet G5 too. That is Option 5: the interim state while the encoder is decided, and the
-   baseline that the measurements compare against.
-2. **Prototype Option 1 in Java and measure it, together with Option 4,** against today's level-7 deflate. Phase 4
-   lists the measurements. The same run measures what Option 3 needs.
-3. **Decision gate.** Each option is held to agreed tolerances on size (for example 2%), serialization time, and
+1. **Measure Option 4 at once.** It needs no new code, since its versions already exist. Phase 4 measures it
+   against today's level-7 deflate, together with the jar investigation and the byte breakdown that Option 3
+   needs. This runs in parallel with the foundations, and if Option 4 is within the tolerances, no encoder is
+   built.
+2. **Build F1 and F2, and check the compiler's determinism (F3).** They are required whatever the encoder
+   decision. Together they already meet G1 and G3, and G2 by comparing canonical forms. Once `FileSerializer`
+   compares canonical forms before rewriting a file, they meet G5 too. That is Option 5: the interim state while
+   the encoder is decided, and the baseline that the measurements compare against. G9 also needs F3's written
+   rules, which follow in Phase 6.
+3. **Prototype Option 1 only if Option 4 falls short,** and measure it the same way.
+4. **Decision gate.** Each option is held to agreed tolerances on size (for example 2%), serialization time, and
    load time, measured against Option 5. Size is the most important of the three, given the multi-gigabyte jars of
    the largest models.
    - **Adopt Option 4** if it is within the tolerances, after any reader changes that the jar investigation points
@@ -475,30 +490,31 @@ measurement confirms. Option 1 is the likely one.**
    - **Otherwise, settle at Option 5,** if keeping today's compression is worth more than byte identity, and the
      goals byte identity serves can be met another way: 5a for one-digest comparisons, and a `FileSerializer` that
      compares canonical forms before rewriting a file. The invariant then becomes identical canonical forms.
-4. **On adopting Option 1,** the compressing extensions switch encoders (Phase 5), and every Java-produced PELT
+5. **On adopting Option 1,** the compressing extensions switch encoders (Phase 5), and every Java-produced PELT
    becomes byte-identical across environments. Whether non-Java writers use the encoder from the start, or stock
    deflate until they publish PELTs, is [decision 4](#9-decisions-to-make).
-5. **Option 3** is a separate format project, worth starting only if the measurements show that inflate is a large
+6. **Option 3** is a separate format project, worth starting only if the measurements show that inflate is a large
    share of load time, or that a structural encoding captures most of deflate's gain.
-6. **Option 4 depends on the jar investigation.** Phase 4 investigates why compression helps inside jars. If that
+7. **Option 4 depends on the jar investigation.** Phase 4 investigates why compression helps inside jars. If that
    gain turns out to come mostly from the I/O path, a reader change might recover it, and Option 4 becomes much
    more attractive.
 
 ## 7. Phases
 
-### Phase 0: specification
+### Phase 0: specification of the encoding
 
 Write `docs/reference/pelt-format.md` as a normative description of the current versions, as implemented:
 
 1. primitives and the string index (V3),
 2. each serializer extension: its payload format; whether and how it compresses; its canonical form; and its
    envelope rules,
-3. file layout (path provider V1),
-4. reference IDs v1: syntax and generation rules, both normative,
-5. the rest of F3: graph-to-content rules, module metadata derivation, and source information.
+3. file layout (path provider V1), including the file-name hash,
+4. reference ID syntax (V1).
 
-Exit: someone can write a decoder from the document alone, and the document says exactly what a compiler must
-produce. Phase 6 tests the first; a second compiler tests the second.
+The rest of F3, including how reference IDs are generated, is what a compiler must follow to produce this content.
+It comes in Phase 6.
+
+Exit: someone can write a decoder and an encoder from the document alone. Phase 6 tests that.
 
 ### Phase 1: canonical-form tooling (F2)
 
@@ -541,8 +557,8 @@ Exit: two builds can be checked for equivalence in any environment.
   Any difference goes to a separate plan for fixing the compiler.
 - **Reject unpaired surrogates and case-only path collisions,** each after its scan of existing models (see
   [section 5](#5-other-details-a-specification-has-to-pin-down)).
-- **Scan existing models for hashed file names,** which decides what replacing the file-name hash would cost, and
-  replace it if that is the decision.
+- **Copy `longSpreadOne` into `FilePathTools`,** crediting Eclipse Collections, with tests that pin today's file
+  names (see [section 5](#5-other-details-a-specification-has-to-pin-down)). No file name changes.
 
 Exit: canonical forms are identical across repeated builds and across the matrix, or every difference is recorded
 for the compiler plan.
@@ -581,19 +597,18 @@ for the compiler plan.
   becomes `compile(sources) == file` once the canonical encoder is adopted. Platform's own sources are the largest
   single test.
 
-### Phase 4: canonical encoder prototype, measurements, and decision gate
+### Phase 4: measurements, encoder prototype, and decision gate
 
-- **Write the encoder specification and a Java prototype.** Test it with fixed vectors and fuzzing against stock
-  inflaters (Java, zlib, and one non-Java inflater). Vectors: empty input, one byte, long runs of a single byte,
-  random data, input longer than the window, and input longer than one block.
+The measurements need no new product code, so they start at once, in parallel with Phase 0. Only the encoder
+prototype waits, and it is built only if Option 4 falls short.
+
 - **Choose module sets:** platform, the legend-engine module set, and at least one of the largest models.
-- **Measure each option on those sets, in directories and in jars:**
+- **Measure today's variants on those sets, in directories and in jars:**
 
   | Variant | What it represents |
   |---|---|
   | Uncompressed: element V1 and metadata V2 | Option 4 |
   | Level-7 deflate | Today, and Option 5 (the baseline) |
-  | The canonical encoder, at a level-7-like setting and at a higher-ratio setting | Option 1 |
 
   For each, record size, serialization time, and load time.
 - **Use the jar settings that production builds use** (compression level and entry method), and record them.
@@ -601,7 +616,12 @@ for the compiler plan.
   from the I/O path (number and size of reads, buffering), or from compression itself.
 - **For Option 3,** record a breakdown of V1's bytes by category: string index, node headers, property headers,
   values, and source information.
-- **Decide** according to [section 6](#6-recommendation).
+- **Decide on Option 4** according to [section 6](#6-recommendation).
+- **Only if Option 4 falls short, prototype the canonical encoder.** Write its specification and a Java prototype.
+  Test it with fixed vectors and fuzzing against stock inflaters (Java, zlib, and one non-Java inflater). Vectors:
+  empty input, one byte, long runs of a single byte, random data, input longer than the window, and input longer
+  than one block. Measure it on the same sets, at a level-7-like setting and at a higher-ratio setting, and decide
+  according to section 6.
 
 ### Phase 5: adopting the canonical encoder (if the gate chooses Option 1)
 
@@ -611,19 +631,30 @@ for the compiler plan.
 - **A canonicality check** re-encodes a file's canonical form with the extension's encoder and compares the result
   with the file.
 - **`FileSerializer` goes back to comparing bytes** before rewriting a file, if Phase 1 made it compare canonical
-  forms. Otherwise, incremental builds would keep every file whose canonical form is unchanged, stock-deflate bytes
-  and all, and output would become byte-identical only after a clean build. Instead, each compressed file is
-  rewritten once.
+  forms. If it kept comparing canonical forms, incremental builds would keep every file whose canonical form is
+  unchanged, stock-deflate bytes and all, and output would become byte-identical only after a clean build.
+  Comparing bytes instead rewrites each compressed file once.
 
-### Phase 6: a second implementation
+### Phase 6: rules for compilers, and a second implementation
 
-- Write a reader and a writer in one non-Java language; Rust is a good first choice. It passes the corpus. Under
-  Option 1, [decision 4](#9-decisions-to-make) settles whether it starts with the canonical encoder or with stock
-  deflate.
+This phase starts the non-Java work, and can be scheduled with it once Phase 3's corpus exists. It is not on the
+critical path for the invariant.
+
+- **Rules for compilers.** Extend Phase 0's document with the rest of F3, all normative:
+  - reference IDs: the generation rules;
+  - graph-to-content rules: element membership, ordering, back-reference properties, stubs, and compile states;
+  - module metadata derivation;
+  - source information.
+
+  Exit: the document says exactly what a compiler must produce.
+- **A second implementation.** Write a reader and a writer in one non-Java language; Rust is a good first choice.
+  It passes the corpus. Under Option 1, [decision 4](#9-decisions-to-make) settles whether it starts with the
+  canonical encoder or with stock deflate.
 - Cross-check in CI: each implementation loads the other's files.
 - Spec gaps go back into Phase 0's document.
-- A non-Java compiler, when one exists, builds on this reader and writer. It is tested by compiling the corpus
-  sources and comparing its binaries with the expected files, using the structural diff to locate differences.
+- A non-Java compiler, when one exists, builds on this reader and writer, and on the rules above. It is tested by
+  compiling the corpus sources and comparing its binaries with the expected files, using the structural diff to
+  locate differences.
 
 ### Phase 7: keeping it true
 
@@ -642,10 +673,8 @@ for the compiler plan.
   that they ignore.
 - **Options 3 and 5b** need new extension versions, which earlier readers cannot read.
 - **Adding canonical-form methods** to the extension interfaces is compatible, because they have defaults.
-- **Replacing the file-name hash** breaks compatibility, in both directions, for files with hashed names (see
-  [section 5](#5-other-details-a-specification-has-to-pin-down)). It breaks nothing in practice if no such files
-  exist. After the [path provider versions plan](2026-10-15-pelt-path-provider-versions.md), it would break only
-  earlier readers, and only on the modules with hashed names.
+- **The file-name hash does not change,** so no file name changes. The copy of `longSpreadOne` in `FilePathTools`
+  is tested to give today's names (see [section 5](#5-other-details-a-specification-has-to-pin-down)).
 - **If a Phase 2 fix changes an uncompressed format,** it gets a new version through the existing extension
   mechanism, and readers keep the old version.
 - **Builds** place no new requirement on dependencies, under any option.
@@ -670,14 +699,11 @@ for the compiler plan.
    version. Escaping renames every file it applies to, which depending on the scheme could be nearly all of them,
    and neither earlier nor later readers would find those files across the change: readers compute file names with
    the default path provider version, and nothing records which version wrote a module. The
-   [path provider versions plan](2026-10-15-pelt-path-provider-versions.md) fixes this for later readers. Earlier
-   readers would then reject each renamed module when they load its manifest.
-8. **The file-name hash:** specify `longSpreadOne`, or replace it with a function of our own, at a cost to
-   compatibility that depends on whether any existing model has hashed file names. The
-   [path provider versions plan](2026-10-15-pelt-path-provider-versions.md) limits that cost to earlier readers,
-   which would reject only the modules with hashed names.
-9. **Where the corpus lives,** and its size budget.
-10. **Which non-Java language comes first.**
+   [path provider and reference ID versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md)
+   fixes this for later readers. Earlier readers would then reject each renamed module when they load its
+   manifest.
+8. **Where the corpus lives,** and its size budget.
+9. **Which non-Java language comes first.**
 
 ## Outside this plan
 

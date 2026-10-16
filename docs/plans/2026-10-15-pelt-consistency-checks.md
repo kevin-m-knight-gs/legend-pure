@@ -1,7 +1,10 @@
 # Plan: PELT consistency checks
 
 Status: proposal, 2026-10-15.
-Prerequisite: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md). This plan starts after that one.
+Prerequisite: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md), through its Phase 2. This plan starts
+after that phase, and does not wait for that plan's decision on compression.
+Related: [path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md),
+and the [roadmap](2026-10-16-pelt-serialization-roadmap.md) for how the plans fit together.
 
 ## Goal
 
@@ -19,15 +22,17 @@ only on a digest mismatch and checks whether the change affects what the module 
 | As early as possible | Runs when the `ElementLoader` is built, before any element loads |
 | As accurate as possible | The slow path checks what can actually break: referenced elements, and instance shapes including multiplicity |
 | As targeted as possible | Only the elements a module references and the classifiers its instances use |
-| Minimal storage | A small summary file per module, plus a detail file that is read only on a mismatch |
-| Minimal cost | The fast path is one small file read and a few digest comparisons per module |
+| Minimal storage | One file per module: a small summary, then details that are read only on a mismatch |
+| Minimal cost | The fast path reads the start of one file per module and compares a few digests |
 
 ## Constraints
 
-- **PELT bytes are stable.** This plan assumes the invariant that the byte-identity plan restores, together with
+- **PELT content is stable.** The checks rely on what the byte-identity plan's Phase 2 establishes, together with
   any compiler fixes its determinism check calls for: the same sources, compiled by the same legend-pure version,
-  produce byte-identical PELT files in every environment and language. The checks rely on it, and the files this
-  plan adds must preserve it.
+  produce the same logical content in every environment and language, and its uncompressed encoding is canonical.
+  Digests here are computed from that encoding, never from compressed bytes, so they do not depend on how that
+  plan settles compression. The file this plan adds must preserve whatever invariant that plan settles on: byte
+  identity, or identical canonical forms.
 - **Existing binaries must keep loading.** They carry no consistency data, so the checks skip them.
 - **Builds may insist** that dependencies carry consistency data.
 - **There is more than one loader.** `PureCompilerLoader`, `MetadataPelt` (used in legend-engine by `PureModel`,
@@ -57,8 +62,8 @@ At build time, for each module M:
 
 - an **element content digest (ECD)** for each element, ignoring source information;
 - a **module consistency digest (MCD)** over the ECDs of M's elements;
-- a **summary file** (`.pcs`) with M's MCD and, for every transitive dependency D, D's MCD as seen at build time;
-- a **detail file** (`.pcd`) holding:
+- a **consistency file** (`.pcd`), which starts with a **summary**: M's MCD and, for every transitive dependency D,
+  D's MCD as seen at build time. **Details** follow:
   1. the ECDs of M's elements,
   2. the referenced elements in other modules, with their ECDs at build time,
   3. M's metamodel footprint,
@@ -66,10 +71,10 @@ At build time, for each module M:
 
 At load time:
 
-- **Fast path:** for each module A that has a summary, compare each recorded dependency MCD with that
-  dependency's current MCD. If they all match, A is done.
-- **Slow path:** for each module A with a mismatch, read the detail files it needs, then run the
-  referenced-element check for each mismatched dependency and the footprint check for all of A's classifiers.
+- **Fast path:** for each module A that has consistency data, read the summary at the start of its file, and
+  compare each recorded dependency MCD with that dependency's current MCD. If they all match, A is done.
+- **Slow path:** for each module A with a mismatch, read the details it needs, then run the referenced-element
+  check for each mismatched dependency and the footprint check for all of A's classifiers.
   - If everything passes, log at INFO and continue.
   - If anything fails, throw one exception listing every failure.
 
@@ -96,6 +101,12 @@ ECDs. Otherwise, a dependency rebuilt with a newer legend-pure would fail the re
 dependent that was not rebuilt, though nothing they rely on changed. The prefix changes, to `pelt-ecd-2`, only if
 the logical content model changes in a way that V1 cannot represent.
 
+**Reference ID versions do change ECDs.** A dependency rebuilt with another reference ID version has different IDs,
+and IDs are content. Its dependents' back-reference files are keyed by those IDs, so they need rebuilding, and the
+referenced-element check correctly fails them. The summary records each dependency's reference ID version, so the
+failure can name that cause (see the [path provider and reference ID
+versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md)).
+
 ### Module consistency digest (MCD)
 
 `MCD(M)` is SHA-256 over the ASCII bytes `pelt-mcd-1`, a zero byte, and then, for each element of M in manifest
@@ -104,10 +115,10 @@ order (sorted by path): the path as length-prefixed UTF-8, followed by its ECD.
 **An MCD covers only M's own content, not its dependencies'.** Every loaded module is checked against its own
 recorded dependencies, so chaining digests through dependencies would only add false mismatches.
 
-**Digests are copied, not recomputed.** At build time, a dependency's MCD and ECDs come from its summary and
-detail files, so they do not depend on the build environment. They are recomputed only for a dependency compiled
-from source in the same build, and by the byte-identity invariant, recomputation gives the same digests in every
-environment.
+**Digests are copied, not recomputed.** At build time, a dependency's MCD and ECDs come from its consistency file,
+so they do not depend on the build environment. They are recomputed only for a dependency compiled from source in
+the same build, and since its logical content and uncompressed encoding are stable, recomputation gives the same
+digests in every environment.
 
 ### Footprint
 
@@ -133,7 +144,7 @@ whose values are written in the element stream *are* in the footprint, like any 
 
 ### Declarations
 
-For each type M defines, the detail file records:
+For each type M defines, the details record:
 
 - **Every type:** its path and its direct generalizations (raw type paths). This lets subtype checks work for
   classes, enumerations, primitive types, and so on.
@@ -211,6 +222,9 @@ property with a default exactly like one without.
 2. If the element no longer exists, fail.
 3. If its ECD differs, fail.
 
+If D's reference ID version differs from the one A's summary recorded for D, the findings say so: D's IDs changed,
+not necessarily its content.
+
 **Why whole elements:** identical content covers everything a dependent can rely on: reference IDs into the
 element (keyed and positional), back-reference instance IDs, and data derived from the element, such as types
 inferred from a function signature.
@@ -222,32 +236,36 @@ for a rebuild.
 
 ## Files and formats
 
-New files go beside the existing module files under `org/finos/legend/pure/module/`:
+One new file goes beside the existing module files under `org/finos/legend/pure/module/`: `<module>.pcd`, the
+module's consistency data. Serialization already writes a great many files, so the summary and the details share
+one file rather than adding two kinds.
 
-- `<module>.pcs`: the summary.
-- `<module>.pcd`: the detail.
+**Layout.** The file follows the conventions of the other module files: a signature, a version, string indexes,
+and big-endian integers. It starts with the summary, uncompressed, so the fast path reads only the start of the
+file, whether from a directory or from a jar, where reading the start of an entry inflates little more than that
+start. The details follow, compressed the way module metadata is compressed under the byte-identity plan's
+outcome: with its encoder, or not at all if it settles on uncompressed files. The extension defines the file's
+canonical form (the header, the summary, and the details uncompressed) and its envelope rules: compressed details
+are exactly one raw deflate stream, ending at the end of the file.
 
-Path methods go on `FilePathProviderExtension` as default methods, to keep the interface compatible. Both files
-follow the conventions of the other module files: a signature, a version, a string index, and big-endian integers.
-The summary is small and stays uncompressed. The detail file is compressed like other module metadata.
+A path method goes on `FilePathProviderExtension` as a default method, to keep the interface compatible.
 
-**A new serializer extension interface,** `ModuleConsistencySerializerExtension`, writes and reads both files, with
+**A new serializer extension interface,** `ModuleConsistencySerializerExtension`, writes and reads the file, with
 its own version line. It is loaded and wired through `FileSerializer` and `FileDeserializer` like the existing
-ones. The files cannot go in `ModuleMetadataSerializerExtension`, which writes every module file under a single
-version: adding them there would bump the manifest format (see below).
+ones. With its own line, the consistency format can change without a new module metadata version, and module
+metadata can change without a new consistency format.
 
-**Both are PELT files,** so they must satisfy the byte-identity invariant like every other kind. Each comes with
-its specification, its canonical-form method, and its conformance-corpus entries, and the detail file compresses
-the same way as the other compressing extensions.
+**It is a PELT file,** so it must satisfy the byte-identity invariant like every other kind. It comes with its
+specification, its canonical-form method, and its conformance-corpus entries.
 
-**Why separate files rather than a new manifest version:**
-
-- `.pmf` is unchanged, and earlier legend-pure versions ignore files they don't know, so older loaders can still
-  read new binaries.
-- There is no manifest format bump.
-- The consistency data gets its own version line.
-
-Under this design, the in-progress `allDependencyVersions` on `ModuleManifest` is not needed.
+**Why a separate file rather than a field in the manifest.** Data that earlier readers may safely ignore goes in a
+file they skip (see the [roadmap](2026-10-16-pelt-serialization-roadmap.md)). Consistency data is that kind, and
+every module carries it, so a manifest field would move every new module's manifest to a metadata version that
+earlier readers reject. Version records are the opposite case: earlier readers must not ignore them, and most
+modules have none, so the [path provider and reference ID
+versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md) puts them in the manifest only when they
+are needed. The price of a separate file is one lookup per module on every load, which the fast path's cost
+includes.
 
 **Summary contents:**
 
@@ -255,7 +273,10 @@ Under this design, the in-progress `allDependencyVersions` on `ModuleManifest` i
 - module name,
 - MCD,
 - an optional label (the Maven project version, passed in by the mojo),
-- for each transitive dependency, sorted by name: its name, MCD, and label.
+- for each transitive dependency, sorted by name: its name, MCD, reference ID version, and label.
+
+Every reference ID version is 1 until a module can record another. The field is in the format from the start, so
+that the format does not have to change then.
 
 **Detail contents:**
 
@@ -266,16 +287,19 @@ Under this design, the in-progress `allDependencyVersions` on `ModuleManifest` i
 
 **Size:**
 
-- The summary is typically under a couple of kilobytes.
-- The detail file is dominated by ECDs: 32 bytes per element, or 16 if truncated (see
+- The summary grows with the dependency closure: for each transitive dependency, a name, a 32-byte MCD, a
+  reference ID version, and a label.
+- The details are dominated by ECDs: 32 bytes per element, or 16 if truncated (see
   [decision 2](#decisions-and-open-questions)).
-- Referenced elements and footprints add little.
+- Referenced elements grow with what the module references, footprints with the classifiers its instances use,
+  and declarations with the types the module defines.
 
 ## Where the check runs
 
 - **A new `ModuleConsistencyChecker`** in `serialization/compiler/metadata`, or a new `consistency` package. It
-  takes a `MetadataIndex` and a source of summary and detail files (a `FileDeserializer` plus a class loader or a
-  directory). It returns a result: pass, pass with notes, or failures.
+  takes a `MetadataIndex` and a source of consistency files (a `FileDeserializer` plus a class loader or a
+  directory). It returns a result: pass, pass with notes, or failures. It finds a module's file the way the
+  module's other files are found, which matters once a module can record a path provider version other than 1.
 - **It is called from `ElementLoader.Builder.build()`** (`ElementLoader.java:398`).
   - `PureCompilerLoader` and `MetadataPelt` (`MetadataPelt.java:261`) both build an `ElementLoader` from a
     `MetadataIndex` before loading any element. `FSPeltGraphLoaderHybridPureGraphCache` goes through
@@ -283,7 +307,9 @@ Under this design, the in-progress `allDependencyVersions` on `ModuleManifest` i
   - So this one call covers every current loader, and every future loader that uses `ElementLoader`.
   - Loaders that bypass `ElementLoader` can call the checker directly; document that contract.
 - **Audit legend-engine's PELT users** to confirm they all go through `ElementLoader`: `PureModel`,
-  `GenerateJavaProject`, `GenerateDiff`, `ElasticsearchPureSpecificationGenerator`, and `InterpretedMetadata`.
+  `GenerateJavaProject`, `GenerateDiff`, `ElasticsearchPureSpecificationGenerator`, and `InterpretedMetadata`. The
+  [path provider and reference ID versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md)
+  relies on the same audit.
 - **Modes:**
   - `STRICT` (the default): failures throw.
   - `WARN`: failures are logged and loading continues. This is the emergency escape hatch.
@@ -301,12 +327,15 @@ Under this design, the in-progress `allDependencyVersions` on `ModuleManifest` i
     per classifier.
   - Collect the declarations.
   - Derive referenced elements from the module metadata that `ModuleMetadataGenerator` already produces.
-  - Write `.pcd` and `.pcs` after the other module files.
+  - Write the consistency file after the other module files.
 - **Dependency digests:**
-  - For dependencies loaded from PELT (`PureCompilerBinaryGenerator`), read them from the dependencies' files.
+  - For dependencies loaded from PELT (`PureCompilerBinaryGenerator`), read them from the dependencies'
+    consistency files.
   - For a dependency compiled from source in the same build, compute them in memory.
-- **Insistence:** if a dependency loaded from PELT has no `.pcs` or `.pcd`, or a version this build does not
-  support, fail the build: "Dependency 'X' has no consistency metadata. Rebuild it with legend-pure N or later."
+  - A dependency's reference ID version is 1 until manifests can record another, and then comes from its manifest.
+- **Insistence:** if a dependency loaded from PELT has no consistency file, or one in a version this build does
+  not support, fail the build: "Dependency 'X' has no consistency metadata. Rebuild it with legend-pure N or
+  later."
 - **The load-time check also runs during builds in `STRICT` mode,** because dependencies are loaded through
   `PureCompilerLoader`.
 - **The label** passes from `PureCompilerMojo` (the project version) through `PureCompilerBinaryGenerator`.
@@ -315,11 +344,12 @@ Under this design, the in-progress `allDependencyVersions` on `ModuleManifest` i
 
 | Module A | Dependency D | Result |
 |---|---|---|
-| Legacy (no `.pcs`) | any | Not checked. Legacy modules are listed once, at DEBUG. |
+| Legacy (no consistency file) | any | Not checked. Legacy modules are listed once, at DEBUG. |
+| Consistency format newer than this loader understands | any | A itself is not checked, with an INFO log, so older loaders tolerate newer files. |
 | New | New | Fast path; slow path on a mismatch. |
 | New | Legacy | **Fail**: "cannot verify". A recorded D's MCD at build time, so D was replaced by a build from an older legend-pure. |
+| New | Consistency format newer than this loader understands | **Fail**: "cannot verify". D was built by a newer legend-pure than this loader, which cannot read D's MCD. The message says to upgrade the loader. |
 | New | Not in the load set | **Fail**: dependency not loaded. |
-| Consistency format newer than this loader understands | any | Treated as legacy, with an INFO log, so older loaders tolerate newer files. |
 
 ## Error reporting
 
@@ -339,22 +369,34 @@ Rebuild core_relational against platform 5.82.0, or load platform 5.81.0.
 
 ## Phases
 
-### Phase 1: fast path
+The checker is phased, but the format is not. Binaries outlive the release that wrote them, so a release that wrote
+only part of the consistency data would leave modules that every later release must handle, and that later builds
+would reject as dependencies. Phase 1 writes the complete file.
 
-- ECD and MCD computation, `.pcs` files, dependency digests, and build-time insistence.
-- `ModuleConsistencySerializerExtension`, and the `.pcs` format in the PELT specification and the conformance
+### Phase 1: the consistency file, and the fast path
+
+- ECD and MCD computation, dependency digests, and build-time insistence.
+- The complete consistency file: the summary, and the details (ECDs, referenced elements, footprints, and
+  declarations).
+- The flattening algorithm, which computes the footprints' writer shapes, with the test of agreement with
+  `ProcessorSupport`.
+- `ModuleConsistencySerializerExtension`, and the file's format in the PELT specification and the conformance
   corpus.
 - The checker's fast path, where any mismatch is an error naming the modules and versions.
 - Handling of legacy modules, and the mode switch.
-- Exit: lineup mismatches fail clearly, and fast-path time is measured on the full legend-engine module set.
+- Exit: every module built from here on carries complete consistency data, and fast-path time is measured on the
+  full legend-engine module set.
 
 ### Phase 2: slow path
 
-- `.pcd` files: ECDs, referenced elements, footprints, and declarations, with their specification and corpus
-  entries.
-- The flattening algorithm, with the test of agreement with `ProcessorSupport`.
 - The rules, and the slow path in the checker, with the messages above.
 - Exit: compatible mismatches pass with an INFO log; incompatible ones fail with specific findings.
+
+### Releasing Phases 1 and 2
+
+Phases 1 and 2 ship in the same release. The fast path alone fails every module whose dependency changed in any
+way, including changes the module does not use, while the goal is to fail only when a change matters. If a release
+must carry Phase 1 without Phase 2, its default mode is `WARN`.
 
 ### Phase 3: rollout
 
@@ -385,13 +427,14 @@ then load with `PureCompilerLoader` and with an `ElementLoader` configured the w
 | A referenced element removed | Fails |
 | A referenced element moved, unchanged, to another module | Passes |
 | Dependency replaced by a legacy build | Fails |
+| Dependency's consistency file in a format version this loader does not know | Fails, saying to upgrade the loader |
 | Legacy dependent | Not checked |
 | `WARN` mode | Logs and loads |
 
 The footprint check needs instances whose classifier is defined in another module. Realistically that classifier
 is an M3 class, and M3 cannot be edited in a test. Instead, simulate the change: a test utility rewrites the
-dependency's `.pcd` declarations (for example, renaming `Stereotype.value` to `name`) and its `.pcs` MCD, then
-loads. That exercises the Annotation-rename case end to end.
+dependency's consistency file, changing its declarations (for example, renaming `Stereotype.value` to `name`) and
+its MCD, then loads. That exercises the Annotation-rename case end to end.
 
 ### Performance
 
@@ -400,7 +443,9 @@ loads. That exercises the Annotation-rename case end to end.
 
 ## Decisions and open questions
 
-1. **Separate files, or manifest V4.** Separate files are recommended.
+1. **Where the data goes:** one separate file (recommended), two files (a summary and details), or a field in a new
+   manifest version. A field would move every new module's manifest to a version that earlier readers reject. Two
+   files would add a second kind of file, to spare the fast path from reading the start of a larger one.
 2. **Digest size.** Full SHA-256 for MCDs. For ECDs, full SHA-256 or its first 16 bytes; 16 bytes is recommended,
    since collisions are not an adversarial concern here.
 3. **An opt-out from build-time insistence for the first release?** Not recommended.
@@ -413,3 +458,5 @@ loads. That exercises the Annotation-rename case end to end.
 7. **Labels:** the Maven version only, or also a VCS revision.
 8. **ECD encoding:** one fixed encoding, V1 (recommended), or the writing extension's own payload, which is
    simpler but changes every ECD whenever the element format changes.
+9. **A dependency whose consistency format is newer than the loader:** fail (recommended), or keep the summary's
+   layout fixed across format versions, so that earlier loaders can still read every module's MCDs.
