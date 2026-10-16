@@ -18,6 +18,7 @@ import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.map.primitive.IntObjectMap;
 import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyVirtualPackage;
 import org.finos.legend.pure.m3.coreinstance.lazy.ManyValues;
 import org.finos.legend.pure.m3.coreinstance.lazy.OneValue;
@@ -154,7 +155,7 @@ class SimpleLazyVirtualPackage extends AbstractLazyVirtualPackage implements Cor
     }
 
     @Override
-    protected void initialize(ListIterable<? extends BackReference> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder)
+    protected void initialize(IntObjectMap<? extends ListIterable<? extends BackReference>> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder)
     {
         MutableList<Supplier<? extends CoreInstance>> applications = Lists.mutable.empty();
         MutableList<Supplier<? extends CoreInstance>> modelElements = Lists.mutable.empty();
