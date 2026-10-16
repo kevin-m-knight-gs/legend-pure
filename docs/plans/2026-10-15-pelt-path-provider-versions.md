@@ -78,7 +78,9 @@ were written with V1.
 
 - `ModuleManifest` gains a path provider version, 1 by default.
 - A new metadata serializer version writes it as part of the manifest. Metadata V1 to V3 cannot hold it: they
-  write a manifest only if its version is 1, and reading any of them gives 1.
+  write a manifest only if its version is 1, and reading any of them gives 1. The
+  [reference ID versions plan](2026-10-16-pelt-reference-id-versions.md) records the module's reference ID version
+  in the same new metadata version, so a manifest moves to it when either value is not 1.
 - A module records the lowest path provider version that names all of its files the same way as the version it
   was written with ([section 4](#4-recording-the-lowest-version-that-works)). Its manifest uses the new metadata
   version only when the recorded version is not 1. Otherwise, the manifest is written exactly as today.
