@@ -23,6 +23,7 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.map.primitive.IntObjectMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.eclipse.collections.api.tuple.Pair;
 import org.eclipse.collections.impl.tuple.Tuples;
@@ -350,6 +351,7 @@ public class M3LazyCoreInstanceGenerator
 
         MutableList<Class<?>> additionalImports = Lists.mutable.with(
                 BackReferenceProvider.class,
+                IntObjectMap.class,
                 MetadataIndex.class,
                 ReferenceIdResolvers.class,
                 Supplier.class,
@@ -1522,7 +1524,7 @@ public class M3LazyCoreInstanceGenerator
     {
         return builder
                 .append("    @Override\n")
-                .append("    protected void initialize(ListIterable<? extends BackReference> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder)\n")
+                .append("    protected void initialize(IntObjectMap<? extends ListIterable<? extends BackReference>> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder)\n")
                 .append("    {\n")
                 .append("        _State current = this.state;\n")
                 .append("        this.state = new _State(current, backReferences, referenceIds, elementBuilder);\n")
@@ -1746,7 +1748,7 @@ public class M3LazyCoreInstanceGenerator
         });
         builder.append("        }\n");
         builder.append('\n');
-        builder.append("        private _State(_State init, ListIterable<? extends BackReference> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder)\n");
+        builder.append("        private _State(_State init, IntObjectMap<? extends ListIterable<? extends BackReference>> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder)\n");
         builder.append("        {\n");
         builder.append("            super(init);\n");
         if (simpleProperties.notEmpty())

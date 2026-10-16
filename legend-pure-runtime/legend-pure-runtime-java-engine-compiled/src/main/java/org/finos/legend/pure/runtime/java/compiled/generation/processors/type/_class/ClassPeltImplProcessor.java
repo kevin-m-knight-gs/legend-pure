@@ -23,6 +23,7 @@ import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.map.primitive.IntObjectMap;
 import org.eclipse.collections.api.set.MutableSet;
 import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyConcreteElement;
 import org.finos.legend.pure.m3.coreinstance.lazy.AbstractLazyCoreInstance;
@@ -299,6 +300,7 @@ public class ClassPeltImplProcessor
                 BackReference.class,
                 BackReferenceProvider.class,
                 ElementBuilder.class,
+                IntObjectMap.class,
                 MetadataIndex.class,
                 ReferenceIdResolvers.class,
                 Supplier.class,
@@ -1146,7 +1148,7 @@ public class ClassPeltImplProcessor
     private static void appendVirtualPackageInitialize(StringBuilder builder, ListIterable<PropertyInfo> simpleProperties)
     {
         builder.append("    @Override\n")
-                .append("    protected void initialize(ListIterable<? extends BackReference> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder)\n")
+                .append("    protected void initialize(IntObjectMap<? extends ListIterable<? extends BackReference>> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder)\n")
                 .append("    {\n");
         MutableSet<String> backRefProperties = Sets.mutable.empty();
         simpleProperties.forEach(propertyInfo ->

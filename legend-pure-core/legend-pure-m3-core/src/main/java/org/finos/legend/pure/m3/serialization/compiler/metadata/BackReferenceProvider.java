@@ -15,8 +15,24 @@
 package org.finos.legend.pure.m3.serialization.compiler.metadata;
 
 import org.eclipse.collections.api.list.ListIterable;
+import org.eclipse.collections.api.map.primitive.IntObjectMap;
 
 public interface BackReferenceProvider
 {
+    /**
+     * Get the back references for an instance, from all the files that hold them.
+     *
+     * @param instanceId reference id of the instance
+     * @return back references for the instance
+     */
     ListIterable<? extends BackReference> getBackReferences(String instanceId);
+
+    /**
+     * Get the back references for an instance, grouped by the reference id version of the files that hold them. The
+     * ids in a back reference must be resolved with the version of its file.
+     *
+     * @param instanceId reference id of the instance
+     * @return back references for the instance, by reference id version
+     */
+    IntObjectMap<? extends ListIterable<? extends BackReference>> getBackReferencesByReferenceIdVersion(String instanceId);
 }

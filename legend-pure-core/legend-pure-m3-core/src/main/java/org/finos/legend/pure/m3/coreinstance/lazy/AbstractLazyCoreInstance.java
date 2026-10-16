@@ -19,6 +19,7 @@ import org.eclipse.collections.api.factory.Maps;
 import org.eclipse.collections.api.list.ImmutableList;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.map.primitive.IntObjectMap;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation._package._Package;
 import org.finos.legend.pure.m3.serialization.compiler.element.ElementBuilder;
@@ -475,7 +476,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
     }
 
     protected static <FE extends CoreInstance, AE extends CoreInstance, P extends CoreInstance, QP extends CoreInstance, RU extends CoreInstance, G extends CoreInstance>
-    void collectBackReferences(ListIterable<? extends BackReference> backReferences,
+    void collectBackReferences(IntObjectMap<? extends ListIterable<? extends BackReference>> backReferencesByReferenceIdVersion,
                                ReferenceIdResolvers referenceIds,
                                ElementBuilder elementBuilder,
                                Collection<? super Supplier<? extends FE>> applications,
@@ -485,7 +486,7 @@ public abstract class AbstractLazyCoreInstance extends AbstractCoreInstance impl
                                Collection<? super Supplier<? extends RU>> refUsages,
                                Collection<? super Supplier<? extends G>> specializations)
     {
-        LazyCoreInstanceUtilities.collectBackReferences(backReferences, referenceIds, elementBuilder, applications, modelElements, propertiesFromAssociations, qualifiedPropertiesFromAssociations, refUsages, specializations);
+        LazyCoreInstanceUtilities.collectBackReferences(backReferencesByReferenceIdVersion, referenceIds, elementBuilder, applications, modelElements, propertiesFromAssociations, qualifiedPropertiesFromAssociations, refUsages, specializations);
     }
 
     protected static <FE extends CoreInstance, AE extends CoreInstance, P extends CoreInstance, QP extends CoreInstance, RU extends CoreInstance, G extends CoreInstance>

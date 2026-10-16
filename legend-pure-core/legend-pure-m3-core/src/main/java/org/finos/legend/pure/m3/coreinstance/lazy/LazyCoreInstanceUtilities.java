@@ -17,6 +17,7 @@ package org.finos.legend.pure.m3.coreinstance.lazy;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
+import org.eclipse.collections.api.map.primitive.IntObjectMap;
 import org.finos.legend.pure.m3.navigation.M3Paths;
 import org.finos.legend.pure.m3.navigation.M3Properties;
 import org.finos.legend.pure.m3.serialization.compiler.element.ElementBuilder;
@@ -542,7 +543,7 @@ public class LazyCoreInstanceUtilities
     // Back references
 
     public static <FE extends CoreInstance, AE extends CoreInstance, P extends CoreInstance, QP extends CoreInstance, RU extends CoreInstance, G extends CoreInstance>
-    void collectBackReferences(ListIterable<? extends BackReference> backReferences,
+    void collectBackReferences(IntObjectMap<? extends ListIterable<? extends BackReference>> backReferencesByReferenceIdVersion,
                                ReferenceIdResolvers referenceIds,
                                ElementBuilder elementBuilder,
                                Collection<? super Supplier<? extends FE>> applications,
@@ -552,7 +553,11 @@ public class LazyCoreInstanceUtilities
                                Collection<? super Supplier<? extends RU>> refUsages,
                                Collection<? super Supplier<? extends G>> specializations)
     {
-        collectBackReferences(backReferences, referenceIds.resolver(), null, elementBuilder, applications, modelElements, propertiesFromAssociations, qualifiedPropertiesFromAssociations, refUsages, specializations);
+        // Each version's back references are resolved with that version's resolver
+        for (int version : backReferencesByReferenceIdVersion.keySet().toSortedArray())
+        {
+            collectBackReferences(backReferencesByReferenceIdVersion.get(version), referenceIds.resolver(version), null, elementBuilder, applications, modelElements, propertiesFromAssociations, qualifiedPropertiesFromAssociations, refUsages, specializations);
+        }
     }
 
     public static <FE extends CoreInstance, AE extends CoreInstance, P extends CoreInstance, QP extends CoreInstance, RU extends CoreInstance, G extends CoreInstance>

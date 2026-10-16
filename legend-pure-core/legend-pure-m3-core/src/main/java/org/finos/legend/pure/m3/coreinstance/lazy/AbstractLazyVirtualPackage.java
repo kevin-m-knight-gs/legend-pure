@@ -15,6 +15,7 @@
 package org.finos.legend.pure.m3.coreinstance.lazy;
 
 import org.eclipse.collections.api.list.ListIterable;
+import org.eclipse.collections.api.map.primitive.IntObjectMap;
 import org.finos.legend.pure.m3.serialization.compiler.element.ElementBuilder;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.BackReference;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.BackReferenceProvider;
@@ -69,7 +70,7 @@ public abstract class AbstractLazyVirtualPackage extends AbstractLazyCoreInstanc
                     try
                     {
                         BackReferenceProvider backReferenceProvider = local.backRefProviderDeserializer.get();
-                        initialize(backReferenceProvider.getBackReferences(this.path), local.referenceIds, local.elementBuilder);
+                        initialize(backReferenceProvider.getBackReferencesByReferenceIdVersion(this.path), local.referenceIds, local.elementBuilder);
                         this.init = null;
                     }
                     catch (Throwable t)
@@ -87,7 +88,16 @@ public abstract class AbstractLazyVirtualPackage extends AbstractLazyCoreInstanc
         }
     }
 
-    protected abstract void initialize(ListIterable<? extends BackReference> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder);
+    /**
+     * Initialize the package's back references. A virtual package has no file of its own, so it has no reference id
+     * version of its own; and the modules that hold back references to it may have written them with different
+     * versions.
+     *
+     * @param backReferences the package's back references, by the reference id version they must be resolved with
+     * @param referenceIds   reference id resolvers
+     * @param elementBuilder element builder
+     */
+    protected abstract void initialize(IntObjectMap<? extends ListIterable<? extends BackReference>> backReferences, ReferenceIdResolvers referenceIds, ElementBuilder elementBuilder);
 
     private static class Init
     {
