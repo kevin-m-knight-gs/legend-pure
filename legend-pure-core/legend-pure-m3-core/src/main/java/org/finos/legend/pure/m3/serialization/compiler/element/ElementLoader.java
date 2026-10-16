@@ -17,9 +17,14 @@ package org.finos.legend.pure.m3.serialization.compiler.element;
 import org.eclipse.collections.api.block.predicate.Predicate;
 import org.eclipse.collections.api.factory.Lists;
 import org.eclipse.collections.api.factory.Maps;
+import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.api.map.ConcurrentMutableMap;
+import org.eclipse.collections.api.map.MapIterable;
 import org.eclipse.collections.api.map.MutableMap;
+import org.eclipse.collections.api.map.primitive.IntObjectMap;
+import org.eclipse.collections.api.map.primitive.MutableIntObjectMap;
+import org.eclipse.collections.impl.factory.primitive.IntObjectMaps;
 import org.eclipse.collections.impl.map.mutable.ConcurrentHashMap;
 import org.finos.legend.pure.m3.serialization.compiler.file.FileDeserializer;
 import org.finos.legend.pure.m3.serialization.compiler.metadata.BackReference;
@@ -44,6 +49,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class ElementLoader
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElementLoader.class);
+
+    private static final BackReferenceProvider EMPTY_BACK_REFERENCES = new DeserializedBackReferences(IntObjectMaps.immutable.empty());
 
     private final MetadataIndex index;
     private final ElementBuilder builder;
@@ -220,12 +227,15 @@ public abstract class ElementLoader
         boolean debug = LOGGER.isDebugEnabled();
         long start = debug ? System.nanoTime() : 0L;
         LOGGER.debug("Deserializing back references for {}", path);
-        MutableMap<String, MutableList<BackReference>> map = Maps.mutable.empty();
+        // The ids in a back reference must be resolved with the reference id version of its file, so we keep the back
+        // references from files of different versions apart
+        MutableIntObjectMap<MutableMap<String, MutableList<BackReference>>> mapsByVersion = IntObjectMaps.mutable.empty();
         this.index.getBackReferenceModuleNames(path).forEach(moduleName ->
         {
             ElementBackReferenceMetadata backRefMetadata = deserializeBackReferences(moduleName, path);
-            if (backRefMetadata != null)
+            if ((backRefMetadata != null) && backRefMetadata.getInstanceBackReferenceMetadata().notEmpty())
             {
+                MutableMap<String, MutableList<BackReference>> map = mapsByVersion.getIfAbsentPut(backRefMetadata.getReferenceIdVersion(), Maps.mutable::empty);
                 backRefMetadata.getInstanceBackReferenceMetadata().forEach(ibr ->
                 {
                     String instanceRefId = ibr.getInstanceReferenceId();
@@ -242,23 +252,78 @@ public abstract class ElementLoader
             }
         });
 
-        if (map.isEmpty())
+        if (mapsByVersion.isEmpty())
         {
-            return id -> Lists.fixedSize.empty();
+            return EMPTY_BACK_REFERENCES;
         }
 
-        map.forEachValue(ListHelper::sortAndRemoveDuplicates);
+        mapsByVersion.forEachValue(map -> map.forEachValue(ListHelper::sortAndRemoveDuplicates));
         if (debug)
         {
             long end = System.nanoTime();
             LOGGER.debug("Finished deserializing back references for {} in {}ns", path, end - start);
         }
-        return id -> map.getIfAbsentValue(id, Lists.fixedSize.empty());
+        return new DeserializedBackReferences(mapsByVersion);
     }
 
     abstract DeserializedConcreteElement deserializeConcreteElement(String path);
 
     abstract ElementBackReferenceMetadata deserializeBackReferences(String moduleName, String path);
+
+    private static class DeserializedBackReferences implements BackReferenceProvider
+    {
+        private final IntObjectMap<? extends MapIterable<String, MutableList<BackReference>>> mapsByVersion;
+        private final MapIterable<String, MutableList<BackReference>> mergedMap;
+
+        private DeserializedBackReferences(IntObjectMap<? extends MapIterable<String, MutableList<BackReference>>> mapsByVersion)
+        {
+            this.mapsByVersion = mapsByVersion;
+            this.mergedMap = mergeMaps(mapsByVersion);
+        }
+
+        @Override
+        public ListIterable<? extends BackReference> getBackReferences(String instanceId)
+        {
+            return this.mergedMap.getIfAbsentValue(instanceId, Lists.fixedSize.empty());
+        }
+
+        @Override
+        public IntObjectMap<? extends ListIterable<? extends BackReference>> getBackReferencesByReferenceIdVersion(String instanceId)
+        {
+            MutableIntObjectMap<ListIterable<? extends BackReference>> result = IntObjectMaps.mutable.ofInitialCapacity(this.mapsByVersion.size());
+            this.mapsByVersion.forEachKeyValue((version, map) ->
+            {
+                ListIterable<? extends BackReference> backReferences = map.get(instanceId);
+                if ((backReferences != null) && backReferences.notEmpty())
+                {
+                    result.put(version, backReferences);
+                }
+            });
+            return result;
+        }
+
+        private static MapIterable<String, MutableList<BackReference>> mergeMaps(IntObjectMap<? extends MapIterable<String, MutableList<BackReference>>> mapsByVersion)
+        {
+            switch (mapsByVersion.size())
+            {
+                case 0:
+                {
+                    return Maps.immutable.empty();
+                }
+                case 1:
+                {
+                    return mapsByVersion.getAny();
+                }
+                default:
+                {
+                    MutableMap<String, MutableList<BackReference>> merged = Maps.mutable.empty();
+                    mapsByVersion.forEachValue(map -> map.forEachKeyValue((id, backReferences) -> merged.getIfAbsentPut(id, Lists.mutable::empty).addAll(backReferences)));
+                    merged.forEachValue(ListHelper::sortAndRemoveDuplicates);
+                    return merged;
+                }
+            }
+        }
+    }
 
     private static class ClassLoaderElementLoader extends ElementLoader
     {
