@@ -1,8 +1,9 @@
 # Plan: more than one path provider or reference ID version
 
 Status: proposal, 2026-10-16. This plan merges two earlier ones, on path provider versions (2026-10-15) and on
-reference ID versions (2026-10-16), which shared their mechanism. Phase 1 can be done now, and Phase 2 once the
-PELT specification exists. Phase 3 waits until a second version of either extension is wanted.
+reference ID versions (2026-10-16), which shared their mechanism. Three of Phase 1's four fixes are merged
+([#1371], [#1372], and [#1373]), and the fourth remains. Phase 2 can be done once the PELT specification exists.
+Phase 3 waits until a second version of either extension is wanted.
 Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 [PELT consistency checks](2026-10-15-pelt-consistency-checks.md), and the
 [roadmap](2026-10-16-pelt-serialization-roadmap.md) for how the plans fit together.
@@ -31,7 +32,7 @@ provider version. No second reference ID version is proposed either. One could b
 position, since a positional ID can resolve to a different instance without error when the element it points into
 changes, or IDs that are simpler for a second compiler to generate. So the plan is phased:
 
-- **Phase 1** fixes what is wrong whatever happens. It can be done now.
+- **Phase 1** fixes what is wrong whatever happens. Three of its four fixes are merged, and the fourth remains.
 - **Phase 2** writes the rules that every later version must keep into the PELT specification. It needs only the
   specification.
 - **Phase 3** records versions and honors them. It ships with the first new version of either extension.
@@ -78,7 +79,7 @@ long after startup, partway through execution.
 - **Only path provider V1 exists,** so every existing binary was written with it.
 - **Readers start from the manifest.** Loaders know module names, compute each manifest's location, and read the
   manifest before any other file of the module: `PureCompilerLoader` (`PureCompilerLoader.java:472`) and
-  `MetadataPelt` (`MetadataPelt.java:297`). legend-engine loads through `MetadataPelt`. `ElementLoader` finds an
+  `MetadataPelt` (`MetadataPelt.java:299`). legend-engine loads through `MetadataPelt`. `ElementLoader` finds an
   element's module through `MetadataIndex.getElementModuleName` (`MetadataIndex.java:238`), and back-reference
   lookups already take a module name.
 - **The manifest has no room for another field.** Metadata V2's manifest holds a string index, the module name,
@@ -97,7 +98,7 @@ long after startup, partway through execution.
 | Element files (`.pelt`) | Instances outside the element that it refers to, and each of its own instances | In the header (`ConcreteElementSerializer.java:59`) | Picks the element's resolver (`AbstractLazyConcreteElement.java:117`) |
 | Per-element back-reference files (`.pbr`) | Keys: instances of the target element. Values: instances in the writing module's elements, such as function applications, reference usages, and specializations | In the file | Ignored. `ElementLoader` merges every module's file for an element into one map and drops the versions (`ElementLoader.java:218`) |
 | External-reference files (`.pxr`) | Instances in other modules that the module's elements refer to | In the file | No loader reads these files |
-| Generated Java (compiled mode) | Classes, enumerations, and other instances that generated code looks up, as string literals, for example `getMetadataAccessor().getClass("...")` (`GenericTypeSerializationInCode.java:59`); lambdas, keyed by ID | Not recorded: `IdBuilder` always uses V1 (`ReferenceIdV1IdBuilder.java:59`) | `MetadataPelt` pins version 1 (`MetadataPelt.java:267`); `MetadataEager` indexes instances by V1 IDs computed at run time (`MetadataEager.java:125`) |
+| Generated Java (compiled mode) | Classes, enumerations, and other instances that generated code looks up, as string literals, for example `getMetadataAccessor().getClass("...")` (`GenericTypeSerializationInCode.java:59`); lambdas, keyed by ID | Not recorded: `IdBuilder` always uses V1 (`ReferenceIdV1IdBuilder.java:59`) | `MetadataPelt` resolves them with version 1 (`MetadataPelt.java:69`); `MetadataEager` indexes instances by V1 IDs computed at run time (`MetadataEager.java:125`) |
 
 Manifests, source metadata, function-name metadata, and the back-reference index hold element paths, not reference
 IDs.
@@ -107,17 +108,24 @@ IDs.
 - **Back-reference values use the wrong resolver.** Generated lazy classes resolve an element's back references
   with the element's own resolver, and virtual packages, which have no element file, use the default
   (`LazyCoreInstanceUtilities.java:555`, from `M3LazyCoreInstanceGenerator.java:1765`, and in compiled mode from
-  `ClassPeltImplProcessor.java:1149`). Neither is the version of the file the values came from.
-- **The writer picks a version twice.** The element serializer and the module-metadata generator each default to
-  the newest loaded version, independently (`FileSerializer.java:59`, `ModuleMetadataGenerator.java:208`). Nothing
-  ties a module's element files and its metadata to the same version.
-- **`MetadataPelt`'s pin does two jobs.** It sets the default for the whole `ElementLoader`, not only for the IDs
-  in generated code that `MetadataPelt.getInstance` resolves (`MetadataPelt.java:66` and `:150`).
-- **`ReferenceIds` picks the wrong extension manager.** It uses the array-backed manager when the number of
-  versions equals `max - min` (`ReferenceIds.java:292`), which should be `max - min + 1`. A contiguous set of
-  versions falls through to the general manager, which works. A set with one gap, such as {1, 3}, throws
-  `ArrayIndexOutOfBoundsException` while building.
-- **No test loads more than one version.** No test-only `ReferenceIdExtension` exists.
+  `ClassPeltImplProcessor.java:1149`). Neither is the version of the file the values came from. Phase 1's
+  remaining fix covers virtual packages. Elements get the right resolver once back-reference files follow their
+  targets ([section 5](#5-matching-back-references)).
+- **No test loads modules written with different versions together.** A test-only reference ID version now exists
+  ([#1373]), and Phase 1's remaining fix adds the first such tests.
+
+**Fixed by Phase 1** ([section 9](#9-phases)):
+
+- **The writer picked a version twice.** The element serializer and the module-metadata generator each defaulted
+  to the newest loaded version, independently, so nothing tied a module's element files and its metadata to the
+  same version. `PureCompilerSerializer` now writes element files with the module-metadata generator's version
+  ([#1373]).
+- **`MetadataPelt`'s pin did two jobs.** It set the default for the whole `ElementLoader`, not only for the IDs in
+  generated code that `MetadataPelt.getInstance` resolves. It now resolves those IDs with version 1 explicitly,
+  and leaves the loader's default alone ([#1372]).
+- **`ReferenceIds` picked the wrong extension manager.** It compared the number of versions with `max - min`
+  instead of `max - min + 1`. A contiguous set of versions fell through to the general manager, which works. A set
+  with one gap, such as {1, 3}, threw `ArrayIndexOutOfBoundsException` while building ([#1371]).
 
 ## 2. Rules
 
@@ -335,7 +343,7 @@ M writes its back-reference file for E entirely in E's version: keys and values.
 - **The writer needs E's provider,** which it has: a `ReferenceIdExtension` supplies both a provider and a
   resolver, and the writer could not have loaded E without that version's resolver.
 - **Today's resolution becomes right for elements:** they resolve back references with their own resolver, which
-  is then the file's version. Virtual packages still need R1.
+  is then the file's version. Virtual packages still need R1, which Phase 1's remaining fix gives them.
 
 ### Two versions per back-reference file
 
@@ -393,8 +401,8 @@ holding for every version.
 
 ### Recommendation
 
-**Freeze generated code at V1.** R4 keeps self-describing IDs open, if a later version ever has to reach generated
-code.
+**Freeze generated code at V1.** `MetadataPelt` already resolves generated-code IDs with V1 explicitly ([#1372]).
+R4 keeps self-describing IDs open, if a later version ever has to reach generated code.
 
 ## 7. Reading
 
@@ -427,8 +435,8 @@ code.
 - `FileSerializer` computes the recorded path provider version ([section 4](#4-what-a-module-records)) when it
   writes a module's manifest, and writes the manifest at the lowest metadata version that can hold it.
 - `ModuleMetadataGenerator` builds manifests without records, as now. `FileSerializer` adds them as it writes.
-- A writer uses one reference ID provider for a module's element files and its module metadata, and writes each
-  back-reference file in its target's version.
+- A writer uses one reference ID version for a module's element files and its module metadata, as
+  `PureCompilerSerializer` has done since [#1373], and writes each back-reference file in its target's version.
 - **A dependency's reference ID version** comes from its manifest, which loaders already hold in `MetadataIndex`.
   For a module compiled in the same run, it is the writer's own version.
 
@@ -439,14 +447,25 @@ written as today.
 
 ### Phase 1: fix what is wrong regardless of versions
 
-This can be done now.
+Three of the four fixes are merged, along with a test-only reference ID version:
 
-- Fix the extension-manager selection in `ReferenceIds`, with tests for {1}, {1, 2}, {1, 3}, and {1, 2, 4}.
-- Add a test-only reference ID V2 that keeps R3 to R5: V1's rules, with a syntax for non-root IDs that V1 rejects.
-- Use one reference ID version per module on the write side, for element files and module metadata alike.
-- Apply R1 in the loader. `ElementLoader` keeps each back-reference file's version, and virtual packages resolve
-  their back references with it. `MetadataPelt` resolves generated-code IDs with V1 explicitly, instead of pinning
-  the `ElementLoader` default.
+- **`ReferenceIds` picks its extension manager correctly** ([#1371]). The tests cover {1}, contiguous sets, sets
+  missing one version or several, and explicit and unknown default versions.
+- **One reference ID version per module on the write side** ([#1373]). `PureCompilerSerializer` writes element
+  files with the module-metadata generator's version.
+- **`MetadataPelt` resolves generated-code IDs with V1 explicitly** ([#1372]), instead of pinning the
+  `ElementLoader` default.
+- **A test-only reference ID version that keeps R3 to R5** ([#1373]). `PrefixedReferenceIdExtension`, in m3-core's
+  test sources, gives each packageable element its path, as V1 does, and every other instance its V1 ID with a
+  prefix that V1 rejects. Its version number is -1: real versions count up from 1, so it can never be mistaken for
+  one or collide with one. It is not registered as a service.
+
+The fourth fix remains:
+
+- **Apply R1 to virtual packages' back references.** `ElementLoader` keeps each back-reference file's version, and
+  virtual packages resolve their back references with it. `BackReferenceProvider` gains
+  `getBackReferencesByReferenceIdVersion`, and the `initialize` method of generated virtual-package classes takes
+  the back references grouped by version ([section 10](#10-compatibility)).
 
 Output does not change.
 
@@ -459,6 +478,7 @@ This needs the PELT specification, from the byte-identity plan's Phase 0, and no
   external-reference metadata, and the target's version for back-reference files.
 - Each new reference ID version comes with tests showing that it rejects the other versions' non-root IDs, accepts
   the same root IDs, and resolves against elements written with every other version.
+  `TestPrefixedReferenceIdExtension` checks the first two for the test version.
 
 Output does not change.
 
@@ -479,19 +499,22 @@ This starts when a new version of either extension is wanted, and ships with tha
   target, keeping the module-level version as the default.
 - Loaders check, when the manifest loads, that the reader has the module's versions; and, as elements load, that
   element headers match the manifest and that each back-reference file records its target's version.
-- Tests, with a test-only path provider V2 that renames some files, and the test-only reference ID V2 from Phase 1:
-  - modules written with V1 and V2 of each extension load together, from a classpath and from a directory, and
-    back references across a reference ID boundary attach in both directions;
-  - a module whose names path provider V2 does not change records nothing, and its files are byte-identical to
-    V1's output;
+- Tests, with the test-only reference ID version from Phase 1, and a test-only path provider version that renames
+  some files. Each test-only version is numbered outside the range of real versions. The path provider's must be
+  above that range, such as `Integer.MAX_VALUE`, since the lowest-version rule
+  ([section 4](#4-what-a-module-records)) tries versions from 1 up. The tests check that:
+  - modules written with V1 and with the test version of each extension load together, from a classpath and from
+    a directory, and back references across a reference ID boundary attach in both directions;
+  - a module whose names the test path provider does not change records nothing, and its files are byte-identical
+    to V1's output;
   - a reader limited to metadata V3 rejects each module that records a version, at its manifest, and reads the
     rest;
   - a reader rejects a record whose name or version it does not know;
   - a back-reference file in the wrong version is rejected;
-  - generated code with V1 IDs resolves against elements written with reference ID V2;
+  - generated code with V1 IDs resolves against elements written with the test reference ID version;
   - files left behind by an earlier path provider version are ignored;
-  - once the consistency checks exist, a dependency rebuilt with reference ID V2 fails its dependents before any
-    element loads, with a message naming the version change.
+  - once the consistency checks exist, a dependency rebuilt with the test reference ID version fails its
+    dependents before any element loads, with a message naming the version change.
 
 Exit: a new version of either extension can ship.
 
@@ -507,7 +530,13 @@ Exit: a new version of either extension can ship.
   lacks reference ID V2 rejects the V2 module at its manifest, before it needs those files.
 - **External-reference files** keep the version of their module's element files. Anything that reads them later
   must compare their IDs with others by resolving them (R3), not as strings (R2).
-- **The API changes are additive:** the list of version records on `ModuleManifest`, module-scoped methods on
+- **Phase 1's API changes.** The merged fixes add two `FileSerializer.serializeElement` overloads that take a
+  reference ID version, and make `ModuleMetadataGenerator.getReferenceIdVersion` public ([#1373]). The remaining
+  fix adds `getBackReferencesByReferenceIdVersion` to the `BackReferenceProvider` interface, which only
+  `ElementLoader` implements, and changes the `initialize` method of generated virtual-package classes. Only
+  `Package` has virtual instances, so only legend-pure's own build generates those classes. legend-engine uses
+  neither.
+- **Phase 3's API changes are additive:** the list of version records on `ModuleManifest`, module-scoped methods on
   `FileDeserializer`, and per-target versions on `ModuleBackReferenceMetadata`, with its module-level version kept
   as the default. No interface gains a method.
 
@@ -527,3 +556,7 @@ Exit: a new version of either extension can ship.
 7. **Generated code:** frozen at V1 (recommended), with the version recorded, or relying on self-describing IDs.
 8. **R3 to R5:** binding on every later version (recommended), or decided version by version.
 9. **When Phase 3 ships:** with the first new version (recommended), or ahead of it.
+
+[#1371]: https://github.com/finos/legend-pure/pull/1371
+[#1372]: https://github.com/finos/legend-pure/pull/1372
+[#1373]: https://github.com/finos/legend-pure/pull/1373

@@ -9,7 +9,7 @@ other, the rules they share, and the order to do them in.
 |---|---|---|
 | [Byte-identical PELT files](2026-10-15-pelt-byte-identity.md) | Makes every PELT file a function of its logical content alone, and specifies the format | Now |
 | [PELT consistency checks](2026-10-15-pelt-consistency-checks.md) | Finds, before any element loads, modules built against other versions of their dependencies | After the byte-identity plan's Phase 2 |
-| [More than one path provider or reference ID version](2026-10-16-pelt-path-provider-and-reference-id-versions.md) (the versions plan) | Lets modules written with different versions of either extension load together | Phases 1 and 2 early; Phase 3 when a new version is wanted |
+| [More than one path provider or reference ID version](2026-10-16-pelt-path-provider-and-reference-id-versions.md) (the versions plan) | Lets modules written with different versions of either extension load together | Phase 1 now, three of its four fixes merged; Phase 2 early; Phase 3 when a new version is wanted |
 
 ## Dependencies
 
@@ -57,7 +57,8 @@ other, the rules they share, and the order to do them in.
 1. **Now, in parallel:**
    - byte identity's Phase 4 measurements of Option 4 against today's compression, which need no new product
      code;
-   - the versions plan's Phase 1, which fixes latent bugs;
+   - the rest of the versions plan's Phase 1, which fixes latent bugs: three of its four fixes are merged, and the
+     fourth, for virtual packages' back references, remains;
    - byte identity's Phase 0, the specification of the encoding.
 2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification exists.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 2 is done.
