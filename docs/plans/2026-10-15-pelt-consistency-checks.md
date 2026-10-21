@@ -30,9 +30,10 @@ only on a digest mismatch and checks whether the change affects what the module 
 - **PELT content is stable.** The checks rely on what the byte-identity plan's Phase 2 establishes, together with
   any compiler fixes its determinism check calls for: the same sources, compiled by the same legend-pure version,
   produce the same logical content in every environment and language, and its uncompressed encoding is canonical.
-  Digests here are computed from that encoding, never from compressed bytes, so they do not depend on how that
-  plan settles compression. The file this plan adds must preserve whatever invariant that plan settles on: byte
-  identity, or identical canonical forms.
+  Digests here are computed from content, in that plan's digest encoding (see its
+  [content model](2026-10-15-pelt-byte-identity.md#f0-the-content-model)), never from a file's bytes. So they do
+  not depend on how that plan settles compression, or on which versions write the files. The file this plan adds
+  must preserve whatever invariant that plan settles on: byte identity, or identical canonical forms.
 - **Existing binaries must keep loading.** They carry no consistency data, so the checks skip them.
 - **Builds may insist** that dependencies carry consistency data.
 - **There is more than one loader.** `PureCompilerLoader`, `MetadataPelt` (used in legend-engine by `PureModel`,
@@ -82,24 +83,23 @@ At load time:
 
 ### Element content digest (ECD)
 
-`ECD(e)` is SHA-256 over the ASCII bytes `pelt-ecd-1`, a zero byte, and the element's logical content encoded in
-the element V1 payload format, whichever extension version writes the element's file, except that:
-
-- the element's source ID is written as the empty string (`SerializerV1.java:104`);
-- every node's source information is written as absent (`SerializerV1.java:315`).
-
-V1 is uncompressed, so computing an ECD needs no compression pass.
+`ECD(e)` is SHA-256 over the ASCII bytes `pelt-ecd-1`, a zero byte, and the element's content in the byte-identity
+plan's digest encoding, with source information set aside: no source ID, and no source information on any node.
+Whichever versions write the element's file, its ECD is the same.
 
 **Why ignore source information:** a line shift in a dependency does not make its dependents inconsistent.
 Including it would send every platform edit down the slow path.
 
-**Why digest serialized content, not source:** the same source compiled by a different legend-pure version can
-produce different shapes and reference IDs.
+**Why digest content, not source:** the same source compiled by a different legend-pure version can produce
+different shapes and reference IDs.
 
-**Why one fixed encoding:** a new element format version that encodes the same content differently must not change
-ECDs. Otherwise, a dependency rebuilt with a newer legend-pure would fail the referenced-element check of every
-dependent that was not rebuilt, though nothing they rely on changed. The prefix changes, to `pelt-ecd-2`, only if
-the logical content model changes in a way that V1 cannot represent.
+**Why not a file format:** a new element format version, or a new string index version inside one, that encodes
+the same content differently must not change ECDs. Otherwise, a dependency rebuilt with a newer legend-pure would
+fail the referenced-element check of every dependent that was not rebuilt, though nothing they rely on changed.
+The element V1 payload, for example, is fixed only in part: it starts with a string index that records its own
+version (`StringIndexer.java:46`), and the newest loaded string index version is the default. The digest encoding
+has no string index, and a new kind of value only adds a tag to it. The prefix changes, to `pelt-ecd-2`, only if
+the digest encoding changes in a way that changes existing digests.
 
 **Reference ID versions do change ECDs.** A dependency rebuilt with another reference ID version has different IDs,
 and IDs are content. Its dependents' back-reference files are keyed by those IDs, so they need rebuilding, and the
@@ -117,8 +117,7 @@ recorded dependencies, so chaining digests through dependencies would only add f
 
 **Digests are copied, not recomputed.** At build time, a dependency's MCD and ECDs come from its consistency file,
 so they do not depend on the build environment. They are recomputed only for a dependency compiled from source in
-the same build, and since its logical content and uncompressed encoding are stable, recomputation gives the same
-digests in every environment.
+the same build, and since its content is stable, recomputation gives the same digests in every environment.
 
 ### Footprint
 
@@ -210,10 +209,15 @@ property with a default exactly like one without.
 
 **Built from:**
 
-- each external reference ID in `ModuleExternalReferenceMetadata`, reduced to its root element with
+- each external reference in the content of the module's elements, reduced to its root element with
   `GraphPath.parse(id).getStartNodePath()`;
 - each target element in `ModuleBackReferenceMetadata`;
 - filtered to elements in other modules, and recorded with each element's ECD and its module at build time.
+
+The content is what the element files hold, so these references cannot disagree with them.
+`ModuleExternalReferenceMetadata` comes from a separate walk of the graph
+(`ConcreteElementMetadataGenerator.java:136`), which agrees with the element files only as long as the two walks
+agree.
 
 **On a mismatch with dependency D,** for each recorded element whose module was D:
 
@@ -230,9 +234,9 @@ element (keyed and positional), back-reference instance IDs, and data derived fr
 inferred from a function signature.
 
 **Known coarseness:** an edit to the body of a referenced function fails every dependent that calls it. A later
-refinement could digest a per-classifier "interface" projection, for example omitting a concrete function's
-expression sequence. Even unrefined, a false positive is no worse than the fast-path-only phase: an error asking
-for a rebuild.
+refinement could digest a per-classifier "interface" projection of the content, for example without a concrete
+function's expression sequence. Even unrefined, a false positive is no worse than the fast-path-only phase: an
+error asking for a rebuild.
 
 ## Files and formats
 
@@ -256,7 +260,7 @@ ones. With its own line, the consistency format can change without a new module 
 metadata can change without a new consistency format.
 
 **It is a PELT file,** so it must satisfy the byte-identity invariant like every other kind. It comes with its
-specification, its canonical-form method, and its conformance-corpus entries.
+specification, its content model, its canonical-form method, and its conformance-corpus entries.
 
 **Why a separate file rather than a field in the manifest.** Data that earlier readers may safely ignore goes in a
 file they skip (see the [roadmap](2026-10-16-pelt-serialization-roadmap.md)). Consistency data is that kind, and
@@ -320,13 +324,15 @@ that the format does not have to change then.
 ## Build-time behavior
 
 - **In `PureCompilerSerializer`:**
-  - Compute each element's ECD while serializing it, by encoding its logical content with the V1 rules and without
-    source information into a SHA-256 sink. The byte-identity plan separates logical content from its encoding, so
-    this is a second encoding step, not a second serialization pass.
-  - Collect the footprint through a callback from `SerializerV1`, which already computes property information
-    per classifier.
+  - Compute each element's ECD while serializing it, from the content that the byte-identity plan's generator
+    produces for the element's file: hash it in the digest encoding, without source information. The content is
+    already in memory, so this is one more pass over it, not over the graph.
+  - Collect the footprint from the same content, which holds each node's classifier, its properties with their
+    source types, and its values. Only the classifiers of external references, and the check that observed types
+    conform, need the graph.
   - Collect the declarations.
-  - Derive referenced elements from the module metadata that `ModuleMetadataGenerator` already produces.
+  - Derive referenced elements from the same content, and from the back-reference metadata that
+    `ModuleMetadataGenerator` already produces.
   - Write the consistency file after the other module files.
 - **Dependency digests:**
   - For dependencies loaded from PELT (`PureCompilerBinaryGenerator`), read them from the dependencies'
@@ -410,7 +416,8 @@ must carry Phase 1 without Phase 2, its default mode is `WARN`.
 - **The rules, table-driven:** every row of the multiplicity table, the pre-existing-mismatch exemption, the type
   rule after a generalization change, and a source-type move.
 - **ECD:** the same element shifted by some lines gives the same ECD; changed content gives a different one; the
-  same element written by the element V1 and V2 extensions gives the same ECD.
+  same element written by the element V1 and V2 extensions, or with different string index versions, gives the
+  same ECD.
 - **Flattening:** agrees with `class_getSimplePropertiesByName` for every class in platform and in the DSL modules.
 
 ### Integration tests
@@ -451,12 +458,13 @@ its MCD, then loads. That exercises the Annotation-rename case end to end.
 3. **An opt-out from build-time insistence for the first release?** Not recommended.
 4. **The source-type rule:** keep it conservative, or relax it after confirming that every reader keys values by
    name only.
-5. **Function-body coarseness:** accept it for now, and add interface projections if false positives are common in
-   practice.
+5. **Function-body coarseness:** accept it for now, and add interface projections of the content if false positives
+   are common in practice. A projection needs no new encoding.
 6. **The reader is code.** A mix of generated code from one build and PELT files from another goes undetected.
    Code generation could embed the module's MCD for comparison later.
 7. **Labels:** the Maven version only, or also a VCS revision.
-8. **ECD encoding:** one fixed encoding, V1 (recommended), or the writing extension's own payload, which is
-   simpler but changes every ECD whenever the element format changes.
+8. **ECD encoding:** the byte-identity plan's digest encoding (recommended); the element V1 payload with its string
+   index version pinned, which takes a second encoding pass and has no room for a new kind of value; or the writing
+   extension's own payload, which is simpler but changes every ECD whenever the element format changes.
 9. **A dependency whose consistency format is newer than the loader:** fail (recommended), or keep the summary's
    layout fixed across format versions, so that earlier loaders can still read every module's MCDs.

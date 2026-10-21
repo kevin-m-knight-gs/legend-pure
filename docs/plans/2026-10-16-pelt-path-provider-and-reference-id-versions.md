@@ -358,8 +358,10 @@ follow the other module.
 
 ### Version-independent keys
 
-For example, an instance's position in its element's file. That ties back references to the element serializer's
-node order, which belongs to a different extension.
+For example, an instance's position in its element's content. Every back-reference file would then depend on the
+order of its target's nodes, which shifts whenever the target changes, even where the instances that its back
+references name do not. It would also need a new format for back-reference files, which using the target's version
+does not.
 
 ### Recommendation
 
