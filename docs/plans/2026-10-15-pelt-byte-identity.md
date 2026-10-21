@@ -4,10 +4,10 @@ Status: proposal, 2026-10-15.
 
 ## Goal
 
-PELT serialization is meant to be deterministic: every PELT file is a function of its logical content alone. Two
-writers that serialize the same content produce the same bytes, whatever the OS, JDK, CPU, zlib build, or
-programming language. That has always been the intent. Where it does not hold today, the existing system has a bug,
-and this plan addresses it. Afterward, other work can rely on the result as an invariant.
+PELT serialization is meant to be deterministic: every PELT file is a function of its logical content alone (see
+[F0](#f0-the-content-model)). Two writers that serialize the same content produce the same bytes, whatever the OS,
+JDK, CPU, zlib build, or programming language. That has always been the intent. Where it does not hold today, the
+existing system has a bug, and this plan addresses it. Afterward, other work can rely on the result as an invariant.
 
 One purpose stands out: a Pure compiler written in a language other than Java can be tested by compiling the same
 sources and comparing its binaries with those from the Java compiler. So the rules that turn a compiled graph into
@@ -21,6 +21,7 @@ byte identity costs, and it could be the outcome if today's compression proves w
 plan:
 
 - lays out the goals,
+- defines a file's content as a model, which comparisons and digests can use apart from any encoding,
 - describes the ways to restore byte identity, and the alternative,
 - compares their costs and benefits against that baseline,
 - recommends a staged path: measure the cheapest option at once, build the foundations that every option needs,
@@ -115,9 +116,66 @@ in other ways.
 
 ## 2. Foundations every option needs
 
+### F0. The content model
+
+Each kind of PELT file holds logical content, or simply content, and each version of its extension encodes that
+content in its own way. The content model is that content as data, apart from any encoding. Most of it exists
+already:
+
+- **Element files.** Every element extension's deserializer returns a `DeserializedConcreteElement`: the element's
+  path, its reference ID version, and its nodes in order. Each node (`InstanceData`) has its name, classifier,
+  source information, reference ID, compile states, and property values, each a primitive value or an internal or
+  external reference. `ElementBuilder` builds instances from it (`ElementBuilder.java:39`).
+- **Module metadata.** `ModuleManifest` and the other metadata classes are its object model.
+
+The write side is the gap. `SerializerV1` computes the same content from the graph, but only on its way to bytes:
+it keeps a list of nodes and their internal IDs, and reads each value from the graph as it writes it
+(`SerializerV1.java:63` and `:241`). Phase 2 splits it into a *generator*, which computes an element's content from
+the compiled graph and a reference ID provider by F3's rules, and an *encoder* for each version. Serializing is
+then generating and encoding, and deserializing is decoding.
+
+**Rules:**
+
+- **Each uncompressed payload is a function of content** (F1), and decoding a file gives back the content it was
+  encoded from.
+- **The model keeps everything that any encoding keeps,** or files that differ would decode to equal content.
+  Section 5 lists the values for which today's classes fall short.
+- **An encoder rejects content that its version cannot represent.** It never drops any.
+- **For files written with the same versions, content is equal exactly when canonical forms are** (F2). Phase 2's
+  round-trip tests check this.
+
+**Uses:**
+
+- **Content equivalence.** Two files have the same content when they decode to equal content, whatever versions
+  wrote them (F2).
+- **Comparisons without files.** Content generated from two compiled graphs, or from a graph and a file, can be
+  compared directly, and the structural diff (Phase 1) shows where they differ.
+- **Projections.** A comparison or a digest may set parts of the content aside, such as source information. A
+  projection is defined on the model, never on bytes.
+- **Content digests,** which agree whatever versions wrote a file.
+
+**The content digest** of an element file is SHA-256 over the ASCII bytes `pelt-content-1`, a zero byte, and the
+element's content in the *digest encoding*. The digest encoding is part of the specification (Phase 0). It writes
+each part of the content in a fixed order: strings as UTF-8, each preceded by its length, and each value with a tag
+for its kind. It has no string index and no compression, and it is never written to a file. A digest of a
+projection uses the same encoding under its own prefix, as would a digest of another kind of file's content, once
+something needs one.
+
+**Why not an existing payload,** such as element V1's:
+
+- **It is fixed only in part.** It starts with a string index that records its own version
+  (`StringIndexer.java:46`). That version is chosen apart from the element version: versions 0 to 3 are
+  registered, and the newest is the default.
+- **It takes two passes,** since its string index comes first.
+- **It cannot grow.** It has no room for a new kind of value: all eight of its node-type codes are taken
+  (`BaseV1.java:45`).
+
+The digest encoding can grow with the model. A new kind of value gets a new tag, which changes no existing digest.
+Any other change to the encoding changes the prefix of every digest that uses it.
+
 ### F1. Canonical uncompressed payloads
 
-Every option needs each extension's uncompressed payload to be a function of logical content alone, specified well
+Every option needs each extension's uncompressed payload to be a function of its content (F0) alone, specified well
 enough to implement elsewhere. That means:
 
 - the specification (Phase 0);
@@ -150,25 +208,26 @@ and `ModuleMetadataSerializerExtension`) produces the canonical form, returning 
 The default keeps the interfaces compatible. The compressing extensions override it, and any interface added later
 for a new kind of PELT file gets the same method. Tools dispatch on signature and version, as reading already does.
 
-**What this gives up:** files written with different versions are never equivalent. An element V1 file and a V2
-file with the same payload compare as different. If that is ever needed, an extension that changes only
-compression can define its canonical form to match its predecessor's. That stays a decision local to the
-extension.
+**Across versions, compare content.** Files written with different versions are never equivalent, and neither are
+files whose payloads record different string index versions. An element V1 file and a V2 file with the same payload
+compare as different. Whether such files hold the same content is a question for F0: they do when they decode to
+equal content. That needs no rule at the top level, since each extension already decodes its own files.
 
 **F2 is needed even with true byte identity:**
 
-- When two files differ, comparing canonical forms tells you whether the content or the encoding diverged.
+- When two files differ, comparing their canonical forms, and then their content, tells you whether the
+  compression, the rest of the encoding, or the content diverged.
 - Existing binaries, and any writer not yet using a canonical encoder, can still be compared.
 
-**Digests of content,** as opposed to digests of whole files, should never be computed over compressed bytes.
-Compute them over canonical forms, or over an encoding of the logical content. They then agree even where files are
-not byte-identical, as with existing binaries.
+**Digests of content,** as opposed to digests of whole files, are content digests (F0), never computed over a
+file's bytes, compressed or not. They then agree whatever versions wrote the files, and even where files are not
+byte-identical, as with existing binaries.
 
 ### F3. Graph-to-content rules, for a second compiler
 
-A serializer that starts from decoded content needs only the encoding rules. A second compiler starts from source,
-so for its binaries to match Java's, the compiled graph must match, and every rule between that graph and the
-bytes must be specified.
+A serializer that starts from content (F0) needs only the encoding rules. A second compiler starts from source, so
+for its binaries to match Java's, it must generate the same content: the compiled graph must match, and every rule
+between that graph and the content must be specified.
 
 **The compiled graph.** It must be identical, and that includes source information. Specifically:
 
@@ -179,7 +238,7 @@ bytes must be specified.
 
 Apart from back-reference properties, the compiled graph must be a function of the source alone.
 
-**Serialization rules:**
+**Generation rules,** from graph to content:
 
 - **Element membership.** `SerializerV1.isExternal` (`SerializerV1.java:565`) treats an instance as part of an
   element when the element's source information subsumes the instance's.
@@ -206,7 +265,7 @@ Apart from back-reference properties, the compiled graph must be a function of t
   for compiler work.
 
 F3 does not depend on the compression decision. Option 5 serves G9 almost as well as true byte identity, by
-comparing canonical forms.
+comparing canonical forms or content.
 
 **When each part is needed.** The compiler's determinism is checked in Phase 2, with the foundations, since every
 digest of content that is compared across builds relies on it. The written rules are needed only once a second
@@ -412,8 +471,8 @@ compare canonical forms. This is what F2 delivers on its own.
 
 - **Generic tools (G4).** Content-addressed caches, artifact deduplication, reproducibility checks, and plain
   `diff` or `sha256sum` work on PELT files directly.
-- **One notion of equality.** There is no decompression step in tests, and a mismatch is visible with standard
-  tools. Canonical forms remain only as a diagnostic.
+- **One notion of equality** for files written with the same versions. There is no decompression step in tests,
+  and a mismatch is visible with standard tools. Canonical forms remain only as a diagnostic.
 - **No version-dependent churn (G5)** without any change to write-if-modified.
 
 Option 5 meets G1 and G3 equally well, and G2 and G9 by comparing canonical forms rather than files. For G9, what
@@ -428,6 +487,17 @@ three benefits above. Whether they are worth more than today's compression is wh
 - **Unpaired surrogates.** Writers should reject them with an error naming the element and property. Java's
   current behavior writes `?` and loses the value. First, scan existing models to confirm none occur. The scan has
   to look at sources or compiled graphs, since existing binaries already hold `?` in their place.
+- **Values in the content model.** The model keeps everything that an encoding keeps (F0):
+  - **Float and Decimal.** V1 writes a sign and digit strings taken from the instance name (`BaseV1.java:175`),
+    but `Value` holds a `BigDecimal` (`Value.java:318` and `:338`), which loses the sign of a negative zero and any
+    leading zeros. If such names occur, files that differ decode to equal content. The model keeps the sign and
+    the digit strings, and compares by them; the `BigDecimal` stays available.
+  - **Integers** are content by value. `Value` compares them by Java type, so an `Integer` 5 differs from a
+    `Long` 5, and V1 chooses between its two integer encodings by Java type too (`BaseV1.java:222`). Both are
+    consistent today, because `ModelRepository` and the deserializer choose types the same way. The specification
+    states the rules by value, as other languages need, and `Value` and the encoder follow them.
+  - **Compile states** are a set of named states. The bitset, which depends on the order of the `CompileState`
+    enum, is V1's encoding of that set.
 - **File names.** The 126-unit limit applies to each path segment, extension included. A longer segment is cut so
   that the kept part, a 13-character hash suffix, and the extension fill exactly 126 units, except that the cut
   moves back one unit rather than split a surrogate pair. The hash runs over the code points of the part cut off.
@@ -458,7 +528,7 @@ three benefits above. Whether they are worth more than today's compression is wh
   numbers.
 - **Special strings.** The special-string table in `BaseStringIndex` (`SPECIAL_STRING_IDS`), listed in full.
 - **Reference IDs.** Both the syntax and the generation rules (`ReferenceIdGenerator`) are normative, because a
-  second compiler must generate the same IDs. For a serializer that starts from decoded content, reference IDs are
+  second compiler must generate the same IDs. For a serializer that starts from content (F0), reference IDs are
   data.
 - **Graph-to-content rules and source information.** Normative, as listed in F3.
 
@@ -471,7 +541,7 @@ measurement confirms. Option 1 is the likely one, but Option 4 is measured first
    against today's level-7 deflate, together with the jar investigation and the byte breakdown that Option 3
    needs. This runs in parallel with the foundations, and if Option 4 is within the tolerances, no encoder is
    built.
-2. **Build F1 and F2, and check the compiler's determinism (F3).** They are required whatever the encoder
+2. **Build F0, F1, and F2, and check the compiler's determinism (F3).** They are required whatever the encoder
    decision. Together they already meet G1 and G3, and G2 by comparing canonical forms. Once `FileSerializer`
    compares canonical forms before rewriting a file, they meet G5 too. That is Option 5: the interim state while
    the encoder is decided, and the baseline that the measurements compare against. G9 also needs F3's written
@@ -501,54 +571,68 @@ measurement confirms. Option 1 is the likely one, but Option 4 is measured first
 
 ## 7. Phases
 
-### Phase 0: specification of the encoding
+### Phase 0: specification of the content and the encoding
 
 Write `docs/reference/pelt-format.md` as a normative description of the current versions, as implemented:
 
-1. primitives and the string index (V3),
-2. each serializer extension: its payload format; whether and how it compresses; its canonical form; and its
+1. the content model of each kind of file (F0), with the value rules in section 5; the digest encoding; and a text
+   form of content, which the corpus uses (Phase 3),
+2. primitives and the string index (V3),
+3. each serializer extension: its payload format; whether and how it compresses; its canonical form; and its
    envelope rules,
-3. file layout (path provider V1), including the file-name hash,
-4. reference ID syntax (V1).
+4. file layout (path provider V1), including the file-name hash,
+5. reference ID syntax (V1).
 
-The rest of F3, including how reference IDs are generated, is what a compiler must follow to produce this content.
-It comes in Phase 6.
+The rest of F3, including how reference IDs are generated, is what a compiler must follow to generate this
+content. It comes in Phase 6.
 
-Exit: someone can write a decoder and an encoder from the document alone. Phase 6 tests that.
+Exit: someone can write a decoder, an encoder, and the content digest from the document alone. Phase 6 tests that.
 
-### Phase 1: canonical-form tooling (F2)
+### Phase 1: content and canonical-form tooling (F0, F2)
 
 Phase 2 compares builds with these tools, so they come first.
 
 - **Canonical-form methods** on `ConcreteElementSerializerExtension` and `ModuleMetadataSerializerExtension`, with
   defaults for extensions that do not compress, plus the compressing extensions' overrides and envelope
   validation.
-- **A utility** that dispatches on signature and version to produce canonical forms and digests. It needs no new
-  dependencies.
+- **The value fixes in the content model** (section 5): Float and Decimal values keep their sign and digit strings,
+  and integers compare by value. Comparisons of content rely on them.
+- **A utility** that dispatches on signature and version to produce canonical forms, canonical digests, and content
+  digests. It needs no new dependencies.
 - **A comparison tool** that takes two directories or jars and reports PELT files that are missing on one side or
-  whose canonical forms differ.
-- **A structural diff.** For two files that differ, the tool decodes both and reports the first differences by
-  element, node (graph path), property, and value. This is what makes byte comparison useful for debugging a second
-  compiler.
+  whose canonical forms differ, or, for files written with different versions, whose content differs.
+- **A structural diff** of content. For two files that differ, the tool decodes both and reports the first
+  differences by element, node (graph path), property, and value. It needs only the deserializers, so it works on
+  files from the start, and on compiled graphs once Phase 2's generator exists. This is what makes byte comparison
+  useful for debugging a second compiler.
 - **Optional: compare canonical forms before rewriting a file.** `FileSerializer` writes through
   `FileWriteTools.writeIfModified`, a byte-comparing utility in `legend-pure-m4` that the code generators, `.par`
   archives, and PCT reports share. The comparison belongs in `FileSerializer`, since m4 cannot see the serializer
   extensions: a `FileWriteTools` overload takes an equivalence test, and `FileSerializer` passes one that compares
   bytes first and canonical forms only when the bytes differ. If Option 1 is adopted, Phase 5 removes it again.
 
-Exit: two builds can be checked for equivalence in any environment.
+Exit: two builds can be checked for equivalence in any environment, and builds written with different versions
+can be compared by content.
 
-### Phase 2: canonical uncompressed payloads in Java (F1)
+### Phase 2: the generator, and canonical uncompressed payloads in Java (F0, F1)
 
-- **Split `SerializerV1` into two steps.** First, graph to logical content: node list, property values, and
-  reference IDs. Second, logical content to bytes.
-  - The deserializer already produces logical content (`InstanceData`), and module metadata already has an object
-    model (`ModuleManifest` and the others).
-  - The second step is what the specification describes and what other languages implement.
-- **Add a round-trip test.** For every file in builds of a fixed set of modules (platform, one DSL module, and
+- **Split `SerializerV1` into a generator and an encoder** (F0).
+  - The generator computes an element's content from the compiled graph and a reference ID provider, following
+    F3's rules. It is public, and it belongs to no element version, so every version encodes the same content.
+  - It returns the classes that the deserializer returns (`DeserializedConcreteElement` and the others), so one
+    model serves both directions. Module metadata already has its object model (`ModuleManifest` and the others).
+  - The encoder is what the specification describes and what other languages implement.
+    `ConcreteElementSerializerExtension` gains a method that encodes content, with a default, so the interface
+    stays compatible.
+  - Measure serialization time before and after the split, on Phase 4's module sets. The write side then holds
+    each element's content in memory, as the read side already does.
+- **Add round-trip tests.** For every file in builds of a fixed set of modules (platform, one DSL module, and
   relational, as in Phase 3), decode, re-encode, and compare canonical forms. This proves that the encoding is a
-  function of the content alone.
-- **Check the compiler's determinism.** Compare canonical digests across two kinds of builds of the same modules:
+  function of the content alone. For element files, also check that the decoded content equals the content
+  generated from the graph, which shows that a file holds exactly that content.
+- **Check the compiler's determinism.** Compare content digests, which depend only on the compiled graph, and
+  canonical digests, which add the encoding, across two kinds of builds of the same modules. Content digests can
+  be computed in memory, and where they differ, the structural diff shows where:
   - *repeated builds in one environment,* which catch run-to-run variation, such as iteration over identity-hashed
     collections;
   - *builds across Linux, Windows, and macOS with JDK 11, 17, 21, and 25,* which catch dependence on the
@@ -560,8 +644,8 @@ Exit: two builds can be checked for equivalence in any environment.
 - **Copy `longSpreadOne` into `FilePathTools`,** crediting Eclipse Collections, with tests that pin today's file
   names (see [section 5](#5-other-details-a-specification-has-to-pin-down)). No file name changes.
 
-Exit: canonical forms are identical across repeated builds and across the matrix, or every difference is recorded
-for the compiler plan.
+Exit: content and canonical forms are identical across repeated builds and across the matrix, or every difference
+is recorded for the compiler plan.
 
 ### Phase 3: conformance corpus, first version
 
@@ -576,26 +660,29 @@ for the compiler plan.
   - the Pure sources it was compiled from,
   - the compiled files,
   - their expected canonical forms,
-  - a canonical text dump of their logical content (JSON with a fixed key order, or a line format).
+  - their content, in the text form (Phase 0),
+  - their content digests.
 - **Packaging:** a versioned zip, published as a Maven artifact (for example `legend-pure-pelt-conformance`) and
   downloadable for non-Maven CI. Versions follow legend-pure releases, since the Java compiler's output changes
   between releases.
 - **Licensing:** the corpus redistributes Pure sources and the files compiled from them, so it is licensed under
   Apache 2.0. The zip carries its own LICENSE and NOTICE, since it travels without the POM. It contains only
   Apache-licensed sources; proprietary models never enter it, even when Phase 4 measures them.
-- **Tests every implementation runs,** where `expected` is a file's expected canonical form:
+- **Tests every implementation runs,** where `expected` is a file's expected canonical form, `dump` its content in
+  the text form, and `digest` its content digest:
 
   | Test | Checks |
   |---|---|
   | `decode(file) == dump` | The reader |
+  | `contentDigest(dump) == digest` | The digest encoding |
   | `canonicalForm(file) == expected` | Decompression, and canonical-form construction |
   | `encode(dump) == expected` | The writer's uncompressed output |
   | `canonicalForm(write(dump)) == expected` | The writer, end to end |
   | `validate(write(dump))` | The compressing extension's envelope rules |
 
-  A compiler additionally runs `canonicalForm(compile(sources)) == expected` for every file of each case. That
-  becomes `compile(sources) == file` once the canonical encoder is adopted. Platform's own sources are the largest
-  single test.
+  A compiler additionally runs `canonicalForm(compile(sources)) == expected` for every file of each case, and,
+  before it has an encoder, `generate(compile(sources)) == dump`. The first becomes `compile(sources) == file` once
+  the canonical encoder is adopted. Platform's own sources are the largest single test.
 
 ### Phase 4: measurements, encoder prototype, and decision gate
 
@@ -653,16 +740,16 @@ critical path for the invariant.
 - Cross-check in CI: each implementation loads the other's files.
 - Spec gaps go back into Phase 0's document.
 - A non-Java compiler, when one exists, builds on this reader and writer, and on the rules above. It is tested by
-  compiling the corpus sources and comparing its binaries with the expected files, using the structural diff to
-  locate differences.
+  compiling the corpus sources and comparing its content with the corpus's, and its binaries with the expected
+  files, using the structural diff to locate differences.
 
 ### Phase 7: keeping it true
 
 - **The invariant holds from here on:** byte identity, or identical canonical forms if the plan settles at
   Option 5. A change that breaks it is a bug, and the checks below catch it.
-- **Any format change, new version, or new kind of PELT file** comes with its specification, its canonical-form
-  method, and its corpus entries, in the same PR. Under byte identity, a new compressing extension uses a
-  specified, frozen encoder, as in Option 1.
+- **Any format change, new version, or new kind of PELT file** comes with its specification, its content model or
+  any additions to it, its canonical-form method, and its corpus entries, in the same PR. Under byte identity, a
+  new compressing extension uses a specified, frozen encoder, as in Option 1.
 - **The Java build runs the corpus tests,** and the determinism checks keep running.
 
 ## 8. Backward compatibility
@@ -673,6 +760,10 @@ critical path for the invariant.
   that they ignore.
 - **Options 3 and 5b** need new extension versions, which earlier readers cannot read.
 - **Adding canonical-form methods** to the extension interfaces is compatible, because they have defaults.
+- **The content model** reuses the classes that the deserializers return today. The value fixes keep `Value`'s
+  methods and change its equality only in the cases that section 5 lists. The method that encodes content has a
+  default, like the canonical-form methods.
+- **Content equivalence and content digests** change no file.
 - **The file-name hash does not change,** so no file name changes. The copy of `longSpreadOne` in `FilePathTools`
   is tested to give today's names (see [section 5](#5-other-details-a-specification-has-to-pin-down)).
 - **If a Phase 2 fix changes an uncompressed format,** it gets a new version through the existing extension
@@ -704,6 +795,11 @@ critical path for the invariant.
    manifest.
 8. **Where the corpus lives,** and its size budget.
 9. **Which non-Java language comes first.**
+10. **The digest encoding:** a small encoding defined on the content model (recommended), or an existing payload,
+    such as element V1's with its string index version pinned, which takes two passes and cannot grow (F0).
+11. **Float and Decimal content:** the sign and digit strings as written (recommended), or numeric values, with
+    every encoder writing canonical digit strings. The second changes the bytes of any element with a negative zero
+    or leading zeros in such a value.
 
 ## Outside this plan
 
@@ -718,3 +814,8 @@ critical path for the invariant.
   [ADR-007](../decisions/ADR-007-write-if-modified-for-generated-output.md) made them repeatable in one environment
   by fixing their entry timestamps, but the JDK's zlib still compresses their entries, so
   [section 1.2](#12-compressed-bytes-break-the-invariant) applies to them as well.
+- **Other uses of the content model.** Tests that compare compiled states could compare content instead. For
+  example, `RuntimeVerifier`'s stability check compares instance counts and the length of the serialized
+  repository (`RuntimeVerifier.java:267`). A compiled state also includes back references from other elements,
+  which module metadata holds, so such a check would compare that metadata too. Content diffs between legend-pure
+  releases could also help review compiler changes.
