@@ -5,7 +5,7 @@ Status: proposal, 2026-10-15.
 ## Goal
 
 PELT serialization is meant to be deterministic: every PELT file is a function of its logical content alone (see
-[F0](#f0-the-content-model)). Two writers that serialize the same content produce the same bytes, whatever the OS,
+[F0](#f0-the-portable-form)). Two writers that serialize the same content produce the same bytes, whatever the OS,
 JDK, CPU, zlib build, or programming language. That has always been the intent. Where it does not hold today, the
 existing system has a bug, and this plan addresses it. Afterward, other work can rely on the result as an invariant.
 
@@ -21,7 +21,7 @@ byte identity costs, and it could be the outcome if today's compression proves w
 plan:
 
 - lays out the goals,
-- defines a file's content as a model, which comparisons and digests can use apart from any encoding,
+- defines a portable form of each element, which comparisons and digests can use apart from any encoding,
 - describes the ways to restore byte identity, and the alternative,
 - compares their costs and benefits against that baseline,
 - recommends a staged path: measure the cheapest option at once, build the foundations that every option needs,
@@ -116,50 +116,70 @@ in other ways.
 
 ## 2. Foundations every option needs
 
-### F0. The content model
+### F0. The portable form
 
-Each kind of PELT file holds logical content, or simply content, and each version of its extension encodes that
-content in its own way. The content model is that content as data, apart from any encoding. Most of it exists
-already:
+The *portable form* of an element is the element as data. Each property value becomes a primitive value, an
+internal reference (an index among the element's own instances), or an external reference (the reference ID of an
+instance outside the element). Indexes and IDs are plain data, and they compare by value rather than by identity.
+So the portable form can be serialized, and it can be compared: between compile states in one JVM, between JVMs,
+and between languages. Most of it exists already:
 
-- **Element files.** Every element extension's deserializer returns a `DeserializedConcreteElement`: the element's
-  path, its reference ID version, and its nodes in order. Each node (`InstanceData`) has its name, classifier,
-  source information, reference ID, compile states, and property values, each a primitive value or an internal or
-  external reference. `ElementBuilder` builds instances from it (`ElementBuilder.java:39`).
-- **Module metadata.** `ModuleManifest` and the other metadata classes are its object model.
+- **Element files.** Every element extension's deserializer returns a `DeserializedConcreteElement`, which Phase 1
+  renames `PortableConcreteElement`: the element's path, its reference ID version, and its instances in order. Each
+  instance (`InstanceData`) has its name, classifier, source information, reference ID, compile states, and
+  property values, each a primitive value or an internal or external reference. `ElementBuilder` builds instances
+  from it (`ElementBuilder.java:39`).
+- **Module metadata** has a portable form already: `ModuleManifest` and the other metadata classes hold paths and
+  reference IDs, not instances.
 
-The write side is the gap. `SerializerV1` computes the same content from the graph, but only on its way to bytes:
-it keeps a list of nodes and their internal IDs, and reads each value from the graph as it writes it
-(`SerializerV1.java:63` and `:241`). Phase 2 splits it into a *generator*, which computes an element's content from
-the compiled graph and a reference ID provider by F3's rules, and an *encoder* for each version. Serializing is
-then generating and encoding, and deserializing is decoding.
+The write side is the gap. `SerializerV1` computes the same form from the graph, but only on its way to bytes: it
+keeps a list of instances and their internal IDs, and reads each value from the graph as it writes it
+(`SerializerV1.java:63` and `:241`). Phase 2 splits it into a *generator*, which computes an element's portable
+form from the compiled graph and a reference ID provider by F3's rules, and an *encoder* for each version.
+Serializing is then generating and encoding, and deserializing is decoding.
 
 **Rules:**
 
-- **Each uncompressed payload is a function of content** (F1), and decoding a file gives back the content it was
-  encoded from.
-- **The model keeps everything that any encoding keeps,** or files that differ would decode to equal content.
-  Section 5 lists the values for which today's classes fall short.
-- **An encoder rejects content that its version cannot represent.** It never drops any.
-- **For files written with the same versions, content is equal exactly when canonical forms are** (F2). Phase 2's
-  round-trip tests check this.
+- **Each uncompressed payload is a function of the portable form it encodes** (F1), and decoding a file gives back
+  that portable form.
+- **The portable form keeps everything that any encoding keeps,** or files that differ would decode to equal
+  portable forms. Section 5 lists the values for which today's classes fall short.
+- **An encoder rejects a portable form that its version cannot represent.** It never drops any part of it.
+- **For files written with the same versions, portable forms are equal exactly when canonical forms are** (F2).
+  Phase 2's round-trip tests check this.
+
+**Back references from other elements, as an option.** Back references among an element's own instances are part
+of its portable form, since its file holds them (sorted by internal ID, `SerializerV1.java:249`). Back references
+from other elements are in the back-reference files that the referring elements' modules write. A portable form can
+include them, for comparisons:
+
+- Each instance with a reference ID gets its back references from other elements, as sorted `BackReference`
+  records. `ElementBuilder` already receives these along with each instance's data (`ElementBuilder.java:41`).
+- From files, they come from the back-reference files of every loaded module, merged as `ElementLoader` merges
+  them. From a graph, the generator reads them from the instances' back-reference properties.
+- They are never serialized, and the content digest leaves them out.
+- In a graph, a back reference can lead to an instance that has no reference ID, such as one whose element was
+  removed while the back reference stayed. The generator reports such back references; it neither fails on them
+  nor drops them.
 
 **Uses:**
 
-- **Content equivalence.** Two files have the same content when they decode to equal content, whatever versions
-  wrote them (F2).
-- **Comparisons without files.** Content generated from two compiled graphs, or from a graph and a file, can be
-  compared directly, and the structural diff (Phase 1) shows where they differ.
-- **Projections.** A comparison or a digest may set parts of the content aside, such as source information. A
-  projection is defined on the model, never on bytes.
+- **Equivalence across versions.** Two files hold the same content when they decode to equal portable forms,
+  whatever versions wrote them (F2).
+- **Comparisons without files.** Portable forms generated from two compiled graphs, or from a graph and a file,
+  compare directly, and the structural diff (Phase 1) shows where they differ. With back references from other
+  elements, a comparison also covers what other elements contribute.
+- **Projections.** A comparison or a digest may set parts of the portable form aside, such as source information.
+  A projection is defined on the portable form, never on bytes.
 - **Content digests,** which agree whatever versions wrote a file.
 
 **The content digest** of an element file is SHA-256 over the ASCII bytes `pelt-content-1`, a zero byte, and the
-element's content in the *digest encoding*. The digest encoding is part of the specification (Phase 0). It writes
-each part of the content in a fixed order: strings as UTF-8, each preceded by its length, and each value with a tag
-for its kind. It has no string index and no compression, and it is never written to a file. A digest of a
-projection uses the same encoding under its own prefix, as would a digest of another kind of file's content, once
-something needs one.
+element's portable form, without back references from other elements, in the *digest encoding*. The digest
+encoding is part of the specification (Phase 0). It writes each part of the portable form in a fixed order: strings
+as UTF-8, each preceded by its length, and each value with a tag for its kind. It has no string index and no
+compression, and it is never written to a file. A digest of a projection, or of a portable form with back
+references, uses the same encoding under its own prefix, and so would a digest of module metadata, once something
+needs one.
 
 **Why not an existing payload,** such as element V1's:
 
@@ -170,13 +190,13 @@ something needs one.
 - **It cannot grow.** It has no room for a new kind of value: all eight of its node-type codes are taken
   (`BaseV1.java:45`).
 
-The digest encoding can grow with the model. A new kind of value gets a new tag, which changes no existing digest.
-Any other change to the encoding changes the prefix of every digest that uses it.
+The digest encoding can grow with the portable form. A new kind of value gets a new tag, which changes no existing
+digest. Any other change to the encoding changes the prefix of every digest that uses it.
 
 ### F1. Canonical uncompressed payloads
 
-Every option needs each extension's uncompressed payload to be a function of its content (F0) alone, specified well
-enough to implement elsewhere. That means:
+Every option needs each extension's uncompressed payload to be a function of the portable form it encodes (F0)
+alone, specified well enough to implement elsewhere. That means:
 
 - the specification (Phase 0);
 - the fixes in [section 5](#5-other-details-a-specification-has-to-pin-down);
@@ -208,14 +228,15 @@ and `ModuleMetadataSerializerExtension`) produces the canonical form, returning 
 The default keeps the interfaces compatible. The compressing extensions override it, and any interface added later
 for a new kind of PELT file gets the same method. Tools dispatch on signature and version, as reading already does.
 
-**Across versions, compare content.** Files written with different versions are never equivalent, and neither are
-files whose payloads record different string index versions. An element V1 file and a V2 file with the same payload
-compare as different. Whether such files hold the same content is a question for F0: they do when they decode to
-equal content. That needs no rule at the top level, since each extension already decodes its own files.
+**Across versions, compare portable forms.** Files written with different versions are never equivalent, and
+neither are files whose payloads record different string index versions. An element V1 file and a V2 file with the
+same payload compare as different. Whether such files hold the same content is a question for F0: they do when
+they decode to equal portable forms. That needs no rule at the top level, since each extension already decodes its
+own files.
 
 **F2 is needed even with true byte identity:**
 
-- When two files differ, comparing their canonical forms, and then their content, tells you whether the
+- When two files differ, comparing their canonical forms, and then their portable forms, tells you whether the
   compression, the rest of the encoding, or the content diverged.
 - Existing binaries, and any writer not yet using a canonical encoder, can still be compared.
 
@@ -225,9 +246,9 @@ byte-identical, as with existing binaries.
 
 ### F3. Graph-to-content rules, for a second compiler
 
-A serializer that starts from content (F0) needs only the encoding rules. A second compiler starts from source, so
-for its binaries to match Java's, it must generate the same content: the compiled graph must match, and every rule
-between that graph and the content must be specified.
+A serializer that starts from portable forms (F0) needs only the encoding rules. A second compiler starts from
+source, so for its binaries to match Java's, it must generate the same portable forms: the compiled graph must
+match, and every rule between that graph and the portable forms must be specified.
 
 **The compiled graph.** It must be identical, and that includes source information. Specifically:
 
@@ -238,7 +259,7 @@ between that graph and the content must be specified.
 
 Apart from back-reference properties, the compiled graph must be a function of the source alone.
 
-**Generation rules,** from graph to content:
+**Generation rules,** from graph to portable form:
 
 - **Element membership.** `SerializerV1.isExternal` (`SerializerV1.java:565`) treats an instance as part of an
   element when the element's source information subsumes the instance's.
@@ -265,7 +286,7 @@ Apart from back-reference properties, the compiled graph must be a function of t
   for compiler work.
 
 F3 does not depend on the compression decision. Option 5 serves G9 almost as well as true byte identity, by
-comparing canonical forms or content.
+comparing canonical forms or portable forms.
 
 **When each part is needed.** The compiler's determinism is checked in Phase 2, with the foundations, since every
 digest of content that is compared across builds relies on it. The written rules are needed only once a second
@@ -487,15 +508,15 @@ three benefits above. Whether they are worth more than today's compression is wh
 - **Unpaired surrogates.** Writers should reject them with an error naming the element and property. Java's
   current behavior writes `?` and loses the value. First, scan existing models to confirm none occur. The scan has
   to look at sources or compiled graphs, since existing binaries already hold `?` in their place.
-- **Values in the content model.** The model keeps everything that an encoding keeps (F0):
+- **Values in the portable form.** It keeps everything that an encoding keeps (F0):
   - **Float and Decimal.** V1 writes a sign and digit strings taken from the instance name (`BaseV1.java:175`),
     but `Value` holds a `BigDecimal` (`Value.java:318` and `:338`), which loses the sign of a negative zero and any
-    leading zeros. If such names occur, files that differ decode to equal content. The model keeps the sign and
-    the digit strings, and compares by them; the `BigDecimal` stays available.
-  - **Integers** are content by value. `Value` compares them by Java type, so an `Integer` 5 differs from a
-    `Long` 5, and V1 chooses between its two integer encodings by Java type too (`BaseV1.java:222`). Both are
-    consistent today, because `ModelRepository` and the deserializer choose types the same way. The specification
-    states the rules by value, as other languages need, and `Value` and the encoder follow them.
+    leading zeros. If such names occur, files that differ decode to equal portable forms. The portable form keeps
+    the sign and the digit strings, and compares by them; the `BigDecimal` stays available.
+  - **Integers** are values, whatever Java type holds them. `Value` compares them by Java type, so an `Integer` 5
+    differs from a `Long` 5, and V1 chooses between its two integer encodings by Java type too (`BaseV1.java:222`).
+    Both are consistent today, because `ModelRepository` and the deserializer choose types the same way. The
+    specification states the rules by value, as other languages need, and `Value` and the encoder follow them.
   - **Compile states** are a set of named states. The bitset, which depends on the order of the `CompileState`
     enum, is V1's encoding of that set.
 - **File names.** The 126-unit limit applies to each path segment, extension included. A longer segment is cut so
@@ -528,8 +549,8 @@ three benefits above. Whether they are worth more than today's compression is wh
   numbers.
 - **Special strings.** The special-string table in `BaseStringIndex` (`SPECIAL_STRING_IDS`), listed in full.
 - **Reference IDs.** Both the syntax and the generation rules (`ReferenceIdGenerator`) are normative, because a
-  second compiler must generate the same IDs. For a serializer that starts from content (F0), reference IDs are
-  data.
+  second compiler must generate the same IDs. For a serializer that starts from portable forms (F0), reference
+  IDs are data.
 - **Graph-to-content rules and source information.** Normative, as listed in F3.
 
 ## 6. Recommendation
@@ -571,40 +592,42 @@ measurement confirms. Option 1 is the likely one, but Option 4 is measured first
 
 ## 7. Phases
 
-### Phase 0: specification of the content and the encoding
+### Phase 0: specification of the portable form and the encoding
 
 Write `docs/reference/pelt-format.md` as a normative description of the current versions, as implemented:
 
-1. the content model of each kind of file (F0), with the value rules in section 5; the digest encoding; and a text
-   form of content, which the corpus uses (Phase 3),
+1. the portable forms (F0): of elements, with the value rules in section 5, and of module metadata; the digest
+   encoding; and a text encoding of each, which the corpus uses (Phase 3),
 2. primitives and the string index (V3),
 3. each serializer extension: its payload format; whether and how it compresses; its canonical form; and its
    envelope rules,
 4. file layout (path provider V1), including the file-name hash,
 5. reference ID syntax (V1).
 
-The rest of F3, including how reference IDs are generated, is what a compiler must follow to generate this
-content. It comes in Phase 6.
+The rest of F3, including how reference IDs are generated, is what a compiler must follow to generate these
+portable forms. It comes in Phase 6.
 
 Exit: someone can write a decoder, an encoder, and the content digest from the document alone. Phase 6 tests that.
 
-### Phase 1: content and canonical-form tooling (F0, F2)
+### Phase 1: portable-form and canonical-form tooling (F0, F2)
 
 Phase 2 compares builds with these tools, so they come first.
 
+- **Rename `DeserializedConcreteElement` to `PortableConcreteElement`,** first, so that these tools are written
+  against the new name (see section 8).
 - **Canonical-form methods** on `ConcreteElementSerializerExtension` and `ModuleMetadataSerializerExtension`, with
   defaults for extensions that do not compress, plus the compressing extensions' overrides and envelope
   validation.
-- **The value fixes in the content model** (section 5): Float and Decimal values keep their sign and digit strings,
-  and integers compare by value. Comparisons of content rely on them.
+- **The value fixes in the portable form** (section 5): Float and Decimal values keep their sign and digit strings,
+  and integers compare by value. Comparisons of portable forms rely on them.
 - **A utility** that dispatches on signature and version to produce canonical forms, canonical digests, and content
   digests. It needs no new dependencies.
 - **A comparison tool** that takes two directories or jars and reports PELT files that are missing on one side or
-  whose canonical forms differ, or, for files written with different versions, whose content differs.
-- **A structural diff** of content. For two files that differ, the tool decodes both and reports the first
-  differences by element, node (graph path), property, and value. It needs only the deserializers, so it works on
-  files from the start, and on compiled graphs once Phase 2's generator exists. This is what makes byte comparison
-  useful for debugging a second compiler.
+  whose canonical forms differ, or, for files written with different versions, whose portable forms differ.
+- **A structural diff** of portable forms, with or without back references from other elements. For two files that
+  differ, the tool decodes both and reports the first differences by element, node (graph path), property, and
+  value. It needs only the deserializers, so it works on files from the start, and on compiled graphs once the
+  generator exists (Phase 2). This is what makes byte comparison useful for debugging a second compiler.
 - **Optional: compare canonical forms before rewriting a file.** `FileSerializer` writes through
   `FileWriteTools.writeIfModified`, a byte-comparing utility in `legend-pure-m4` that the code generators, `.par`
   archives, and PCT reports share. The comparison belongs in `FileSerializer`, since m4 cannot see the serializer
@@ -612,24 +635,25 @@ Phase 2 compares builds with these tools, so they come first.
   bytes first and canonical forms only when the bytes differ. If Option 1 is adopted, Phase 5 removes it again.
 
 Exit: two builds can be checked for equivalence in any environment, and builds written with different versions
-can be compared by content.
+can be compared by portable form.
 
 ### Phase 2: the generator, and canonical uncompressed payloads in Java (F0, F1)
 
 - **Split `SerializerV1` into a generator and an encoder** (F0).
-  - The generator computes an element's content from the compiled graph and a reference ID provider, following
-    F3's rules. It is public, and it belongs to no element version, so every version encodes the same content.
-  - It returns the classes that the deserializer returns (`DeserializedConcreteElement` and the others), so one
-    model serves both directions. Module metadata already has its object model (`ModuleManifest` and the others).
+  - The generator computes an element's portable form from the compiled graph and a reference ID provider,
+    following F3's rules, with back references from other elements when asked. It is public, and it belongs to no
+    element version, so every version encodes the same portable form.
+  - It returns the classes that the deserializer returns (`PortableConcreteElement` and the others), so one form
+    serves both directions. Module metadata already has its portable form (`ModuleManifest` and the others).
   - The encoder is what the specification describes and what other languages implement.
-    `ConcreteElementSerializerExtension` gains a method that encodes content, with a default, so the interface
-    stays compatible.
+    `ConcreteElementSerializerExtension` gains a method that encodes a portable form, with a default, so the
+    interface stays compatible.
   - Measure serialization time before and after the split, on Phase 4's module sets. The write side then holds
-    each element's content in memory, as the read side already does.
+    each element's portable form in memory, as the read side already does.
 - **Add round-trip tests.** For every file in builds of a fixed set of modules (platform, one DSL module, and
   relational, as in Phase 3), decode, re-encode, and compare canonical forms. This proves that the encoding is a
-  function of the content alone. For element files, also check that the decoded content equals the content
-  generated from the graph, which shows that a file holds exactly that content.
+  function of the content alone. For element files, also check that the portable form decoded from each file
+  equals the one generated from the graph without back references from other elements.
 - **Check the compiler's determinism.** Compare content digests, which depend only on the compiled graph, and
   canonical digests, which add the encoding, across two kinds of builds of the same modules. Content digests can
   be computed in memory, and where they differ, the structural diff shows where:
@@ -644,8 +668,8 @@ can be compared by content.
 - **Copy `longSpreadOne` into `FilePathTools`,** crediting Eclipse Collections, with tests that pin today's file
   names (see [section 5](#5-other-details-a-specification-has-to-pin-down)). No file name changes.
 
-Exit: content and canonical forms are identical across repeated builds and across the matrix, or every difference
-is recorded for the compiler plan.
+Exit: portable forms and canonical forms are identical across repeated builds and across the matrix, or every
+difference is recorded for the compiler plan.
 
 ### Phase 3: conformance corpus, first version
 
@@ -660,7 +684,7 @@ is recorded for the compiler plan.
   - the Pure sources it was compiled from,
   - the compiled files,
   - their expected canonical forms,
-  - their content, in the text form (Phase 0),
+  - their portable forms, in the text encoding (Phase 0),
   - their content digests.
 - **Packaging:** a versioned zip, published as a Maven artifact (for example `legend-pure-pelt-conformance`) and
   downloadable for non-Maven CI. Versions follow legend-pure releases, since the Java compiler's output changes
@@ -668,8 +692,8 @@ is recorded for the compiler plan.
 - **Licensing:** the corpus redistributes Pure sources and the files compiled from them, so it is licensed under
   Apache 2.0. The zip carries its own LICENSE and NOTICE, since it travels without the POM. It contains only
   Apache-licensed sources; proprietary models never enter it, even when Phase 4 measures them.
-- **Tests every implementation runs,** where `expected` is a file's expected canonical form, `dump` its content in
-  the text form, and `digest` its content digest:
+- **Tests every implementation runs,** where `expected` is a file's expected canonical form, `dump` its portable
+  form in the text encoding, and `digest` its content digest:
 
   | Test | Checks |
   |---|---|
@@ -740,16 +764,16 @@ critical path for the invariant.
 - Cross-check in CI: each implementation loads the other's files.
 - Spec gaps go back into Phase 0's document.
 - A non-Java compiler, when one exists, builds on this reader and writer, and on the rules above. It is tested by
-  compiling the corpus sources and comparing its content with the corpus's, and its binaries with the expected
-  files, using the structural diff to locate differences.
+  compiling the corpus sources and comparing its portable forms with the corpus's, and its binaries with the
+  expected files, using the structural diff to locate differences.
 
 ### Phase 7: keeping it true
 
 - **The invariant holds from here on:** byte identity, or identical canonical forms if the plan settles at
   Option 5. A change that breaks it is a bug, and the checks below catch it.
-- **Any format change, new version, or new kind of PELT file** comes with its specification, its content model or
-  any additions to it, its canonical-form method, and its corpus entries, in the same PR. Under byte identity, a
-  new compressing extension uses a specified, frozen encoder, as in Option 1.
+- **Any format change, new version, or new kind of PELT file** comes with its specification, the portable form it
+  encodes or any additions to it, its canonical-form method, and its corpus entries, in the same PR. Under byte
+  identity, a new compressing extension uses a specified, frozen encoder, as in Option 1.
 - **The Java build runs the corpus tests,** and the determinism checks keep running.
 
 ## 8. Backward compatibility
@@ -760,10 +784,15 @@ critical path for the invariant.
   that they ignore.
 - **Options 3 and 5b** need new extension versions, which earlier readers cannot read.
 - **Adding canonical-form methods** to the extension interfaces is compatible, because they have defaults.
-- **The content model** reuses the classes that the deserializers return today. The value fixes keep `Value`'s
-  methods and change its equality only in the cases that section 5 lists. The method that encodes content has a
-  default, like the canonical-form methods.
-- **Content equivalence and content digests** change no file.
+- **The portable form** reuses the classes that the deserializers return today, with `DeserializedConcreteElement`
+  renamed `PortableConcreteElement`. legend-engine's sources do not use that class. Generated code names it only
+  in an erased `Supplier<? extends DeserializedConcreteElement>` constructor parameter, which it passes straight to
+  its superclass (`ClassPeltImplProcessor.java:416`, `M3LazyCoreInstanceGenerator.java:481`), so generated code
+  that is already compiled keeps linking. `InstanceData` keeps its name, since it appears unerased in generated
+  constructors (`ClassPeltImplProcessor.java:438`).
+- **The value fixes** keep `Value`'s methods and change its equality only in the cases that section 5 lists. The
+  method that encodes a portable form has a default, like the canonical-form methods.
+- **Equivalence across versions and content digests** change no file.
 - **The file-name hash does not change,** so no file name changes. The copy of `longSpreadOne` in `FilePathTools`
   is tested to give today's names (see [section 5](#5-other-details-a-specification-has-to-pin-down)).
 - **If a Phase 2 fix changes an uncompressed format,** it gets a new version through the existing extension
@@ -795,11 +824,11 @@ critical path for the invariant.
    manifest.
 8. **Where the corpus lives,** and its size budget.
 9. **Which non-Java language comes first.**
-10. **The digest encoding:** a small encoding defined on the content model (recommended), or an existing payload,
+10. **The digest encoding:** a small encoding defined on the portable form (recommended), or an existing payload,
     such as element V1's with its string index version pinned, which takes two passes and cannot grow (F0).
-11. **Float and Decimal content:** the sign and digit strings as written (recommended), or numeric values, with
-    every encoder writing canonical digit strings. The second changes the bytes of any element with a negative zero
-    or leading zeros in such a value.
+11. **Float and Decimal in the portable form:** the sign and digit strings as written (recommended), or numeric
+    values, with every encoder writing canonical digit strings. The second changes the bytes of any element with a
+    negative zero or leading zeros in such a value.
 
 ## Outside this plan
 
@@ -814,8 +843,7 @@ critical path for the invariant.
   [ADR-007](../decisions/ADR-007-write-if-modified-for-generated-output.md) made them repeatable in one environment
   by fixing their entry timestamps, but the JDK's zlib still compresses their entries, so
   [section 1.2](#12-compressed-bytes-break-the-invariant) applies to them as well.
-- **Other uses of the content model.** Tests that compare compiled states could compare content instead. For
-  example, `RuntimeVerifier`'s stability check compares instance counts and the length of the serialized
-  repository (`RuntimeVerifier.java:267`). A compiled state also includes back references from other elements,
-  which module metadata holds, so such a check would compare that metadata too. Content diffs between legend-pure
-  releases could also help review compiler changes.
+- **Other uses of the portable form.** Tests that compare compiled states could compare portable forms instead,
+  with back references from other elements included. For example, `RuntimeVerifier`'s stability check compares
+  instance counts and the length of the serialized repository (`RuntimeVerifier.java:267`). Diffs of portable
+  forms between legend-pure releases could also help review compiler changes.
