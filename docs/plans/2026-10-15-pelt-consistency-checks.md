@@ -30,10 +30,11 @@ only on a digest mismatch and checks whether the change affects what the module 
 - **PELT content is stable.** The checks rely on what the byte-identity plan's Phase 2 establishes, together with
   any compiler fixes its determinism check calls for: the same sources, compiled by the same legend-pure version,
   produce the same logical content in every environment and language, and its uncompressed encoding is canonical.
-  Digests here are computed from content, in that plan's digest encoding (see its
-  [content model](2026-10-15-pelt-byte-identity.md#f0-the-content-model)), never from a file's bytes. So they do
-  not depend on how that plan settles compression, or on which versions write the files. The file this plan adds
-  must preserve whatever invariant that plan settles on: byte identity, or identical canonical forms.
+  Digests here are computed from that plan's
+  [portable form](2026-10-15-pelt-byte-identity.md#f0-the-portable-form) of each element, in its digest encoding,
+  never from a file's bytes. So they do not depend on how that plan settles compression, or on which versions write
+  the files. The file this plan adds must preserve whatever invariant that plan settles on: byte identity, or
+  identical canonical forms.
 - **Existing binaries must keep loading.** They carry no consistency data, so the checks skip them.
 - **Builds may insist** that dependencies carry consistency data.
 - **There is more than one loader.** `PureCompilerLoader`, `MetadataPelt` (used in legend-engine by `PureModel`,
@@ -83,12 +84,16 @@ At load time:
 
 ### Element content digest (ECD)
 
-`ECD(e)` is SHA-256 over the ASCII bytes `pelt-ecd-1`, a zero byte, and the element's content in the byte-identity
-plan's digest encoding, with source information set aside: no source ID, and no source information on any node.
-Whichever versions write the element's file, its ECD is the same.
+`ECD(e)` is SHA-256 over the ASCII bytes `pelt-ecd-1`, a zero byte, and the element's portable form in the
+byte-identity plan's digest encoding, without source information (no source ID, and no source information on any
+node) and without back references from other elements. Whichever versions write the element's file, its ECD is
+the same.
 
 **Why ignore source information:** a line shift in a dependency does not make its dependents inconsistent.
 Including it would send every platform edit down the slow path.
+
+**Why leave out back references from other elements:** they come from the elements that refer to it, which are
+mostly in its dependents, so including them would change a dependency's ECDs whenever a dependent changed.
 
 **Why digest content, not source:** the same source compiled by a different legend-pure version can produce
 different shapes and reference IDs.
@@ -209,12 +214,12 @@ property with a default exactly like one without.
 
 **Built from:**
 
-- each external reference in the content of the module's elements, reduced to its root element with
+- each external reference in the portable forms of the module's elements, reduced to its root element with
   `GraphPath.parse(id).getStartNodePath()`;
 - each target element in `ModuleBackReferenceMetadata`;
 - filtered to elements in other modules, and recorded with each element's ECD and its module at build time.
 
-The content is what the element files hold, so these references cannot disagree with them.
+Those portable forms are what the element files hold, so these references cannot disagree with them.
 `ModuleExternalReferenceMetadata` comes from a separate walk of the graph
 (`ConcreteElementMetadataGenerator.java:136`), which agrees with the element files only as long as the two walks
 agree.
@@ -234,9 +239,9 @@ element (keyed and positional), back-reference instance IDs, and data derived fr
 inferred from a function signature.
 
 **Known coarseness:** an edit to the body of a referenced function fails every dependent that calls it. A later
-refinement could digest a per-classifier "interface" projection of the content, for example without a concrete
-function's expression sequence. Even unrefined, a false positive is no worse than the fast-path-only phase: an
-error asking for a rebuild.
+refinement could digest a per-classifier "interface" projection of the portable form, for example without a
+concrete function's expression sequence. Even unrefined, a false positive is no worse than the fast-path-only
+phase: an error asking for a rebuild.
 
 ## Files and formats
 
@@ -260,7 +265,7 @@ ones. With its own line, the consistency format can change without a new module 
 metadata can change without a new consistency format.
 
 **It is a PELT file,** so it must satisfy the byte-identity invariant like every other kind. It comes with its
-specification, its content model, its canonical-form method, and its conformance-corpus entries.
+specification, its portable form, its canonical-form method, and its conformance-corpus entries.
 
 **Why a separate file rather than a field in the manifest.** Data that earlier readers may safely ignore goes in a
 file they skip (see the [roadmap](2026-10-16-pelt-serialization-roadmap.md)). Consistency data is that kind, and
@@ -324,14 +329,14 @@ that the format does not have to change then.
 ## Build-time behavior
 
 - **In `PureCompilerSerializer`:**
-  - Compute each element's ECD while serializing it, from the content that the byte-identity plan's generator
-    produces for the element's file: hash it in the digest encoding, without source information. The content is
-    already in memory, so this is one more pass over it, not over the graph.
-  - Collect the footprint from the same content, which holds each node's classifier, its properties with their
-    source types, and its values. Only the classifiers of external references, and the check that observed types
-    conform, need the graph.
+  - Compute each element's ECD while serializing it, from the portable form that the byte-identity plan's
+    generator produces for the element's file: hash it in the digest encoding, without source information. The
+    portable form is already in memory, so this is one more pass over it, not over the graph.
+  - Collect the footprint from the same portable form, which holds each node's classifier, its properties with
+    their source types, and its values. Only the classifiers of external references, and the check that observed
+    types conform, need the graph.
   - Collect the declarations.
-  - Derive referenced elements from the same content, and from the back-reference metadata that
+  - Derive referenced elements from the same portable form, and from the back-reference metadata that
     `ModuleMetadataGenerator` already produces.
   - Write the consistency file after the other module files.
 - **Dependency digests:**
@@ -458,8 +463,8 @@ its MCD, then loads. That exercises the Annotation-rename case end to end.
 3. **An opt-out from build-time insistence for the first release?** Not recommended.
 4. **The source-type rule:** keep it conservative, or relax it after confirming that every reader keys values by
    name only.
-5. **Function-body coarseness:** accept it for now, and add interface projections of the content if false positives
-   are common in practice. A projection needs no new encoding.
+5. **Function-body coarseness:** accept it for now, and add interface projections of the portable form if false
+   positives are common in practice. A projection needs no new encoding.
 6. **The reader is code.** A mix of generated code from one build and PELT files from another goes undetected.
    Code generation could embed the module's MCD for comparison later.
 7. **Labels:** the Maven version only, or also a VCS revision.
