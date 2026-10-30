@@ -150,9 +150,14 @@ were written with V1.
   some other file.
 - **R2. Compare IDs as strings only within one version.** Where IDs from one module are matched with IDs from
   another, both sides use the same version.
-- **R3. Resolution walks the graph.** A resolver computes its answer from the graph, never from IDs stored in
-  files. Then an ID of any version resolves against elements written with any version. V1 already works this way;
-  every later version must too.
+- **R3. Resolution walks the target element.** A resolver computes its answer from the element an ID points into,
+  never from IDs stored in files, and that element's serializable form, without back references from other
+  elements, is all it needs. Then an ID of any version resolves against elements written with any version, and IDs
+  can be resolved from files without a compiled graph (see the byte-identity plan's
+  [F0](2026-10-15-pelt-byte-identity.md#f0-the-serializable-form)). V1 already works this way: its IDs never leave
+  their element or follow back-reference properties, and each step of a V1 ID (a to-one property, or a to-many
+  property by index or by string key) can be followed in a serializable form. Every later version must work this
+  way too.
 - **R4. No ID means different things in different versions.** If two versions both accept an ID, they resolve it
   to the same instance. The simplest way to keep this rule is to give each later version a syntax that earlier
   versions reject, except for packageable elements (R5). A misrouted ID then fails as invalid instead of resolving
@@ -160,6 +165,12 @@ were written with V1.
 - **R5. A packageable element's ID is its path, in every version.** V1 already does this
   (`ReferenceIdGenerator.java:171`). Element roots, including virtual packages, then match across versions, and so
   do generated-code lookups of classes and other types.
+- **R6. An ID names its target element by itself.** Every version can tell, from an ID alone, which element it
+  points into, and its resolver reports that element's path. Resolution already depends on this, since a resolver
+  finds the element before walking it, and so do checks that run before any element loads, such as the
+  [consistency checks'](2026-10-15-pelt-consistency-checks.md) referenced-element check. A V1 ID starts with its
+  element's path (`GraphPath.getStartNodePath`), and so does an ID of the test-only version once its prefix is
+  removed.
 
 ## 3. Recording versions in the manifest
 
@@ -223,7 +234,7 @@ provider version. It is written only when the version is not 1, under the same l
 **Costs:**
 
 - **A new kind of PELT file.** It is written only for modules that need it, but like any new kind, it needs a
-  signature, a specification, a canonical form, and conformance-corpus entries.
+  signature, a specification, a serializable form, and conformance-corpus entries.
 - **One more lookup per module,** which in the common case finds nothing. On a classpath, a lookup that finds
   nothing has to check every jar. `FileDeserializer` already makes such lookups for optional back-reference files
   (`FileDeserializer.java:840`), so the added cost is modest, but it is not zero.
@@ -358,10 +369,10 @@ follow the other module.
 
 ### Version-independent keys
 
-For example, an instance's position in its element's portable form. Every back-reference file would then depend on
-the order of its target's nodes, which shifts whenever the target changes, even where the instances that its back
-references name do not. It would also need a new format for back-reference files, which using the target's version
-does not.
+For example, an instance's position in its element's serializable form. Every back-reference file would then
+depend on the order of its target's nodes, which shifts whenever the target changes, even where the instances that
+its back references name do not. It would also need a new format for back-reference files, which using the
+target's version does not.
 
 ### Recommendation
 
@@ -475,12 +486,15 @@ Output does not change.
 
 This needs the PELT specification, from the byte-identity plan's Phase 0, and nothing else.
 
-- The specification states the frozen manifest location ([section 2](#2-rules)), and R3 to R5.
+- The specification states the frozen manifest location ([section 2](#2-rules)), and R3 to R6.
 - It states which reference ID version each kind of file uses: the module's own version for element files and
   external-reference metadata, and the target's version for back-reference files.
+- `ReferenceIdResolver` gains a method that returns the path of the element an ID points into (R6). V1 and the
+  test-only version implement it, with tests, and the consistency checks use it to reduce external references to
+  elements.
 - Each new reference ID version comes with tests showing that it rejects the other versions' non-root IDs, accepts
-  the same root IDs, and resolves against elements written with every other version.
-  `TestPrefixedReferenceIdExtension` checks the first two for the test version.
+  the same root IDs, names the element of each of its IDs (R6), and resolves against elements written with every
+  other version. `TestPrefixedReferenceIdExtension` checks the first two for the test version.
 
 Output does not change.
 
@@ -488,10 +502,10 @@ Output does not change.
 
 This starts when a new version of either extension is wanted, and ships with that version, or before it.
 
-- `ModuleManifest` gains the list of version records. The new metadata version or versions carry it, following
-  the byte-identity plan's outcome on compression, and come with their specification, canonical-form methods, and
-  conformance-corpus entries, as that plan requires of every new version. Metadata V1 to V3 refuse to write a
-  manifest with records.
+- `ModuleManifest` gains the list of version records. The new metadata version or versions carry it, following the
+  byte-identity plan's outcome on compression, and come with their specification, the records' addition to the
+  manifest's serializable form, the uncompressed counterpart of any compressed version, and conformance-corpus
+  entries, as that plan requires of every new version. Metadata V1 to V3 refuse to write a manifest with records.
 - `FilePathProvider` computes manifest locations by the frozen rule. `FileSerializer` computes the recorded path
   provider version and picks the manifest's metadata version.
 - `FileDeserializer` gains module-scoped reading, and `PureCompilerLoader`, `MetadataPelt`, and `ElementLoader` use
@@ -507,6 +521,10 @@ This starts when a new version of either extension is wanted, and ships with tha
   ([section 4](#4-what-a-module-records)) tries versions from 1 up. The tests check that:
   - modules written with V1 and with the test version of each extension load together, from a classpath and from
     a directory, and back references across a reference ID boundary attach in both directions;
+  - modules built with V1, loaded, and written again with the test reference ID version give the same files as the
+    same modules built with the test version, and the reverse. This compares across a reference ID boundary
+    through a graph, as the byte-identity plan's F0 describes, and shows that every ID resolved to the instance
+    its writer meant;
   - a module whose names the test path provider does not change records nothing, and its files are byte-identical
     to V1's output;
   - a reader limited to metadata V3 rejects each module that records a version, at its manifest, and reads the
@@ -538,6 +556,10 @@ Exit: a new version of either extension can ship.
   `ElementLoader` implements, and changes the `initialize` method of generated virtual-package classes. Only
   `Package` has virtual instances, so only legend-pure's own build generates those classes. legend-engine uses
   neither.
+- **Phase 2's API change.** `ReferenceIdResolver` gains a method that returns the path of an ID's element (R6).
+  Its default reads the path from a V1 ID: under R5, that is right for every version's root IDs, and under R4, it
+  fails on another version's other IDs rather than misreading them. legend-engine neither implements nor uses the
+  interface.
 - **Phase 3's API changes are additive:** the list of version records on `ModuleManifest`, module-scoped methods on
   `FileDeserializer`, and per-target versions on `ModuleBackReferenceMetadata`, with its module-level version kept
   as the default. No interface gains a method.
@@ -556,7 +578,7 @@ Exit: a new version of either extension can ship.
 6. **When the back-reference check runs:** as elements load, with the consistency checks finding version skew
    before then (recommended), or when modules load, with each target's version in the back-reference index.
 7. **Generated code:** frozen at V1 (recommended), with the version recorded, or relying on self-describing IDs.
-8. **R3 to R5:** binding on every later version (recommended), or decided version by version.
+8. **R3 to R6:** binding on every later version (recommended), or decided version by version.
 9. **When Phase 3 ships:** with the first new version (recommended), or ahead of it.
 
 [#1371]: https://github.com/finos/legend-pure/pull/1371
