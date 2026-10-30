@@ -7,7 +7,7 @@ other, the rules they share, and the order to do them in.
 
 | Plan | What it does | When |
 |---|---|---|
-| [Byte-identical PELT files](2026-10-15-pelt-byte-identity.md) | Defines a portable form of each element, makes every PELT file a function of its content alone, and specifies the format | Now |
+| [Byte-identical PELT files](2026-10-15-pelt-byte-identity.md) | Defines a serializable form of each element, makes every PELT file a function of its content alone, and specifies the format | Now |
 | [PELT consistency checks](2026-10-15-pelt-consistency-checks.md) | Finds, before any element loads, modules built against other versions of their dependencies | After the byte-identity plan's Phase 2 |
 | [More than one path provider or reference ID version](2026-10-16-pelt-path-provider-and-reference-id-versions.md) (the versions plan) | Lets modules written with different versions of either extension load together | Phase 1 now, three of its four fixes merged; Phase 2 early; Phase 3 when a new version is wanted |
 
@@ -17,16 +17,18 @@ other, the rules they share, and the order to do them in.
   error for case-only path collisions. Only the alternative to that error, escaping, would need a new path provider
   version.
 - **The consistency checks depend on byte identity through its Phase 2:** the specification, including the
-  portable form and its digest encoding (Phase 0), the portable-form and canonical-form tooling (Phase 1), and the
-  generator and canonical uncompressed payloads from a deterministic compiler (Phase 2). ECDs are digests of the
-  generator's portable forms. They do not depend on byte identity's decision about compression: their file's
-  details are compressed however module metadata ends up compressed.
+  serializable form and its digest encoding (Phase 0), the serializable-form tooling (Phase 1), and the generator,
+  the encoders that take serializable forms, and canonical uncompressed payloads from a deterministic compiler
+  (Phase 2). ECDs are digests of the generator's serializable forms. They do not depend on byte identity's
+  decision about compression: their file's details are compressed however module metadata ends up compressed.
 - **The versions plan:** Phase 1 depends on nothing. Phase 2 needs byte identity's specification. Phase 3's new
   metadata version follows byte identity's decision about compression.
 - **Where the consistency checks and the versions plan meet:**
   - ECDs include reference IDs, so a dependency rebuilt with another reference ID version changes its ECDs. The
     consistency checks report that before any element loads, naming the version change. The versions plan's
     back-reference check is the backstop for modules without consistency data.
+  - The consistency checks find the element that each external reference points into through the versions plan's
+    R6, which its Phase 2 adds, so they work with any reference ID version.
   - The consistency file is found like the module's other files: under the path provider version the module
     records, once modules can record one.
   - Both rely on every PELT loader going through `ElementLoader`, `PureCompilerLoader`, or `MetadataPelt`. The
@@ -43,9 +45,9 @@ other, the rules they share, and the order to do them in.
    them. A new lookup per module on every load needs a reason. The consistency file has one, since every module
    carries it. Version records do not, since most modules have none, so they go in the manifest, which readers
    read anyway.
-3. **New versions and new kinds of file** come with their specification, the portable form they encode or any
-   additions to it, their canonical-form method, and their conformance-corpus entries, in the same PR, and keep the
-   byte-identity invariant (byte identity's Phase 7).
+3. **New versions and new kinds of file** come with their specification, the serializable form they encode or any
+   additions to it, the uncompressed counterpart of any file they compress, and their conformance-corpus entries,
+   in the same PR, and keep the byte-identity invariant (byte identity's Phase 7).
 4. **Phase the code, not the format.** Binaries outlive the release that wrote them, so a format's first release
    writes every field the plan needs, even fields that nothing reads yet. Checks and readers can come in phases.
 5. **Fail early, in a fixed order.** When modules load:
@@ -53,9 +55,11 @@ other, the rules they share, and the order to do them in.
    2. before any element loads: the consistency check;
    3. as each element loads, as a backstop: its header against its manifest, and its back-reference files against
       its reference ID version (the versions plan).
-6. **Portable forms, not bytes.** Comparisons and digests of content are defined on portable forms (byte
-   identity's F0), never on a file's bytes, compressed or not. Canonical forms compare files written with the same
-   versions; portable forms compare across versions and languages, and between compiled graphs and files.
+6. **Serializable forms, not bytes.** Comparisons and digests of content are defined on serializable forms (byte
+   identity's F0), never on a file's bytes, compressed or not. Serializable forms compare across format versions
+   and languages, and between compiled graphs and files. Reference IDs are content, so forms written with
+   different reference ID versions compare only through what their IDs name (byte identity's F0). Files written
+   with the same versions compare by bytes once byte identity holds.
 
 ## Order
 
@@ -64,7 +68,7 @@ other, the rules they share, and the order to do them in.
      code;
    - the rest of the versions plan's Phase 1, which fixes latent bugs: three of its four fixes are merged, and the
      fourth, for virtual packages' back references, remains;
-   - byte identity's Phase 0, the specification of the portable form and the encoding.
+   - byte identity's Phase 0, the specification of the serializable form and the encoding.
 2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification exists.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 2 is done.
    Meanwhile, byte identity's decision gate, and its Phase 5 if the gate chooses Option 1.
