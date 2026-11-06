@@ -2,20 +2,23 @@
 
 Status: 2026-10-16.
 
-Three plans change PELT serialization. Each stands on its own. This document records only how they depend on each
-other, the rules they share, and the order to do them in.
+Three plans change PELT serialization. A fourth document sets out options for handling strings across platforms
+and languages: some of its decisions become rules in the byte-identity specification, and the rest reach beyond
+PELT into the Pure language and the other Legend repositories. Each stands on its own. This document records only
+how they depend on each other, the rules they share, and the order to do them in.
 
 | Plan | What it does | When |
 |---|---|---|
 | [Byte-identical PELT files](2026-10-15-pelt-byte-identity.md) | Defines a serializable form of each element, makes every PELT file a function of its content alone, and specifies the format | Now |
 | [PELT consistency checks](2026-10-15-pelt-consistency-checks.md) | Finds, before any element loads, modules built against other versions of their dependencies | After the byte-identity plan's Phase 2 |
 | [More than one path provider or reference ID version](2026-10-16-pelt-path-provider-and-reference-id-versions.md) (the versions plan) | Lets modules written with different versions of either extension load together | Phase 1 now, three of its four fixes merged; Phase 2 early; Phase 3 when a new version is wanted |
+| [Strings across platforms and languages](2026-11-06-cross-platform-strings.md) (the strings document) | Sets out options for the string value, source coordinates, the language's string functions, and the format's string rules, and lists hazards to fix whatever is chosen | Hazard fixes now; format decisions with the byte-identity plan's Phase 0, coordinate decisions before its Phase 6, and language decisions separately |
 
 ## Dependencies
 
-- **Byte identity depends on neither of the others.** It keeps today's file-name hash and recommends a build-time
-  error for case-only path collisions. Only the alternative to that error, escaping, would need a new path provider
-  version.
+- **Byte identity depends on neither of the other plans.** It keeps today's file-name hash and recommends a
+  build-time error for case-only path collisions. Only the alternative to that error, escaping, would need a new
+  path provider version.
 - **The consistency checks depend on byte identity through its Phase 2:** the specification, including the
   serializable form and its digest encoding (Phase 0), the serializable-form tooling (Phase 1), and the generator,
   the encoders that take serializable forms, and canonical uncompressed payloads from a deterministic compiler
@@ -23,6 +26,15 @@ other, the rules they share, and the order to do them in.
   decision about compression: their file's details are compressed however module metadata ends up compressed.
 - **The versions plan:** Phase 1 depends on nothing. Phase 2 needs byte identity's specification. Phase 3's new
   metadata version follows byte identity's decision about compression.
+- **The strings document depends on none of the plans, and they wait for it only in text.** It agrees with byte
+  identity's decisions 6 and 7, and adds Windows device names and non-ASCII path segments to decision 7's
+  build-time error. Byte identity's specification (Phase 0) writes down the format rules it recommends: well-formed
+  UTF-8, lengths in bytes, today's UTF-16 orders and reference ID escapes, and ASCII path segments. Byte identity's
+  rules for compilers (Phase 6) write down the strings document's coordinate rules. Counting columns in code points
+  changes no format, and the consistency checks do not see it, since ECDs leave source information out. Departing
+  from what the format does today takes new versions: a new path provider version for path segments outside ASCII,
+  and a new reference ID version for another order in reference ID generation (the versions plan's Phase 3). UTF-8
+  orders elsewhere come only with versions made for other reasons.
 - **Where the consistency checks and the versions plan meet:**
   - ECDs include reference IDs, so a dependency rebuilt with another reference ID version changes its ECDs. The
     consistency checks report that before any element loads, naming the version change. The versions plan's
@@ -68,9 +80,14 @@ other, the rules they share, and the order to do them in.
      code;
    - the rest of the versions plan's Phase 1, which fixes latent bugs: three of its four fixes are merged, and the
      fourth, for virtual packages' back references, remains;
-   - byte identity's Phase 0, the specification of the serializable form and the encoding.
+   - byte identity's Phase 0, the specification of the serializable form and the encoding, with the strings
+     document's decisions on the format (its decisions 1, 9, and 10);
+   - the strings document's hazard fixes (its section 8), one per bug, and its scans of existing models.
 2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification exists.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 2 is done.
    Meanwhile, byte identity's decision gate, and its Phase 5 if the gate chooses Option 1.
 4. **When wanted:** byte identity's Phase 6, rules for compilers and a second implementation, with the non-Java
-   work; and the versions plan's Phase 3, with the first new version of either extension.
+   work, once the strings document's decisions on coordinates (its decisions 3 to 5) are made; and the versions
+   plan's Phase 3, with the first new version of either extension.
+5. **Separately:** the strings document's decisions on the Pure language and its string functions, which no PELT
+   work waits for.
