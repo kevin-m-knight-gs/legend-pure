@@ -475,10 +475,13 @@ Three of the four fixes are merged, along with a test-only reference ID version:
 
 The fourth fix remains:
 
-- **Apply R1 to virtual packages' back references.** `ElementLoader` keeps each back-reference file's version, and
-  virtual packages resolve their back references with it. `BackReferenceProvider` gains
-  `getBackReferencesByReferenceIdVersion`, and the `initialize` method of generated virtual-package classes takes
-  the back references grouped by version ([section 10](#10-compatibility)).
+- **Apply R1 to virtual packages' back references.** For a virtual package, `ElementLoader` keeps each
+  back-reference file's version, and the package resolves the back references from that file with it. A new
+  interface, `BackReferencesByVersion`, groups them by version, and the virtual-package classes take it instead of
+  a `BackReferenceProvider` ([section 10](#10-compatibility)). The package is its only instance, and its ID is its
+  path in every version (R5), so its path finds its back references in files of every version. Concrete elements
+  are unchanged: `ElementLoader` still merges their back references, and Phase 3 makes every back-reference file
+  for an element use the element's version ([section 5](#5-matching-back-references)).
 
 Output does not change.
 
@@ -552,10 +555,11 @@ Exit: a new version of either extension can ship.
   must compare their IDs with others by resolving them (R3), not as strings (R2).
 - **Phase 1's API changes.** The merged fixes add two `FileSerializer.serializeElement` overloads that take a
   reference ID version, and make `ModuleMetadataGenerator.getReferenceIdVersion` public ([#1373]). The remaining
-  fix adds `getBackReferencesByReferenceIdVersion` to the `BackReferenceProvider` interface, which only
-  `ElementLoader` implements, and changes the `initialize` method of generated virtual-package classes. Only
-  `Package` has virtual instances, so only legend-pure's own build generates those classes. legend-engine uses
-  neither.
+  fix adds the `BackReferencesByVersion` interface. `ElementBuilder.buildVirtualPackage`, the constructors of the
+  virtual-package base classes, the `initialize` method of generated virtual-package classes, and the
+  `collectBackReferences` helper that those call take it in place of a `BackReferenceProvider` or a list of back
+  references. Only `Package` has virtual instances, so only legend-pure's own build generates those classes.
+  legend-engine uses none of them.
 - **Phase 2's API change.** `ReferenceIdResolver` gains a method that returns the path of an ID's element (R6).
   Its default reads the path from a V1 ID: under R5, that is right for every version's root IDs, and under R4, it
   fails on another version's other IDs rather than misreading them. legend-engine neither implements nor uses the
