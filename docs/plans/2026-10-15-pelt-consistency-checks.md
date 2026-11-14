@@ -323,7 +323,7 @@ definition instead.
   takes a `MetadataIndex` and a source of consistency files (a `FileDeserializer` plus a class loader or a
   directory). It returns a result: pass, pass with notes, or failures. It finds a module's file the way the
   module's other files are found, which matters once a module can record a path provider version other than 1.
-- **It is called from `ElementLoader.Builder.build()`** (`ElementLoader.java:398`).
+- **It is called from `ElementLoader.Builder.build()`** (`ElementLoader.java:488`).
   - `PureCompilerLoader` and `MetadataPelt` (`MetadataPelt.java:264`) both build an `ElementLoader` from a
     `MetadataIndex` before loading any element. `FSPeltGraphLoaderHybridPureGraphCache` goes through
     `PureCompilerLoader`.

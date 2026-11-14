@@ -11,7 +11,7 @@ how they depend on each other, the rules they share, and the order to do them in
 |---|---|---|
 | [Byte-identical PELT files](2026-10-15-pelt-byte-identity.md) | Defines a serializable form of each element, makes every PELT file a function of its content alone, and specifies the format | Now |
 | [PELT consistency checks](2026-10-15-pelt-consistency-checks.md) | Finds, before any element loads, modules built against other versions of their dependencies | After the byte-identity plan's Phase 2 |
-| [More than one path provider or reference ID version](2026-10-16-pelt-path-provider-and-reference-id-versions.md) (the versions plan) | Lets modules written with different versions of either extension load together | Phase 1 now, three of its four fixes merged; Phase 2 early; Phase 3 when a new version is wanted |
+| [More than one path provider or reference ID version](2026-10-16-pelt-path-provider-and-reference-id-versions.md) (the versions plan) | Lets modules written with different versions of either extension load together | Phase 1 done; Phase 2 early; Phase 3 when a new version is wanted |
 | [Strings across platforms and languages](2026-11-06-cross-platform-strings.md) (the strings document) | Sets out options for the string value, source coordinates, the language's string functions, and the format's string rules, and lists hazards to fix whatever is chosen | Hazard fixes now; format decisions with the byte-identity plan's Phase 0, coordinate decisions before its Phase 6, and language decisions separately |
 
 ## Dependencies
@@ -24,8 +24,8 @@ how they depend on each other, the rules they share, and the order to do them in
   the encoders that take serializable forms, and canonical uncompressed payloads from a deterministic compiler
   (Phase 2). ECDs are digests of the generator's serializable forms. They do not depend on byte identity's
   decision about compression: their file's details are compressed however module metadata ends up compressed.
-- **The versions plan:** Phase 1 depends on nothing. Phase 2 needs byte identity's specification. Phase 3's new
-  metadata version follows byte identity's decision about compression.
+- **The versions plan:** Phase 1, now done, depended on nothing. Phase 2 needs byte identity's specification.
+  Phase 3's new metadata version follows byte identity's decision about compression.
 - **The strings document depends on none of the plans, and they wait for it only in text.** It agrees with byte
   identity's decisions 6 and 7, and adds Windows device names and non-ASCII path segments to decision 7's
   build-time error. Byte identity's specification (Phase 0) writes down the format rules it recommends: well-formed
@@ -75,11 +75,11 @@ how they depend on each other, the rules they share, and the order to do them in
 
 ## Order
 
+The versions plan's Phase 1, which fixed latent bugs, is done.
+
 1. **Now, in parallel:**
    - byte identity's Phase 4 measurements of Option 4 against today's compression, which need no new product
      code;
-   - the rest of the versions plan's Phase 1, which fixes latent bugs: three of its four fixes are merged, and the
-     fourth, for virtual packages' back references, remains;
    - byte identity's Phase 0, the specification of the serializable form and the encoding, with the strings
      document's decisions on the format (its decisions 1, 9, and 10);
    - the strings document's hazard fixes (its section 8), one per bug, and its scans of existing models.

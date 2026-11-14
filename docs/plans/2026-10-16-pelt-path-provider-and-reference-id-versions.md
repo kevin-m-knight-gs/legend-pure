@@ -1,8 +1,8 @@
 # Plan: more than one path provider or reference ID version
 
 Status: proposal, 2026-10-16. This plan merges two earlier ones, on path provider versions (2026-10-15) and on
-reference ID versions (2026-10-16), which shared their mechanism. Three of Phase 1's four fixes are merged
-([#1371], [#1372], and [#1373]), and the fourth remains. Phase 2 can be done once the PELT specification exists.
+reference ID versions (2026-10-16), which shared their mechanism. Phase 1 is done: its four fixes are merged
+([#1371], [#1372], [#1373], and [#1398]). Phase 2 can be done once the PELT specification exists.
 Phase 3 waits until a second version of either extension is wanted.
 Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 [PELT consistency checks](2026-10-15-pelt-consistency-checks.md), and the
@@ -20,8 +20,9 @@ of each exists, and the code assumes it in places:
 - A **reference ID** names an instance so that other elements, other modules, and generated code can refer to it.
   IDs come from a versioned `ReferenceIdExtension`, whose provider generates them and whose resolver turns them
   back into instances. Most files that hold IDs record which version produced them, but readers use the recorded
-  version in only one place, and several paths assume version 1 or the default. If a second version shipped, some
-  back references would be resolved with the wrong version, and others would be dropped without any error.
+  version only for element files and virtual packages' back references, and several paths assume version 1 or the
+  default. If a second version shipped, some back references would be resolved with the wrong version, and others
+  would be dropped without any error.
 
 This plan makes several versions of each safe. It records each module's versions in its manifest, sets the rules
 that every later version must keep, and fixes the places where today's code would break them.
@@ -32,7 +33,7 @@ provider version. No second reference ID version is proposed either. One could b
 position, since a positional ID can resolve to a different instance without error when the element it points into
 changes, or IDs that are simpler for a second compiler to generate. So the plan is phased:
 
-- **Phase 1** fixes what is wrong whatever happens. Three of its four fixes are merged, and the fourth remains.
+- **Phase 1** fixes what is wrong whatever happens. It is done: all four of its fixes are merged.
 - **Phase 2** writes the rules that every later version must keep into the PELT specification. It needs only the
   specification.
 - **Phase 3** records versions and honors them. It ships with the first new version of either extension.
@@ -65,7 +66,7 @@ Two facts about reference IDs shape the design:
 | G8 | Every loader gets this right without having to opt in. |
 
 G4 matters because elements load lazily. `ElementLoader` reads an element's file when the element is first
-requested (`ElementLoader.java:119`), so a missing file, or a version the reader lacks, could otherwise surface
+requested (`ElementLoader.java:126`), so a missing file, or a version the reader lacks, could otherwise surface
 long after startup, partway through execution.
 
 ## 1. Where we are
@@ -96,7 +97,7 @@ long after startup, partway through execution.
 | Where | What the IDs name | Version recorded | How readers use it |
 |---|---|---|---|
 | Element files (`.pelt`) | Instances outside the element that it refers to, and each of its own instances | In the header (`ConcreteElementSerializer.java:59`) | Picks the element's resolver (`AbstractLazyConcreteElement.java:117`) |
-| Per-element back-reference files (`.pbr`) | Keys: instances of the target element. Values: instances in the writing module's elements, such as function applications, reference usages, and specializations | In the file | Ignored. `ElementLoader` merges every module's file for an element into one map and drops the versions (`ElementLoader.java:218`) |
+| Per-element back-reference files (`.pbr`) | Keys: instances of the target element. Values: instances in the writing module's elements, such as function applications, reference usages, and specializations | In the file | For a concrete element, ignored: `ElementLoader` merges every module's file for the element into one map and drops the versions (`ElementLoader.java:225`). For a virtual package, `ElementLoader` keeps the back references apart by version, and the package resolves each version's with that version's resolver (`ElementLoader.java:273`) |
 | External-reference files (`.pxr`) | Instances in other modules that the module's elements refer to | In the file | No loader reads these files |
 | Generated Java (compiled mode) | Classes, enumerations, and other instances that generated code looks up, as string literals, for example `getMetadataAccessor().getClass("...")` (`GenericTypeSerializationInCode.java:59`); lambdas, keyed by ID | Not recorded: `IdBuilder` always uses V1 (`ReferenceIdV1IdBuilder.java:59`) | `MetadataPelt` resolves them with version 1 (`MetadataPelt.java:69`); `MetadataEager` indexes instances by V1 IDs computed at run time (`MetadataEager.java:125`) |
 
@@ -105,17 +106,19 @@ IDs.
 
 **What is wrong or missing:**
 
-- **Back-reference values use the wrong resolver.** Generated lazy classes resolve an element's back references
-  with the element's own resolver, and virtual packages, which have no element file, use the default
-  (`LazyCoreInstanceUtilities.java:555`, from `M3LazyCoreInstanceGenerator.java:1765`, and in compiled mode from
-  `ClassPeltImplProcessor.java:1149`). Neither is the version of the file the values came from. Phase 1's
-  remaining fix covers virtual packages. Elements get the right resolver once back-reference files follow their
-  targets ([section 5](#5-matching-back-references)).
-- **No test loads modules written with different versions together.** A test-only reference ID version now exists
-  ([#1373]), and Phase 1's remaining fix adds the first such tests.
+- **Elements resolve back-reference values with the wrong resolver.** A concrete element resolves the back
+  references from every module's file with its own resolver (`AbstractLazyConcreteElement.java:117` and `:122`),
+  which is not the version of the file the values came from. Elements get the right resolver once back-reference
+  files follow their targets ([section 5](#5-matching-back-references)).
+- **Few tests load modules written with different versions together.** The only one, from [#1398], loads a
+  virtual package whose back-reference files come from modules written with two versions. Phase 3 adds the rest.
 
 **Fixed by Phase 1** ([section 9](#9-phases)):
 
+- **Virtual packages resolved back references with the default version.** A virtual package has no element file,
+  and so no version of its own, and `ElementLoader` dropped the versions that back-reference files record. It now
+  keeps a package's back references apart by version, and the package resolves each version's with that version's
+  resolver, so a package can take back references from modules written with different versions ([#1398]).
 - **The writer picked a version twice.** The element serializer and the module-metadata generator each defaulted
   to the newest loaded version, independently, so nothing tied a module's element files and its metadata to the
   same version. `PureCompilerSerializer` now writes element files with the module-metadata generator's version
@@ -354,7 +357,11 @@ M writes its back-reference file for E entirely in E's version: keys and values.
 - **The writer needs E's provider,** which it has: a `ReferenceIdExtension` supplies both a provider and a
   resolver, and the writer could not have loaded E without that version's resolver.
 - **Today's resolution becomes right for elements:** they resolve back references with their own resolver, which
-  is then the file's version. Virtual packages still need R1, which Phase 1's remaining fix gives them.
+  is then the file's version.
+- **Virtual packages are the exception.** A virtual package has no element file, and so no version for M to
+  follow: M writes its back-reference file for a package in M's own version. Since [#1398], the package resolves
+  the back references from each file with that file's version (R1), and its ID is its path in every version (R5),
+  so the keys match whatever version wrote them.
 
 ### Two versions per back-reference file
 
@@ -435,7 +442,8 @@ R4 keeps self-describing IDs open, if a later version ever has to reach generate
   - when the manifest loads, the reader must have the module's reference ID version (G4);
   - as each element loads, its header must record the manifest's version, which catches a module whose files
     disagree;
-  - each back-reference file must record its target's version ([section 5](#5-matching-back-references)).
+  - each back-reference file for a concrete element must record the element's version
+    ([section 5](#5-matching-back-references)).
 - **Callers that still use the default path provider version** are right for every module that records none.
   Under section 4, that is every module whose names never changed.
 - **Stale files.** An incremental build that changes a module's recorded path provider version leaves files with
@@ -449,7 +457,8 @@ R4 keeps self-describing IDs open, if a later version ever has to reach generate
   writes a module's manifest, and writes the manifest at the lowest metadata version that can hold it.
 - `ModuleMetadataGenerator` builds manifests without records, as now. `FileSerializer` adds them as it writes.
 - A writer uses one reference ID version for a module's element files and its module metadata, as
-  `PureCompilerSerializer` has done since [#1373], and writes each back-reference file in its target's version.
+  `PureCompilerSerializer` has done since [#1373], and writes each back-reference file in its target's version,
+  or in the module's own version for a virtual package.
 - **A dependency's reference ID version** comes from its manifest, which loaders already hold in `MetadataIndex`.
   For a module compiled in the same run, it is the writer's own version.
 
@@ -460,7 +469,7 @@ written as today.
 
 ### Phase 1: fix what is wrong regardless of versions
 
-Three of the four fixes are merged, along with a test-only reference ID version:
+Done. The four fixes are merged, along with a test-only reference ID version:
 
 - **`ReferenceIds` picks its extension manager correctly** ([#1371]). The tests cover {1}, contiguous sets, sets
   missing one version or several, and explicit and unknown default versions.
@@ -472,16 +481,15 @@ Three of the four fixes are merged, along with a test-only reference ID version:
   test sources, gives each packageable element its path, as V1 does, and every other instance its V1 ID with a
   prefix that V1 rejects. Its version number is -1: real versions count up from 1, so it can never be mistaken for
   one or collide with one. It is not registered as a service.
-
-The fourth fix remains:
-
-- **Apply R1 to virtual packages' back references.** For a virtual package, `ElementLoader` keeps each
+- **R1 for virtual packages' back references** ([#1398]). For a virtual package, `ElementLoader` keeps each
   back-reference file's version, and the package resolves the back references from that file with it. A new
   interface, `BackReferencesByVersion`, groups them by version, and the virtual-package classes take it instead of
   a `BackReferenceProvider` ([section 10](#10-compatibility)). The package is its only instance, and its ID is its
-  path in every version (R5), so its path finds its back references in files of every version. Concrete elements
-  are unchanged: `ElementLoader` still merges their back references, and Phase 3 makes every back-reference file
-  for an element use the element's version ([section 5](#5-matching-back-references)).
+  path in every version (R5), so its path finds its back references in files of every version. The tests, with
+  the test-only version, load a package whose back-reference files have a version other than the loader's
+  default, and a package with back-reference files of two versions. Concrete elements are unchanged:
+  `ElementLoader` still merges their back references, and Phase 3 makes every back-reference file for an element
+  use the element's version ([section 5](#5-matching-back-references)).
 
 Output does not change.
 
@@ -491,7 +499,8 @@ This needs the PELT specification, from the byte-identity plan's Phase 0, and no
 
 - The specification states the frozen manifest location ([section 2](#2-rules)), and R3 to R6.
 - It states which reference ID version each kind of file uses: the module's own version for element files and
-  external-reference metadata, and the target's version for back-reference files.
+  external-reference metadata, and for back-reference files, the target's version, or the writing module's own
+  version when the target is a virtual package.
 - `ReferenceIdResolver` gains a method that returns the path of the element an ID points into (R6). V1 and the
   test-only version implement it, with tests, and the consistency checks use it to reduce external references to
   elements.
@@ -513,11 +522,14 @@ This starts when a new version of either extension is wanted, and ships with tha
   provider version and picks the manifest's metadata version.
 - `FileDeserializer` gains module-scoped reading, and `PureCompilerLoader`, `MetadataPelt`, and `ElementLoader` use
   it.
-- Writers write each back-reference file in its target's version. `ModuleBackReferenceMetadata` holds one version
-  for all of a module's back-reference files (`ModuleBackReferenceMetadata.java:185`). It gains a version per
-  target, keeping the module-level version as the default.
+- Writers write each back-reference file in its target's version, or in the module's own version for a virtual
+  package.
+  `ModuleBackReferenceMetadata` holds one version for all of a module's back-reference files
+  (`ModuleBackReferenceMetadata.java:185`). It gains a version per target, keeping the module-level version as the
+  default.
 - Loaders check, when the manifest loads, that the reader has the module's versions; and, as elements load, that
-  element headers match the manifest and that each back-reference file records its target's version.
+  element headers match the manifest and that each back-reference file for a concrete element records the
+  element's version.
 - Tests, with the test-only reference ID version from Phase 1, and a test-only path provider version that renames
   some files. Each test-only version is numbered outside the range of real versions. The path provider's must be
   above that range, such as `Integer.MAX_VALUE`, since the lowest-version rule
@@ -533,7 +545,7 @@ This starts when a new version of either extension is wanted, and ships with tha
   - a reader limited to metadata V3 rejects each module that records a version, at its manifest, and reads the
     rest;
   - a reader rejects a record whose name or version it does not know;
-  - a back-reference file in the wrong version is rejected;
+  - a back-reference file for a concrete element in the wrong version is rejected;
   - generated code with V1 IDs resolves against elements written with the test reference ID version;
   - files left behind by an earlier path provider version are ignored;
   - once the consistency checks exist, a dependency rebuilt with the test reference ID version fails its
@@ -553,9 +565,9 @@ Exit: a new version of either extension can ship.
   lacks reference ID V2 rejects the V2 module at its manifest, before it needs those files.
 - **External-reference files** keep the version of their module's element files. Anything that reads them later
   must compare their IDs with others by resolving them (R3), not as strings (R2).
-- **Phase 1's API changes.** The merged fixes add two `FileSerializer.serializeElement` overloads that take a
-  reference ID version, and make `ModuleMetadataGenerator.getReferenceIdVersion` public ([#1373]). The remaining
-  fix adds the `BackReferencesByVersion` interface. `ElementBuilder.buildVirtualPackage`, the constructors of the
+- **Phase 1's API changes.** Two `FileSerializer.serializeElement` overloads take a reference ID version, and
+  `ModuleMetadataGenerator.getReferenceIdVersion` is public ([#1373]). A new interface, `BackReferencesByVersion`,
+  groups back references by version ([#1398]). `ElementBuilder.buildVirtualPackage`, the constructors of the
   virtual-package base classes, the `initialize` method of generated virtual-package classes, and the
   `collectBackReferences` helper that those call take it in place of a `BackReferenceProvider` or a list of back
   references. Only `Package` has virtual instances, so only legend-pure's own build generates those classes.
@@ -588,3 +600,4 @@ Exit: a new version of either extension can ship.
 [#1371]: https://github.com/finos/legend-pure/pull/1371
 [#1372]: https://github.com/finos/legend-pure/pull/1372
 [#1373]: https://github.com/finos/legend-pure/pull/1373
+[#1398]: https://github.com/finos/legend-pure/pull/1398

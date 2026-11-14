@@ -234,7 +234,7 @@ character, so nothing reports it.
   - legend-sdlc derives Maven artifact IDs from enum names the same way (`MavenProjectStructure.java:387`,
     `MultiModuleMavenProjectStructure.java:519`).
   - So do build-time generators (`M3ToJavaGenerator.java:1070` and `:2367`, and
-    `M3LazyCoreInstanceGenerator.java:877` through the default-locale overloads in `TextTools.java:335`).
+    `M3LazyCoreInstanceGenerator.java:878` through the default-locale overloads in `TextTools.java:335`).
 - **Unicode tables.** Character properties come from the JDK. The compiler uses them in the multi-line layout
   (`Character.isWhitespace`) and in graph path validation (`Character.isLetterOrDigit`, `GraphPath.java:1126`).
   Java's whitespace set is the same on JDK 11, 17, 21, and 25 (verified): U+0009 to U+000D, U+001C to U+0020,

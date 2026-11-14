@@ -131,7 +131,7 @@ digesting, and projecting it are uses of the same form, not other forms. Most of
   renames `SerializableConcreteElement`: the element's path, its reference ID version, and its instances in order.
   Each instance (`InstanceData`) has its name, classifier, source information, reference ID, compile states, and
   property values, each a primitive value or an internal or external reference. `ElementBuilder` builds instances
-  from it (`ElementBuilder.java:39`).
+  from it (`ElementBuilder.java:40`).
 - **Module metadata** has a serializable form already: its extensions serialize `ModuleManifest` and the other
   metadata classes, which hold paths and reference IDs, not instances.
 
@@ -185,7 +185,7 @@ them, and they are never serialized with the element. Comparisons can pair a ser
 
 - Each instance with a reference ID gets its back references from other elements, as sorted `BackReference`
   records. `ElementBuilder` already receives these separately from each instance's data
-  (`ElementBuilder.java:41`).
+  (`ElementBuilder.java:42`).
 - From files, they come from the back-reference files of every loaded module, merged as `ElementLoader` merges
   them. From a graph, the generator reads them from the instances' back-reference properties.
 - The content digest leaves them out.
@@ -857,7 +857,7 @@ critical path for the invariant.
   `DeserializedConcreteElement` renamed `SerializableConcreteElement`. legend-engine's sources do not use that
   class. Generated code names it only in an erased `Supplier<? extends DeserializedConcreteElement>` constructor
   parameter, which it passes straight to its superclass (`ClassPeltImplProcessor.java:416`,
-  `M3LazyCoreInstanceGenerator.java:481`), so generated code that is already compiled keeps linking.
+  `M3LazyCoreInstanceGenerator.java:482`), so generated code that is already compiled keeps linking.
   `InstanceData` keeps its name, since it appears unerased in generated constructors
   (`ClassPeltImplProcessor.java:438`).
 - **The value fixes** keep `Value`'s methods and change its equality only in the cases that section 5 lists.
