@@ -453,6 +453,12 @@ Keep the backslash-u escapes of UTF-16 code units. They are an encoding rule, AS
   of their extensions (verified). Under the versions plan's lowest-version rule, every existing module then keeps
   recording V1, and keeps its bytes. Only a module with a name outside ASCII records the new version, and earlier
   readers reject it at its manifest.
+- **Keep a margin.** V1's limit of 126 is conservative on purpose, for two reasons. The limits are uncertain, as
+  the table shows. And Legend neither turns names into bytes nor controls who does or how: the JDK does it when it
+  writes a file, in the locale's charset and, on macOS, sometimes in NFD; the archiver does it when it packages the
+  files into a jar; and whatever later unpacks, copies, or reads them, in Java or another language, does it again
+  in its own way, for file systems with their own limits. A margin covers encodings and limits that cannot be
+  listed in advance.
 - **Stay fast.** Readers compute file names as well as writers.
 - **Not depend on the JDK's Unicode tables.** Readers on different JDKs have to compute the same name for the same
   element.
@@ -491,8 +497,8 @@ Keep the backslash-u escapes of UTF-16 code units. They are an encoding rule, AS
   - Every character of every segment is scanned, even in short names.
 
 **Before choosing.** N3 is the only option that holds whatever APFS counts, and whatever the JDK and the locale.
-N2 keeps names readable, and holds unless APFS counts UTF-8 bytes. N1 renames existing files. Two checks would
-inform the choice:
+N2 keeps names readable, and holds unless APFS counts UTF-8 bytes. Both keep V1's margin. N1 renames existing
+files, and leaves no margin at the most common limit. Two checks would inform the choice:
 
 1. On a Mac with JDK 17, write a hashed N2 name of Korean text to an APFS volume, and see whether it fails.
 2. Measure N2's and N3's checks against V1's with JMH. In a rough first run, both added well under a microsecond
