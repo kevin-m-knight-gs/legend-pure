@@ -1,6 +1,7 @@
 # Strings across platforms and languages: options
 
-Status: options for decision, 2026-11-06.
+Status: options for decision, 2026-11-06. Options for file names outside ASCII added 2026-11-16 (section 6.5), for
+consideration.
 Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 [PELT consistency checks](2026-10-15-pelt-consistency-checks.md),
 [path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md), and the
@@ -32,7 +33,9 @@ its rules for compilers (its Phase 6).
 Statements marked *verified* were checked on 2026-11-06 at legend-pure `234ae818c`, legend-engine `c6aa1602956`,
 legend-sdlc `ebf1f204`, and legend-shared `f9b8089`, by reading the code or by running small programs against
 Temurin JDK 11.0.32, 17.0.21, 21.0.12, and 25.0.5 on Windows 11, legend-pure's generated M3 lexer, H2 2.1.214, and
-DuckDB 1.4.5.
+DuckDB 1.4.5. Statements added to section 6.5 on 2026-11-16 were checked at legend-pure `3b5117ffb`, with small
+programs on Temurin JDK 25.0.5, by reading the OpenJDK jdk17u, jdk21u, and jdk25u sources, and by scanning the jars
+in a local Maven repository.
 
 ## Terms
 
@@ -206,7 +209,7 @@ character, so nothing reports it.
 | Other orders | Module metadata (`String.compareTo`, at the five sites that the byte-identity plan lists in its section 1.1), node properties by name (`SerializerV1.java:544`), and candidate paths in reference ID generation, by UTF-16 length and then code unit order (`ReferenceIdGenerator.java:412`). The last is a generation rule: it decides content, not only its encoding. |
 | Reference ID text | Keys are escaped by `StringEscape.escape` (`GraphPath.java:871`), which writes each code unit outside U+0020 to U+007F as a backslash-u escape (`StringEscape.java:36`). IDs are ASCII, with UTF-16 escapes. |
 | Source information | Six integers per node, in the unit of whichever parser produced them. No unit is recorded. |
-| File names | Each path segment, extension included, is limited to 126 UTF-16 code units, to fit 255 bytes of UTF-16 (`FilePathTools.java:24`). The overflow hash runs over code points (`FilePathTools.java:205`). Linux file systems such as ext4 limit a name to 255 bytes, which 126 characters from U+0800 to U+FFFF exceed in UTF-8 (378 bytes). This cannot happen today, since legend-pure's grammar allows only ASCII element names. |
+| File names | Each path segment, extension included, is limited to 126 UTF-16 code units, to fit 255 bytes of UTF-16 (`FilePathTools.java:24`). The overflow hash runs over code points (`FilePathTools.java:205`). Linux file systems such as ext4 limit a name to 255 bytes, which 126 characters from U+0800 to U+FFFF exceed in UTF-8 (378 bytes). This cannot happen today, since legend-pure's grammar allows only ASCII element names. Section 6.5 has options for names outside ASCII. |
 
 ### 1.7 Platform dependencies outside Unicode
 
@@ -417,9 +420,83 @@ Keep the backslash-u escapes of UTF-16 code units. They are an encoding rule, AS
   it, as build-time errors on every platform: the case-only collisions of the byte-identity plan's decision 7, and
   Windows device names compared without regard to case (`NUL` at least; all of them, for earlier Windows versions).
 - If element names outside ASCII are ever needed, for example if legend-engine models with quoted identifiers
-  become PELTs, a new path provider version limits each segment to 255 bytes of UTF-8, and fixes a normalization
-  form (NFC), since file systems treat normalization differently (HFS+ stores decomposed names). That is out of
-  scope until then.
+  become PELTs, a new path provider version has to name their files. The rest of this section sets out options for
+  that version, to consider when it is needed. None is chosen (decision 13).
+
+**What a name has to fit.** File systems limit the length of each name, in one of two units:
+
+| Limit | File systems |
+|---|---|
+| 255 bytes | ext4, XFS, Btrfs, and ZFS |
+| 255 UTF-16 code units | NTFS, exFAT, FAT long names, ReFS, and HFS+ |
+| 143 bytes | eCryptfs with encrypted file names, as in older Ubuntu encrypted home directories |
+| 255, in an undocumented unit | APFS. Apple documents no limit, and recommends creating a file and handling the failure. Reports differ on whether the limit counts UTF-8 bytes or UTF-16 code units. |
+
+- **UTF-8 bytes are the stricter count.** A character never takes fewer UTF-8 bytes than UTF-16 code units (1 and
+  1, 2 and 1, 3 and 1, or 4 and 2), so a limit in UTF-8 bytes also limits UTF-16 code units. V1 counts code units,
+  the smaller of the two, so 126 CJK ideographs (378 bytes) pass it.
+- **Normalization changes lengths.** HFS+ stores names decomposed (NFD). JDK 17's file API on macOS also converts
+  any name outside ASCII to NFD before passing it to the OS, on any volume; JDK 21 and 25 do so only when
+  `jdk.nio.path.useNormalizationFormD` is set (verified, in each version's `MacOSXFileSystem`). NFD can give a name
+  up to 1.5 UTF-16 code units per UTF-8 byte of the original (U+01D5), and up to 3 UTF-8 bytes per byte of the
+  original (U+0390, and every Hangul syllable with a final consonant) (verified).
+- **Locale.** On Linux, the JDK encodes file names in the locale's charset (`sun.jnu.encoding`), which JDK 18's
+  move to UTF-8 did not change. Under the C locale, it cannot write a name outside ASCII at all.
+- **Case.** Case-insensitive file systems fold letters outside ASCII too, so the case-only collision check would
+  have to fold them as well.
+
+**What a new version has to do.**
+
+- **Give V1's names to every name that exists today.** Identifiers allow only ASCII letters, digits, `_`, and `$`
+  (`M4Fragment.g4:27`), and module names only lowercase letters, digits, and `_` (`CodeRepository.java:29`). The
+  98,287 module and element files in the newest local copy of 134 Legend jars use nothing else, apart from the `.`
+  of their extensions (verified). Under the versions plan's lowest-version rule, every existing module then keeps
+  recording V1, and keeps its bytes. Only a module with a name outside ASCII records the new version, and earlier
+  readers reject it at its manifest.
+- **Stay fast.** Readers compute file names as well as writers.
+- **Not depend on the JDK's Unicode tables.** Readers on different JDKs have to compute the same name for the same
+  element.
+
+**Options.**
+
+- **N1. 255 bytes of UTF-8, with names in NFC.** This section's earlier suggestion.
+  - It renames existing files. V1 hashes every segment over 126 code units; N1 writes those up to 255 whole, and
+    cuts longer ones at another point. Every module with a hashed name, the mapping DSL among them, would record
+    the new version.
+  - It fails eCryptfs, and HFS+ for decomposable text: after NFD, 254 bytes of U+01D5 take 381 UTF-16 code units
+    (verified).
+- **N2. 126 bytes of UTF-8, with names in NFC.** V1's rule, counting UTF-8 bytes instead of code units, and cutting
+  at a code point boundary, which covers V1's rule against splitting a surrogate pair.
+  - For ASCII, bytes equal code units, so the threshold, the cut, and the hash are V1's. A prototype matched
+    `FilePathTools` on two million random ASCII paths, about two-thirds of them with a hashed segment, and on every
+    segment length from 1 to 300 with each extension (verified).
+  - As written, a name fits every limit in the table, eCryptfs included. After NFD, it still fits HFS+, at no more
+    than 189 UTF-16 code units.
+  - One gap: if APFS counts UTF-8 bytes, a name written through JDK 17 on macOS can exceed the limit after NFD. A
+    hashed segment of 36 Korean syllables, the 13-character suffix, and `.pelt` is 126 bytes as written and 342 in
+    NFD (verified). Closing the gap inside a length rule would need either NFD lengths, which depend on the Unicode
+    tables, or a weight of 3 for every byte outside ASCII.
+  - Names stay readable. The locale and case issues remain.
+  - A segment of 40 code units or fewer cannot exceed 120 bytes and needs no scan; a longer one takes one pass.
+- **N3. Escape to ASCII, then apply V1's rule unchanged.** Replace each UTF-16 code unit outside the characters
+  that existing names use (ASCII letters, digits, `_`, and `$`) with `-` and four lowercase hex digits, the unit
+  that reference ID escapes use (6.4). The hash then runs over the escaped text.
+  - The result is ASCII, so bytes, code units, and code points coincide, and no file system or JDK normalizes or
+    re-encodes it. V1's cut and hash apply as they are, and the result fits every limit in the table, whatever
+    APFS counts. The locale and case issues go too, and names need no normalization form for the file systems'
+    sake.
+  - No existing name changes, since none has a character that N3 escapes.
+  - Names outside ASCII become unreadable. Each escaped code unit takes five characters, so about 21 fit before
+    the hash cut.
+  - Every character of every segment is scanned, even in short names.
+
+**Before choosing.** N3 is the only option that holds whatever APFS counts, and whatever the JDK and the locale.
+N2 keeps names readable, and holds unless APFS counts UTF-8 bytes. N1 renames existing files. Two checks would
+inform the choice:
+
+1. On a Mac with JDK 17, write a hashed N2 name of Korean text to an APFS volume, and see whether it fails.
+2. Measure N2's and N3's checks against V1's with JMH. In a rough first run, both added well under a microsecond
+   per path, N3 more than N2.
 
 ### 6.6 Source information
 
@@ -542,7 +619,7 @@ For the recommended combination. Items marked *now* are the hazards of section 8
   does.
 - Test generation budgets class names in mixed units: a name's UTF-8 bytes against a limit computed from UTF-16
   byte lengths that include byte order marks (`AbstractTestClassGenerator.java:36` and `:79`). It is harmless, but
-  one shared rule, 255 bytes of UTF-8 per name, would serve here and in 6.5.
+  counting UTF-8 bytes against one limit would be simpler; 6.5 lists the file systems' limits.
 
 ### Outside these four repositories (not reviewed)
 
@@ -571,7 +648,7 @@ In one table:
 | PELT length prefixes | UTF-8 bytes | UTF-8 bytes, unchanged |
 | PELT orders | UTF-16 length, then code units | Unchanged in existing versions (O1); UTF-8 bytes in later ones (O3) |
 | Reference ID escapes | UTF-16 code units | Unchanged |
-| PELT file-name limit | 126 UTF-16 code units per segment | ASCII path segments; 255 bytes of UTF-8 in any later path provider version |
+| PELT file-name limit | 126 UTF-16 code units per segment | ASCII path segments; for other names, a later path provider version, by an option in 6.5 not yet chosen |
 | Editor positions (LSP, Monaco) | UTF-16 code units | Converted from code points where they are shown |
 
 ## 11. Order of work
@@ -601,10 +678,12 @@ In one table:
    to U+0020, as `trim` uses today.
 8. **`split`:** a literal separator, as documented, or a set of characters, as implemented.
 9. **Orders in existing versions:** O1 written down (recommended), or new versions now.
-10. **Path segments in path provider V1:** ASCII only (recommended), or a byte limit in a new path provider
-    version.
+10. **Path segments in path provider V1:** ASCII only (recommended), or a new path provider version now, by one of
+    the options in 6.5.
 11. **Case mapping:** `Locale.ROOT` everywhere (recommended), with any locale-aware variants as separate functions.
 12. **A code point escape in literals,** such as `\u{1F600}`: add it, or not.
+13. **File names outside ASCII,** for the path provider version that would allow them: N1, N2, or N3 (6.5). Open,
+    with no recommendation yet; nothing waits for it until names outside ASCII are wanted.
 
 ## Outside this document
 

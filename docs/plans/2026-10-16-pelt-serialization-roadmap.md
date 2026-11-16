@@ -32,9 +32,10 @@ how they depend on each other, the rules they share, and the order to do them in
   UTF-8, lengths in bytes, today's UTF-16 orders and reference ID escapes, and ASCII path segments. Byte identity's
   rules for compilers (Phase 6) write down the strings document's coordinate rules. Counting columns in code points
   changes no format, and the consistency checks do not see it, since ECDs leave source information out. Departing
-  from what the format does today takes new versions: a new path provider version for path segments outside ASCII,
-  and a new reference ID version for another order in reference ID generation (the versions plan's Phase 3). UTF-8
-  orders elsewhere come only with versions made for other reasons.
+  from what the format does today takes new versions: a new path provider version for path segments outside ASCII
+  (the strings document's section 6.5 lists options for it, none chosen), and a new reference ID version for
+  another order in reference ID generation (the versions plan's Phase 3). UTF-8 orders elsewhere come only with
+  versions made for other reasons.
 - **Where the consistency checks and the versions plan meet:**
   - ECDs include reference IDs, so a dependency rebuilt with another reference ID version changes its ECDs. The
     consistency checks report that before any element loads, naming the version change. The versions plan's
