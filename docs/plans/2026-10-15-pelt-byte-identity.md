@@ -110,7 +110,9 @@ Earlier measurements found three things:
 - **Cost.** It adds serialization time.
 
 These findings are recollections, and this plan records no figures. Phase 4 measures again, under controlled
-conditions.
+conditions. Its first results, for platform, legend-pure, and legend-engine, are in
+[PELT compression measurements](2026-11-18-pelt-compression-measurements.md). They find no load-time gain, a size
+gain in jars under 1%, and the added serialization time.
 
 It is not yet understood why the gain survives inside jars, where entries are already deflated. That matters for
 Option 4: if part of the gain comes from the I/O path rather than from compression itself, it might be recovered
@@ -777,7 +779,8 @@ and across the matrix, or every difference is recorded for the compiler plan.
 ### Phase 4: measurements, encoder prototype, and decision gate
 
 The measurements need no new product code, so they start at once, in parallel with Phase 0. Only the encoder
-prototype waits, and it is built only if Option 4 falls short.
+prototype waits, and it is built only if Option 4 falls short. Results so far, for every module set but one of
+the largest models: [PELT compression measurements](2026-11-18-pelt-compression-measurements.md).
 
 - **Choose module sets:** platform, the legend-engine module set, and at least one of the largest models.
 - **Measure today's variants on those sets, in directories and in jars:**

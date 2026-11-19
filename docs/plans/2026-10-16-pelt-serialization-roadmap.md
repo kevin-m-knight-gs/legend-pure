@@ -80,7 +80,7 @@ The versions plan's Phase 1, which fixed latent bugs, is done.
 
 1. **Now, in parallel:**
    - byte identity's Phase 4 measurements of Option 4 against today's compression, which need no new product
-     code;
+     code (results so far: [PELT compression measurements](2026-11-18-pelt-compression-measurements.md));
    - byte identity's Phase 0, the specification of the serializable form and the encoding, with the strings
      document's decisions on the format (its decisions 1, 9, and 10);
    - the strings document's hazard fixes (its section 8), one per bug, and its scans of existing models.
