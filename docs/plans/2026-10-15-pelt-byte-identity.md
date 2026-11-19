@@ -608,8 +608,9 @@ it the three benefits above. Whether they are worth more than today's compressio
   version: legend-pure pins 3.5, and legend-engine 3.18.0. Nothing has changed yet, but nothing pins it either. The
   [strings document](2026-11-06-cross-platform-strings.md#64-reference-id-text) recommends the same remedy as for
   the hash: legend-pure's own code, with no change in behavior, and tests that pin the escape of every code unit.
-  Do it before the specification states the escapes (Phase 0, item 5), so that the code it describes is
-  legend-pure's own. The document also lists the escapes that readers accept but writers never write.
+  [#1402], in review, does that. Merge it before the specification states the escapes (Phase 0, item 5), so that
+  the code it describes is legend-pure's own. The document also lists the escapes that readers accept but writers
+  never write.
 - **Case-only differences.** Element paths that differ only in letter case, such as `a::B` and `a::b`, map to
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
   directory, the later write silently replaces the earlier file. A build-time error on every platform is the
@@ -945,3 +946,4 @@ critical path for the invariant.
   IDs name if a release changes the reference ID version (F0).
 
 [#1401]: https://github.com/finos/legend-pure/pull/1401
+[#1402]: https://github.com/finos/legend-pure/pull/1402

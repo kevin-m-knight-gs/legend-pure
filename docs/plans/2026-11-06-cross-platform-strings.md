@@ -1,7 +1,9 @@
 # Strings across platforms and languages: options
 
 Status: options for decision, 2026-11-06. Options for file names outside ASCII added 2026-11-16 (section 6.5), for
-consideration. `StringEscape` added 2026-11-19 (section 6.4, and section 8's item 9).
+consideration. `StringEscape` added 2026-11-19 (section 6.4, and section 8's item 9). Also on 2026-11-19,
+section 8's item 2 and the first step of its item 9 went into review, and section 1.7 was corrected: under a
+Turkish default locale, `/` parses with the wrong precedence rather than failing to compile.
 Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 [PELT consistency checks](2026-10-15-pelt-consistency-checks.md),
 [path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md), and the
@@ -35,7 +37,8 @@ legend-sdlc `ebf1f204`, and legend-shared `f9b8089`, by reading the code or by r
 Temurin JDK 11.0.32, 17.0.21, 21.0.12, and 25.0.5 on Windows 11, legend-pure's generated M3 lexer, H2 2.1.214, and
 DuckDB 1.4.5. Statements added to section 6.5 on 2026-11-16 were checked at legend-pure `3b5117ffb`, with small
 programs on Temurin JDK 25.0.5, by reading the OpenJDK jdk17u, jdk21u, and jdk25u sources, and by scanning the jars
-in a local Maven repository.
+in a local Maven repository. Statements added or corrected on 2026-11-19 were checked at legend-pure `6352a7942`,
+by tests on Temurin JDK 25.0.5, and by small programs on JDK 11, 17, and 25.
 
 ## Terms
 
@@ -230,15 +233,23 @@ character, so nothing reports it.
     copy of its configuration (`Server.java:55` to `:64`).
 - **Default locale.** `String.toLowerCase()` and `toUpperCase()` use the JVM's default locale. In Turkish and
   Azerbaijani, `I` lowercases to U+0131 (dotless i), and `i` uppercases to U+0130; Lithuanian has rules of its own.
-  - The M3 parser derives function names from operator enum names this way
-    (`AntlrContextToM3CoreInstance.java:641`, `:1796`, and `:1911`). With a `tr-TR` default locale, `MINUS`,
-    `TIMES`, and `DIVIDE` become `m\u0131nus`, `t\u0131mes`, and `d\u0131v\u0131de` (verified), so any source that
-    uses `-`, `*`, or `/` would fail to compile.
+  - The M3 parser derives function names, and the names it compares to decide precedence, from operator enum
+    names this way (`AntlrContextToM3CoreInstance.java:641`, `:653`, `:1802`, and `:1917`, at `6352a7942`). With a
+    `tr-TR` default locale, `MINUS` and `TIMES` become `m\u0131nus` and `t\u0131mes` (verified), so any source that
+    uses `-` or `*` names functions that do not exist and would fail to compile. `/` fails silently instead: its
+    function is always named `divide`, but the precedence check compares `d\u0131v\u0131de`, which names no
+    operator, so `1 + 6 / 3` parses as `(1 + 6) / 3`, and `1 < 6 / 3` as `(1 < 6) / 3` (verified). An earlier
+    version of this section said that `/` would fail to compile.
   - Pure's `toUpper` and `toLower` follow the server's locale.
   - legend-sdlc derives Maven artifact IDs from enum names the same way (`MavenProjectStructure.java:387`,
     `MultiModuleMavenProjectStructure.java:519`).
-  - So do build-time generators (`M3ToJavaGenerator.java:1070` and `:2367`, and
-    `M3LazyCoreInstanceGenerator.java:878` through the default-locale overloads in `TextTools.java:335`).
+  - So do build-time generators (`M3ToJavaGenerator.java:1070`, `:2367`, and `:2753`, and
+    `M3LazyCoreInstanceGenerator.java:878` through the default-locale overloads in `TextTools.java:335`). With a
+    `tr-TR` default locale, their output refers to Java names that do not exist, such as
+    `STR\u0130NG_TO_COREINSTANCE_FN`, so it would not compile (verified).
+  - Fixing these (section 8, item 2) found more: the relational grammar rejected column and join types such as
+    `integer`, `bigint`, and `(inner)`, and case-insensitive searches missed matches, both of sources and file
+    names and in the language server's completion and workspace symbols (verified).
 - **Unicode tables.** Character properties come from the JDK. The compiler uses them in the multi-line layout
   (`Character.isWhitespace`) and in graph path validation (`Character.isLetterOrDigit`, `GraphPath.java:1126`).
   Java's whitespace set is the same on JDK 11, 17, 21, and 25 (verified): U+0009 to U+000D, U+001C to U+0020,
@@ -254,7 +265,9 @@ character, so nothing reports it.
   which does not depend on the locale, and gave the same output on JDK 17 and 25 for 200,008 doubles (verified).
   `Double.toString` changed in JDK 19: 2,695 of 1,000,008 doubles print differently on JDK 17 and 25, such as
   `2.0E23`, which JDK 17 prints as `1.9999999999999998E23` (verified). Anything that renders Floats with
-  `Double.toString` depends on the JDK.
+  `Double.toString` depends on the JDK. `String.format` and `printf` take their digits from the default locale:
+  `%d` writes Arabic-Indic or Persian digits under `ar-EG`, `ar-SA`, and `fa-IR` (verified on JDK 11, 17, and 25).
+  The interpreted engine's code coverage files were written this way (section 8, item 2).
 
 ## 2. Requirements
 
@@ -421,7 +434,8 @@ m4's only use of commons-lang3. Nothing has changed yet. On nine versions from 3
 same text for every code unit, for a sample of supplementary characters, and for unpaired surrogates, and
 `unescape` gives the same results on 45 edge cases (verified). Replace the library with legend-pure's own code,
 with no change in behavior, and with tests that pin the escape of every code unit. The byte-identity plan's
-section 5 does the same for the file-name hash, for the same reason. This is section 8's item 9.
+section 5 does the same for the file-name hash, for the same reason. This is section 8's item 9. [#1402], in review,
+does it, and m4 then no longer depends on commons-lang3.
 
 **Readers accept more than writers write.** `GraphPath.parse` reads a key with `StringEscape.unescape`, which also
 accepts the escapes that section 8's item 9 lists. The specification states what writers write, and readers accept
@@ -556,7 +570,12 @@ Each is a small, separate fix that can start now:
 2. **Default locale.** Use `Locale.ROOT` for anything that becomes an identifier: the M3 parser's operator names,
    legend-sdlc's artifact IDs, the generators, and the default overloads in `TextTools`. Pure's `toUpper` and
    `toLower` follow (decision 11); their results change only where the default locale is Turkish, Azerbaijani, or
-   Lithuanian.
+   Lithuanian. In legend-pure, these fixes are in review (2026-11-19), one commit per bug: the sites in 1.7 except
+   Pure's `toUpper` and `toLower`, the sites found while fixing them, the code coverage files' digits, and the test
+   runner that skips tests of unsupported APIs, each with a test that fails without its fix under a Turkish or
+   Arabic default locale; and tests that themselves changed case in the default locale. `TextTools`' default
+   overloads are public, so their change is a change in m4's behavior; only legend-pure calls them. legend-sdlc's
+   artifact IDs remain.
 3. **Byte order marks.** Drop one leading U+FEFF when reading source text: in legend-pure's code storages, in
    legend-sdlc's text entity files, and at legend-engine's grammar entry points.
 4. **Malformed UTF-8 in sources.** Report an error that names the file and byte offset, instead of substituting
@@ -571,9 +590,10 @@ Each is a small, separate fix that can start now:
 7. **`split` and `trim`.** Make each function's implementation and documentation agree (decisions 7 and 8).
 8. **Continuous integration.** Run the compiler and PCT suites once with `-Duser.language=tr -Duser.country=TR`,
    and once on Windows with JDK 17, where the default charset is windows-1252.
-9. **`StringEscape`.** First, replace commons-lang3 with legend-pure's own code, with no change in behavior (6.4).
-   Then fix what literals inherit from the library. The grammar names `\b`, `\t`, `\n`, `\f`, `\r`, `\"`, `\'`, `\\`,
-   and backslash-u escapes (`M4Fragment.g4:41`), but `unescape` also accepts these (verified):
+9. **`StringEscape`.** First, replace commons-lang3 with legend-pure's own code, with no change in behavior (6.4),
+   which is in review as [#1402]. Then fix what literals inherit from the library. The grammar names `\b`, `\t`,
+   `\n`, `\f`, `\r`, `\"`, `\'`, `\\`, and backslash-u escapes (`M4Fragment.g4:41`), but `unescape` also accepts
+   these (verified):
    - **A sign in a backslash-u escape,** since the digits go to `Integer.parseInt`: `'\u-123'` holds U+FEDD.
    - **`\u+0041` and `\uuuu0041`,** each read as `A`.
    - **Fewer than four hex digits.** The lexers accept them (`M4Fragment.g4:50`), and `unescape` then fails with
@@ -604,9 +624,9 @@ For the recommended combination. Items marked *now* are the hazards of section 8
 
 - **Parsers:** move the nine `ANTLRInputStream` setups to `CharStreams.fromString` (C2); compute end columns from
   stop indexes; drop a leading BOM; apply the line terminator rule; and fix `FunctionDescriptor.java:275`.
-- **Literals:** replace commons-lang3 in `StringEscape` with legend-pure's own code, with no change in behavior;
-  then reject unpaired surrogate escapes and the malformed escapes of section 8's item 9, and optionally add a code
-  point escape.
+- **Literals:** replace commons-lang3 in `StringEscape` with legend-pure's own code, with no change in behavior
+  ([#1402], in review); then reject unpaired surrogate escapes and the malformed escapes of section 8's item 9, and
+  optionally add a code point escape.
 - **Code storages:** decode UTF-8 strictly, with a clear error (`FSCodeStorage.java:168`,
   `ClassLoaderFileNode.java:40`, and the others).
 - **Language server and MCP server:** convert code point columns into the client's position encoding using the
@@ -624,7 +644,7 @@ For the recommended combination. Items marked *now* are the hazards of section 8
 - **Corpus** (its Phase 3): supplementary characters in strings, in quoted property names, and before tokens on the
   same line; U+E000 to U+FFFF beside supplementary characters, for order; and sources with CRLF, CR only, and a
   BOM.
-- **Now:** the default-locale and default-charset fixes listed in 1.7.
+- **Now:** the default-charset fixes listed in 1.7. The default-locale fixes are in review (section 8, item 2).
 - **One home for the rules:** m4's tools package, for example an extension of `TextTools`, holding code point
   length and slicing, the O1 and O3 comparators, strict decoding, BOM removal, line terminators, and conversion
   between code point and UTF-16 columns. legend-engine and the language server then use the same code.
@@ -731,3 +751,5 @@ In one table:
 - Regular expressions: `regexpLike`, `regexpReplace`, and the other regular expression functions use
   `java.util.regex` (`FunctionsHelper.java:315`), whose dialect a non-Java runtime would have to match.
 - Number formatting, beyond the note in 1.7.
+
+[#1402]: https://github.com/finos/legend-pure/pull/1402
