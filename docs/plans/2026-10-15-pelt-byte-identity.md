@@ -603,6 +603,13 @@ it the three benefits above. Whether they are worth more than today's compressio
     new readers would find files on both sides of the change, but every earlier reader would reject each module
     with a hashed name, the mapping DSL among them.
   - **Little would be gained.** `longSpreadOne` is already simple to implement in any language.
+- **Reference ID escapes.** The same risk applies to the escapes in reference ID keys. `StringEscape` writes them
+  with commons-lang3's `text.translate` classes, deprecated since 3.6, and each consumer picks the library's
+  version: legend-pure pins 3.5, and legend-engine 3.18.0. Nothing has changed yet, but nothing pins it either. The
+  [strings document](2026-11-06-cross-platform-strings.md#64-reference-id-text) recommends the same remedy as for
+  the hash: legend-pure's own code, with no change in behavior, and tests that pin the escape of every code unit.
+  Do it before the specification states the escapes (Phase 0, item 5), so that the code it describes is
+  legend-pure's own. The document also lists the escapes that readers accept but writers never write.
 - **Case-only differences.** Element paths that differ only in letter case, such as `a::B` and `a::b`, map to
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
   directory, the later write silently replaces the earlier file. A build-time error on every platform is the
@@ -665,7 +672,8 @@ Write `docs/reference/pelt-format.md` as a normative description of the current 
 3. each serializer extension: its payload format; whether and how it compresses; and, if it compresses, its
    uncompressed counterpart and its envelope rule (F2),
 4. file layout (path provider V1), including the file-name hash,
-5. reference ID syntax (V1).
+5. reference ID syntax (V1), including the escapes in keys
+   ([section 5](#5-other-details-a-specification-has-to-pin-down)).
 
 The rest of F3, including how reference IDs are generated, is what a compiler must follow to generate these
 serializable forms. It comes in Phase 6.

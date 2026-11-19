@@ -1,7 +1,7 @@
 # Strings across platforms and languages: options
 
 Status: options for decision, 2026-11-06. Options for file names outside ASCII added 2026-11-16 (section 6.5), for
-consideration.
+consideration. `StringEscape` added 2026-11-19 (section 6.4, and section 8's item 9).
 Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 [PELT consistency checks](2026-10-15-pelt-consistency-checks.md),
 [path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md), and the
@@ -99,6 +99,7 @@ paths create them:
 - **Literals.** The lexers accept a backslash-u escape with up to four hex digits (`M4Fragment.g4:50`), and
   `StringEscape` decodes each escape to a single code unit (`StringEscape.java:40`), so `'\uD800'` holds an
   unpaired surrogate. A supplementary character can only be escaped as a pair, such as `\uD83D\uDE00` for U+1F600.
+  Section 8's item 9 lists the other escapes it accepts.
 - **Functions.** `substring` can cut a pair in half (verified: the first unit of U+1F600 is a lone high surrogate).
   legend-engine's `char` casts its argument to a 16-bit `char` (`FunctionsHelper.java:290`), so 0xD800 gives an
   unpaired surrogate, and 0x1F600 gives U+F600 (verified).
@@ -207,7 +208,7 @@ character, so nothing reports it.
 | Length prefixes | UTF-8 byte counts, in the string index and in m4's `writeString`. |
 | String index order | UTF-16 length, then UTF-16 code unit order (`StringWriterV3.java:307`). |
 | Other orders | Module metadata (`String.compareTo`, at the five sites that the byte-identity plan lists in its section 1.1), node properties by name (`SerializerV1.java:544`), and candidate paths in reference ID generation, by UTF-16 length and then code unit order (`ReferenceIdGenerator.java:412`). The last is a generation rule: it decides content, not only its encoding. |
-| Reference ID text | Keys are escaped by `StringEscape.escape` (`GraphPath.java:871`), which writes each code unit outside U+0020 to U+007F as a backslash-u escape (`StringEscape.java:36`). IDs are ASCII, with UTF-16 escapes. |
+| Reference ID text | Keys are escaped by `StringEscape.escape` (`GraphPath.java:871`). It puts a backslash before `'` and `\`, writes `\b`, `\t`, `\n`, `\f`, and `\r` for those five control characters, and writes every other code unit outside U+0020 to U+007F as a backslash-u escape with four uppercase hex digits (`StringEscape.java:34` to `:37`). IDs are ASCII, with UTF-16 escapes. A third-party library does the work (6.4). |
 | Source information | Six integers per node, in the unit of whichever parser produced them. No unit is recorded. |
 | File names | Each path segment, extension included, is limited to 126 UTF-16 code units, to fit 255 bytes of UTF-16 (`FilePathTools.java:24`). The overflow hash runs over code points (`FilePathTools.java:205`). Linux file systems such as ext4 limit a name to 255 bytes, which 126 characters from U+0800 to U+FFFF exceed in UTF-8 (378 bytes). This cannot happen today, since legend-pure's grammar allows only ASCII element names. Section 6.5 has options for names outside ASCII. |
 
@@ -413,6 +414,19 @@ that order decides content.
 Keep the backslash-u escapes of UTF-16 code units. They are an encoding rule, ASCII, and easy to produce anywhere
 (Rust has `encode_utf16`). The specification states them (the byte-identity plan's Phase 0, item 5).
 
+**Own the code that writes them.** `StringEscape` is built from commons-lang3's `text.translate` classes, so a
+third-party library defines this part of the format, and each consumer picks the library's version: legend-pure
+pins 3.5, and legend-engine 3.18.0. That package has been deprecated since 3.6, in favor of commons-text, and it is
+m4's only use of commons-lang3. Nothing has changed yet. On nine versions from 3.5 to 3.20.0, `escape` writes the
+same text for every code unit, for a sample of supplementary characters, and for unpaired surrogates, and
+`unescape` gives the same results on 45 edge cases (verified). Replace the library with legend-pure's own code,
+with no change in behavior, and with tests that pin the escape of every code unit. The byte-identity plan's
+section 5 does the same for the file-name hash, for the same reason. This is section 8's item 9.
+
+**Readers accept more than writers write.** `GraphPath.parse` reads a key with `StringEscape.unescape`, which also
+accepts the escapes that section 8's item 9 lists. The specification states what writers write, and readers accept
+at least that. Rejecting those escapes in literals cannot reject a reference ID, since `escape` writes none of them.
+
 ### 6.5 File names
 
 - legend-pure's grammar allows only ASCII element names, so path provider V1 can say so, and serialization can
@@ -557,6 +571,21 @@ Each is a small, separate fix that can start now:
 7. **`split` and `trim`.** Make each function's implementation and documentation agree (decisions 7 and 8).
 8. **Continuous integration.** Run the compiler and PCT suites once with `-Duser.language=tr -Duser.country=TR`,
    and once on Windows with JDK 17, where the default charset is windows-1252.
+9. **`StringEscape`.** First, replace commons-lang3 with legend-pure's own code, with no change in behavior (6.4).
+   Then fix what literals inherit from the library. The grammar names `\b`, `\t`, `\n`, `\f`, `\r`, `\"`, `\'`, `\\`,
+   and backslash-u escapes (`M4Fragment.g4:41`), but `unescape` also accepts these (verified):
+   - **A sign in a backslash-u escape,** since the digits go to `Integer.parseInt`: `'\u-123'` holds U+FEDD.
+   - **`\u+0041` and `\uuuu0041`,** each read as `A`.
+   - **Fewer than four hex digits.** The lexers accept them (`M4Fragment.g4:50`), and `unescape` then fails with
+     the library's message, reported at the literal rather than at the escape.
+   - **Octal escapes,** from `\0` to `\377`, although the grammar calls a backslash before any other character an
+     invalid escape (`M4Fragment.g4:43`). `\400` is a space followed by `0`.
+   - **A backslash before any other character,** which is dropped: `\q` is `q`.
+
+   Make the first three parse errors at the escape (recommended), together with the unpaired surrogate escapes of
+   section 3. Octal escapes and dropped backslashes may be in use, so keeping them is decision 14, after a scan of
+   existing models. legend-engine's `PureGrammarParserUtility.fromGrammarString` uses commons-text's `unescapeJava`,
+   which gives the same results on all 47 cases checked (verified), so it needs the same changes.
 
 ## 9. Scope by project
 
@@ -575,7 +604,9 @@ For the recommended combination. Items marked *now* are the hazards of section 8
 
 - **Parsers:** move the nine `ANTLRInputStream` setups to `CharStreams.fromString` (C2); compute end columns from
   stop indexes; drop a leading BOM; apply the line terminator rule; and fix `FunctionDescriptor.java:275`.
-- **Literals:** reject unpaired surrogate escapes (`StringEscape`), and optionally add a code point escape.
+- **Literals:** replace commons-lang3 in `StringEscape` with legend-pure's own code, with no change in behavior;
+  then reject unpaired surrogate escapes and the malformed escapes of section 8's item 9, and optionally add a code
+  point escape.
 - **Code storages:** decode UTF-8 strictly, with a clear error (`FSCodeStorage.java:168`,
   `ClassLoaderFileNode.java:40`, and the others).
 - **Language server and MCP server:** convert code point columns into the client's position encoding using the
@@ -602,7 +633,8 @@ For the recommended combination. Items marked *now* are the hazards of section 8
 
 - **Grammar:** end columns (`ParseTreeWalkerSourceInformation.java:111`, and any other place that adds a token
   text's length to a column); island offsets in code points; drop a leading BOM at the grammar entry points; and
-  reject unpaired surrogate escapes in `PureGrammarParserUtility.fromGrammarString`.
+  reject unpaired surrogate escapes in `PureGrammarParserUtility.fromGrammarString`, along with the escapes that
+  legend-pure rejects (section 8, item 9).
 - **Protocol:** document that `SourceInformation` columns count code points. No schema change.
 - **Pure functions:** `ascii` returns the first code point, and `char` accepts only scalar values
   (`FunctionsHelper.java:285` and `:290`, and the interpreted `ASCII` and `Char`). Now: name the charset in the
@@ -653,16 +685,16 @@ In one table:
 | Lengths, indexes, and slices in Pure | UTF-16 code units | Code points (L2) |
 | PELT length prefixes | UTF-8 bytes | UTF-8 bytes, unchanged |
 | PELT orders | UTF-16 length, then code units | Unchanged in existing versions (O1); UTF-8 bytes in later ones (O3) |
-| Reference ID escapes | UTF-16 code units | Unchanged |
+| Reference ID escapes | UTF-16 code units, written by a third-party library | Unchanged, written by legend-pure's own code |
 | PELT file-name limit | 126 UTF-16 code units per segment | ASCII path segments; for other names, a later path provider version, by an option in 6.5 not yet chosen |
 | Editor positions (LSP, Monaco) | UTF-16 code units | Converted from code points where they are shown |
 
 ## 11. Order of work
 
-1. **Now, independently:** the fixes in section 8, one per bug; the scans (unpaired surrogates, non-ASCII path
-   segments, case-only collisions, and device names); and PCT tests that record each store's current results for
-   supplementary characters, with exclusions where needed, so that the differences are visible before L2 changes
-   them.
+1. **Now, independently:** the fixes in section 8, one per bug; the scans (escapes in literals, unpaired
+   surrogates, non-ASCII path segments, case-only collisions, and device names); and PCT tests that record each
+   store's current results for supplementary characters, with exclusions where needed, so that the differences are
+   visible before L2 changes them.
 2. **With the byte-identity plan's Phases 0 and 3:** the string rules in `pelt-format.md` (6.1 to 6.5), and the
    corpus cases.
 3. **After decisions 1, 3, 4, and 5:** V2 enforcement, C2 in legend-pure's parsers and language server,
@@ -690,6 +722,8 @@ In one table:
 12. **A code point escape in literals,** such as `\u{1F600}`: add it, or not.
 13. **File names outside ASCII,** for the path provider version that would allow them: N1, N2, or N3 (6.5). Open,
     with no recommendation yet; nothing waits for it until names outside ASCII are wanted.
+14. **Octal escapes and dropped backslashes in literals** (section 8, item 9): keep them and document them, or make
+    them parse errors. Open until a scan of existing models shows how much uses them.
 
 ## Outside this document
 
