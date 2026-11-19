@@ -780,7 +780,8 @@ and across the matrix, or every difference is recorded for the compiler plan.
 
 The measurements need no new product code, so they start at once, in parallel with Phase 0. Only the encoder
 prototype waits, and it is built only if Option 4 falls short. Results so far, for every module set but one of
-the largest models: [PELT compression measurements](2026-11-18-pelt-compression-measurements.md).
+the largest models: [PELT compression measurements](2026-11-18-pelt-compression-measurements.md). Option 4 falls
+short on size in directories, so the encoder prototype follows.
 
 - **Choose module sets:** platform, the legend-engine module set, and at least one of the largest models.
 - **Measure today's variants on those sets, in directories and in jars:**
@@ -879,7 +880,9 @@ critical path for the invariant.
    the tolerances, otherwise Option 1, with Option 2 if Option 1 falls short. Or settle at Option 5 if byte
    identity costs more than it is worth.
 2. **Gate tolerances:** how much size, serialization time, and load time byte identity is worth, measured against
-   Option 5. Size is the most important of the three.
+   Option 5. Size is the most important of the three. It counts in directories as well as in jars (decided
+   2026-11-19): in some larger projects, directory size is itself a problem, and PELT files are used outside jars
+   too.
 3. **Marking canonical files with a new extension version.** Not recommended: canonicality can be checked by
    re-encoding, and avoiding a new version keeps forward compatibility. The price is that the encoder is frozen,
    and any revision comes with a new version.

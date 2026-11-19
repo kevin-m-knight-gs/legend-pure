@@ -1,6 +1,6 @@
 # PELT compression measurements
 
-Status: results, 2026-11-18.
+Status: results, 2026-11-18. Directory size counts against the gate, decided 2026-11-19.
 
 These are the measurements for
 [Phase 4 of the byte-identity plan](2026-10-15-pelt-byte-identity.md#phase-4-measurements-encoder-prototype-and-decision-gate).
@@ -31,9 +31,9 @@ jar) against today's level-7 deflate (element V2 and module metadata V3), which 
   slows loading from directories. Its size gain in jars is under 1%. It does add serialization time.
 - **Jar settings:** maven-jar-plugin's defaults, which deflate every entry at level 6. Rebuilding the jars with
   those settings reproduced the compressed size of every entry but 3 of legend-engine's 95,217 PELT entries.
-- **Decision:** see [section 8](#8-the-decision-gate). Option 4 meets the size tolerance in jars, and loads at
-  least as fast. What remains open is whether directory size counts against the tolerance, and confirmation on
-  one of the largest models.
+- **Decision: Option 4 falls short** ([section 8](#8-the-decision-gate)). It meets the size tolerance in jars, and
+  loads at least as fast, but directory size counts against the tolerance too, and its directories are 3.1 to 4.0
+  times as large. Under the gate, the canonical encoder (Option 1) is prototyped next.
 - **Found along the way:**
   - Storing Option 4's entries uncompressed in jars makes reading them 14 to 18 times as slow as deflated entries,
     with today's readers.
@@ -52,8 +52,7 @@ jar) against today's level-7 deflate (element V2 and module metadata V3), which 
 | legend-pure | 9 | 3,450 | 5,093,727 | every legend-pure 5.112.1 jar with PELT files |
 | legend-engine | 151 | 95,217 | 187,293,271 | every legend-engine jar with PELT files, 5.3.1-SNAPSHOT built locally against legend-pure 5.112.1, plus the legend-pure jars it uses |
 
-One of the largest models is not measured yet. The harness needs only the model's jars and no product code, so it
-can run where those jars are.
+None of the largest models could be measured.
 
 ### Option 4's files
 
@@ -326,29 +325,34 @@ gives 7.5% less. No structural encoding was measured.
 ## 8. The decision gate
 
 The gate in [section 6](2026-10-15-pelt-byte-identity.md#6-recommendation) holds Option 4 to tolerances on size,
-serialization time, and load time, measured against Option 5. The tolerances themselves are decision 2.
+serialization time, and load time, measured against Option 5. The tolerances themselves are decision 2. Part of
+it is decided: size counts in directories as well as in jars. In some larger projects, directory size is itself a
+problem, and PELT files are used outside jars too.
 
 | Measure | Option 4 against today | Within the example tolerance? |
 |---|---|---|
 | Size in jars | +0.02% to +0.80% of PELT entry bytes | Yes |
-| Size in directories | 3.1 to 4.0 times the bytes, or 1.65 to 2.10 times in 4 KiB blocks | No, if directories count |
+| Size in directories | 3.1 to 4.0 times the bytes, or 1.65 to 2.10 times in 4 KiB blocks | No |
 | Serialization time | 0.58 to 0.64 for a clean write; 0.66 to 0.69 of the CPU time spent compressing, packaging included | Yes |
 | Load time | Equal in jars, and 0.69 to 0.77 end to end in directories | Yes |
 | Load time with a buffer after each inflater | Equal | Yes |
 
 Recommendations:
 
-- **Option 4 passes the gate for jars.** It needs no new code: adopting it switches the default versions to
-  element V1 and metadata V2. Before adopting it, decide whether raw directory size counts. Directories are where
-  builds write and where IDEs and tests load from. Jars are what is shipped, and where the largest models' size
-  matters.
-- **Run the harness on one of the largest models** before deciding, to confirm that its jars show the same small
-  difference.
-- **Buffer after each inflater, whatever the decision.** It makes today's reads 1.8 to 2.7 times as fast. Under
-  Option 4, the jar entry's stream needs a buffer for the same reason. Then measure the end-to-end effect.
-- **Buffer before each deflater, too.** It leaves the output unchanged ([section 5](#5-serialization-time)), and
+- **Option 4 falls short on size in directories.** Under the gate, the next step is Phase 4's prototype of the
+  canonical encoder (Option 1), measured the same way.
+- **Buffer after each inflater, whatever the encoder.** Element V2 and metadata V3 decode straight from an
+  `InflaterInputStream`. A `BufferedInputStream` after it makes reading today's files 1.8 to 2.7 times as fast,
+  from class loaders and directories alike. Then measure the end-to-end effect.
+- **Buffer the class loader's stream, too.** `FileDeserializer` reads files in directories through a
+  `BufferedInputStream`, but class-loader resources through `url.openStream()` alone. With today's files that
+  costs nothing measurable, since their inflater reads the stream 512 bytes at a time. Uncompressed files, such
+  as those that builds wrote before element V2 and metadata V3, pay a native call per read: an inflate call from
+  deflated entries, and a file read from stored ones.
+- **Buffer before each deflater.** It leaves the output unchanged ([section 5](#5-serialization-time)), and
   today's serialization spends most of its compression time on writes into an unbuffered deflater.
-- **Under Option 4, never store PELT entries in jars** until the readers buffer.
+- **Don't store PELT entries in jars.** Today's files gain nothing from it, and uncompressed files read 14 to 18
+  times as slowly until the class loader's stream is buffered.
 
 ## 9. Not measured
 
