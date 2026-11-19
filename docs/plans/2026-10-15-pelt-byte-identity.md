@@ -114,9 +114,10 @@ conditions. Its first results, for platform, legend-pure, and legend-engine, are
 [PELT compression measurements](2026-11-18-pelt-compression-measurements.md). They find no load-time gain, a size
 gain in jars under 1%, and the added serialization time.
 
-It is not yet understood why the gain survives inside jars, where entries are already deflated. That matters for
-Option 4: if part of the gain comes from the I/O path rather than from compression itself, it might be recovered
-in other ways.
+Load time turned out to depend on the I/O path, not on compression: the readers made a native call for each
+primitive they read. Buffering, merged as [#1401], speeds up loading for both formats. Why the earlier measurements
+found a gain is not known. They may come from settings that Phase 4 did not measure, such as a cold file cache or
+slow disks.
 
 ## 2. Foundations every option needs
 
@@ -478,16 +479,20 @@ V2, through the existing version selection. Jars compress their entries as usual
 
 **Costs:**
 
-- Earlier measurements (1.3) suggest this gives up PELT-level compression's load-time gain from both directories
-  and jars, and its size gain in jars.
-- Raw directory output is larger.
+- Earlier measurements (1.3) suggested this gives up PELT-level compression's load-time gain from both
+  directories and jars, and its size gain in jars. Phase 4 found no load-time gain, and a size gain in jars under
+  1%.
+- Raw directory output is larger: 3.1 to 4.0 times as many bytes, in Phase 4's measurements.
 
-**Open questions:**
+**Open questions,** answered by Phase 4 except for the largest models:
 
-- How large the losses are, especially for the largest models.
+- How large the losses are, especially for the largest models. Without the largest models: none in load time, and
+  under 1% of size in jars.
 - Why the gains survive inside jars. If part of the load-time gain comes from the I/O path rather than from
-  compression itself, for example from the number and size of reads, a reader change might recover it.
-- Which jar settings drive the size difference: compression level and entry method.
+  compression itself, for example from the number and size of reads, a reader change might recover it. Load time
+  came from the number and size of reads, and the reader change, buffering, is merged ([#1401]).
+- Which jar settings drive the size difference: compression level and entry method. Both repositories use
+  maven-jar-plugin's defaults, which deflate every entry at level 6.
 
 **Kept on the table, and measured first.** It needs no new code, so Phase 4 measures it before any encoder is
 built, and the decision follows the numbers.
@@ -644,9 +649,9 @@ measurement confirms. Option 1 is the likely one, but Option 4 is measured first
    deflate until they publish PELTs, is [decision 4](#9-decisions-to-make).
 6. **Option 3** is a separate format project, worth starting only if the measurements show that inflate is a large
    share of load time, or that a structural encoding captures most of deflate's gain.
-7. **Option 4 depends on the jar investigation.** Phase 4 investigates why compression helps inside jars. If that
-   gain turns out to come mostly from the I/O path, a reader change might recover it, and Option 4 becomes much
-   more attractive.
+7. **Option 4 depended on the jar investigation.** Phase 4 found that load time came from the I/O path, not from
+   compression, and the reader change it pointed to, buffering, is merged ([#1401]). That speeds up both formats,
+   and Option 4 still falls short on size in directories.
 
 ## 7. Phases
 
@@ -781,7 +786,9 @@ and across the matrix, or every difference is recorded for the compiler plan.
 The measurements need no new product code, so they start at once, in parallel with Phase 0. Only the encoder
 prototype waits, and it is built only if Option 4 falls short. Results so far, for every module set but one of
 the largest models: [PELT compression measurements](2026-11-18-pelt-compression-measurements.md). Option 4 falls
-short on size in directories, so the encoder prototype follows.
+short on size in directories, so the encoder prototype follows. The product change that the measurements point to,
+a buffer after each inflater and before each deflater, is merged ([#1401]). It changes no file, and its reader side
+speeds up loading whatever the gate decides.
 
 - **Choose module sets:** platform, the legend-engine module set, and at least one of the largest models.
 - **Measure today's variants on those sets, in directories and in jars:**
@@ -913,7 +920,9 @@ critical path for the invariant.
 - **Fixing compiler nondeterminism.** Phase 2 detects any. Fixes belong in a separate plan.
 - **Double compression in jars.** Unless the packaging tool is configured otherwise, PELT entries are deflated a
   second time when packaged, for little gain. Storing them uncompressed (`STORED`) in jars would avoid that work at
-  build and load time. Measure before changing.
+  build and load time. Measure before changing. Phase 4 measured it with readers from before [#1401]: storing
+  today's files saves almost no space, and they read slightly slower. Stored entries have not been measured with
+  readers since then.
 - **Byte-identical jars across environments** are out of reach from the PELT side alone. Jar bytes also depend on
   the JDK through compiled class files and the jar's own entry compression. PELT-level identity is the realistic
   scope.
@@ -926,3 +935,5 @@ critical path for the invariant.
   compares instance counts and the length of the serialized repository (`RuntimeVerifier.java:267`). Diffs of
   serializable forms between legend-pure releases could also help review compiler changes, going by what reference
   IDs name if a release changes the reference ID version (F0).
+
+[#1401]: https://github.com/finos/legend-pure/pull/1401

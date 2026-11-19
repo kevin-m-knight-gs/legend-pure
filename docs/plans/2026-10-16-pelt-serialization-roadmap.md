@@ -76,7 +76,8 @@ how they depend on each other, the rules they share, and the order to do them in
 
 ## Order
 
-The versions plan's Phase 1, which fixed latent bugs, is done.
+The versions plan's Phase 1, which fixed latent bugs, is done. So is the buffering that byte identity's Phase 4
+measurements recommended ([#1401]), which changes no file.
 
 1. **Now, in parallel:**
    - byte identity's Phase 4 measurements of Option 4 against today's compression, which need no new product
@@ -93,3 +94,5 @@ The versions plan's Phase 1, which fixed latent bugs, is done.
    plan's Phase 3, with the first new version of either extension.
 5. **Separately:** the strings document's decisions on the Pure language and its string functions, which no PELT
    work waits for.
+
+[#1401]: https://github.com/finos/legend-pure/pull/1401

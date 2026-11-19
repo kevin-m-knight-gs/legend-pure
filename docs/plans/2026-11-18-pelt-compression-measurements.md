@@ -1,6 +1,8 @@
 # PELT compression measurements
 
-Status: results, 2026-11-18. Directory size counts against the gate, decided 2026-11-19.
+Status: results, 2026-11-18. Directory size counts against the gate, decided 2026-11-19. The buffering recommended
+here was merged on 2026-11-19 ([#1401]), and [section 9](#9-the-buffering-fix) measures its effect. Elsewhere,
+"today's readers" are those of legend-pure 5.112.1, from before that change. It leaves today's files unchanged.
 
 These are the measurements for
 [Phase 4 of the byte-identity plan](2026-10-15-pelt-byte-identity.md#phase-4-measurements-encoder-prototype-and-decision-gate).
@@ -19,6 +21,8 @@ jar) against today's level-7 deflate (element V2 and module metadata V3), which 
     0.69 to 0.77 of today's time end to end, and in 0.39 to 0.42 of today's time to read and decode.
   - With a buffer after each inflater, a reader change, today's files read and decode as fast as Option 4's, in
     jars and in directories. That makes today's reads 1.8 to 2.7 times as fast.
+- **The buffering fix, now merged ([#1401]),** takes 0.57 to 0.76 of the time to load end to end, and 0.54 of the
+  time to encode platform with compression, with the output unchanged ([section 9](#9-the-buffering-fix)).
 - **Serialization: Option 4 writes faster, and moves compression into packaging.** A clean write takes 0.58 to
   0.64 of today's time. Packaging then spends 3.2 to 4.7 times as much CPU time deflating, but compression as a
   whole takes 0.66 to 0.69 of today's CPU time: one level-6 deflate, instead of a level-7 deflate in serialization
@@ -334,27 +338,71 @@ problem, and PELT files are used outside jars too.
 | Size in jars | +0.02% to +0.80% of PELT entry bytes | Yes |
 | Size in directories | 3.1 to 4.0 times the bytes, or 1.65 to 2.10 times in 4 KiB blocks | No |
 | Serialization time | 0.58 to 0.64 for a clean write; 0.66 to 0.69 of the CPU time spent compressing, packaging included | Yes |
-| Load time | Equal in jars, and 0.69 to 0.77 end to end in directories | Yes |
-| Load time with a buffer after each inflater | Equal | Yes |
+| Load time, readers before [#1401] | Equal in jars, and 0.69 to 0.77 end to end in directories | Yes |
+| Load time, readers since [#1401] | Equal in jars, and 0.84 to 0.91 of today's time to read and decode in directories | Yes |
 
 Recommendations:
 
 - **Option 4 falls short on size in directories.** Under the gate, the next step is Phase 4's prototype of the
   canonical encoder (Option 1), measured the same way.
-- **Buffer after each inflater, whatever the encoder.** Element V2 and metadata V3 decode straight from an
-  `InflaterInputStream`. A `BufferedInputStream` after it makes reading today's files 1.8 to 2.7 times as fast,
-  from class loaders and directories alike. Then measure the end-to-end effect.
-- **Buffer the class loader's stream, too.** `FileDeserializer` reads files in directories through a
-  `BufferedInputStream`, but class-loader resources through `url.openStream()` alone. With today's files that
-  costs nothing measurable, since their inflater reads the stream 512 bytes at a time. Uncompressed files, such
-  as those that builds wrote before element V2 and metadata V3, pay a native call per read: an inflate call from
-  deflated entries, and a file read from stored ones.
-- **Buffer before each deflater.** It leaves the output unchanged ([section 5](#5-serialization-time)), and
-  today's serialization spends most of its compression time on writes into an unbuffered deflater.
-- **Don't store PELT entries in jars.** Today's files gain nothing from it, and uncompressed files read 14 to 18
-  times as slowly until the class loader's stream is buffered.
+- **Buffer after each inflater, whatever the encoder.** Done in [#1401]. Element V2 and metadata V3 decoded
+  straight from an `InflaterInputStream`. A `BufferedInputStream` after it makes reading today's files 1.8 to 2.7
+  times as fast, from class loaders and directories alike. [Section 9](#9-the-buffering-fix) measures the
+  end-to-end effect.
+- **Buffer the class loader's stream, too.** Done in [#1401]. `FileDeserializer` read files in directories
+  through a `BufferedInputStream`, but class-loader resources through `url.openStream()` alone. With today's files
+  that costs nothing measurable, since their inflater reads the stream 512 bytes at a time. Uncompressed files,
+  such as those that builds wrote before element V2 and metadata V3, pay a native call per read: an inflate call
+  from deflated entries, and a file read from stored ones.
+- **Buffer before each deflater.** Done in [#1401]. It leaves the output unchanged
+  ([section 5](#5-serialization-time)), and today's serialization spends most of its compression time on writes
+  into an unbuffered deflater.
+- **Don't store PELT entries in jars.** Today's files gain nothing from it. Uncompressed files read 14 to 18 times
+  as slowly with readers from before [#1401], which buffers the class loader's stream. Stored entries have not been
+  measured with readers since then.
 
-## 9. Not measured
+## 9. The buffering fix
+
+[#1401] made the three buffering changes that [section 8](#8-the-decision-gate) recommends: a
+`BufferedInputStream` after each `InflaterInputStream` and a `BufferedOutputStream` before each
+`DeflaterOutputStream`, in element V2 and metadata V3, and a `BufferedInputStream` around `FileDeserializer`'s
+class-loader streams. It was measured before it merged, against master, under the conditions of
+[section 1](#1-method). Both builds' versions of the three classes it changes were compiled with the same javac and
+put first on the class path, and the builds alternated.
+
+**Output.** Unchanged. Serializing platform with the fix gives files byte-identical to all 2,638 released ones,
+with today's versions, and to their uncompressed counterparts, with Option 4's. The PR's tests check that each V2
+and V3 payload equals a one-pass deflate of its V1 or V2 payload.
+
+**End to end.** `loadAll`, then the realization of every element, as in [section 4](#end-to-end). Medians in
+seconds; the ratio compares the totals.
+
+| Set | Files | Source | Runs | Before | With the fix | Ratio |
+|---|---|---|---|---|---|---|
+| platform | today's | jar | 6 | 0.28 + 1.25 = 1.53 | 0.28 + 0.88 = 1.16 | 0.76 |
+| platform | today's | directory | 6 | 0.29 + 1.43 = 1.71 | 0.28 + 1.03 = 1.30 | 0.76 |
+| platform | Option 4's | jar | 6 | 0.29 + 1.25 = 1.53 | 0.29 + 0.87 = 1.16 | 0.76 |
+| `core_relational` and its dependencies | today's | jar | 3 | 1.42 + 22.69 = 24.10 | 1.27 + 12.41 = 13.69 | 0.57 |
+| `core_relational` and its dependencies | today's | directory | 3 | 1.34 + 29.43 = 30.76 | 1.21 + 18.59 = 19.82 | 0.64 |
+
+- Today's files gain from the buffers after their inflaters, and Option 4's from the buffer around the class
+  loader's stream. With the fix, the two load platform from jars in the same time.
+- These runs were a separate session, and their times before the fix differ from section 4's: 24.10 seconds
+  against 33.36 for `core_relational` from jars, for example. Compare ratios only within a table.
+
+**Serialization.** Encoding platform with compression, into a stream that discards its bytes, takes 0.97 seconds
+against 1.79, or 0.54 of the time, over 4 runs. Encoding without compression, which the fix does not touch, takes
+0.60 against 0.59. A clean write takes 3.56 against 4.21, or 0.85.
+
+For `core_relational`, every run that encoded with compression was faster with the fix than every run without it,
+over two sessions and 6 runs of each build. Its timings support no ratio, though: encoding without compression took
+9.1 to 16.3 seconds across JVMs, and clean writes were slower with the fix in one session and faster in the other.
+
+**For the gate.** The fix narrows Option 4's advantage in directories to the time spent inflating, 9% to 16% of the
+time to read and decode ([section 6](#6-element-v1s-bytes-for-option-3)). It leaves the decision unchanged, since
+Option 4 falls short on size.
+
+## 10. Not measured
 
 - One of the largest models.
 - A cold OS file cache, slow disks, and network file systems. In those settings, reading 3 to 4 times as many bytes
@@ -362,6 +410,8 @@ Recommendations:
 - Linux and macOS. JDKs other than 17, except platform's read and decode on JDK 25, which shows the same
   pattern: in directories, 0.965 seconds for today's files and 0.293 for Option 4's; in jars, 0.887 and 0.874; with
   a buffer after the inflater, 0.265 and 0.263 in jars.
-- The end-to-end effect of buffered readers, which needs a product change.
+- Stored PELT entries, and Option 4's files in directories, with the buffering fix.
 - The wall time of packaging. maven-jar-plugin compresses entries on several threads, and the figures in
   [section 5](#5-serialization-time) are single-threaded CPU time.
+
+[#1401]: https://github.com/finos/legend-pure/pull/1401
