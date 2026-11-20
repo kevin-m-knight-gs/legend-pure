@@ -603,14 +603,13 @@ it the three benefits above. Whether they are worth more than today's compressio
     new readers would find files on both sides of the change, but every earlier reader would reject each module
     with a hashed name, the mapping DSL among them.
   - **Little would be gained.** `longSpreadOne` is already simple to implement in any language.
-- **Reference ID escapes.** The same risk applies to the escapes in reference ID keys. `StringEscape` writes them
-  with commons-lang3's `text.translate` classes, deprecated since 3.6, and each consumer picks the library's
-  version: legend-pure pins 3.5, and legend-engine 3.18.0. Nothing has changed yet, but nothing pins it either. The
-  [strings document](2026-11-06-cross-platform-strings.md#64-reference-id-text) recommends the same remedy as for
+- **Reference ID escapes.** The same risk applied to the escapes in reference ID keys. `StringEscape` wrote them
+  with commons-lang3's `text.translate` classes, deprecated since 3.6, and each consumer picked the library's
+  version: legend-pure pins 3.5, and legend-engine 3.18.0. Nothing had changed, but nothing pinned it either. The
+  [strings document](2026-11-06-cross-platform-strings.md#64-reference-id-text) recommended the same remedy as for
   the hash: legend-pure's own code, with no change in behavior, and tests that pin the escape of every code unit.
-  [#1402], in review, does that. Merge it before the specification states the escapes (Phase 0, item 5), so that
-  the code it describes is legend-pure's own. The document also lists the escapes that readers accept but writers
-  never write.
+  [#1402] did that, so the specification (Phase 0, item 5) describes legend-pure's own code, and m4 no longer
+  depends on commons-lang3. The document also lists the escapes that readers accept but writers never write.
 - **Case-only differences.** Element paths that differ only in letter case, such as `a::B` and `a::b`, map to
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
   directory, the later write silently replaces the earlier file. A build-time error on every platform is the
@@ -877,7 +876,7 @@ critical path for the invariant.
   `DeserializedConcreteElement` renamed `SerializableConcreteElement`. legend-engine's sources do not use that
   class. Generated code names it only in an erased `Supplier<? extends DeserializedConcreteElement>` constructor
   parameter, which it passes straight to its superclass (`ClassPeltImplProcessor.java:416`,
-  `M3LazyCoreInstanceGenerator.java:482`), so generated code that is already compiled keeps linking.
+  `M3LazyCoreInstanceGenerator.java:483`), so generated code that is already compiled keeps linking.
   `InstanceData` keeps its name, since it appears unerased in generated constructors
   (`ClassPeltImplProcessor.java:438`).
 - **The value fixes** keep `Value`'s methods and change its equality only in the cases that section 5 lists.

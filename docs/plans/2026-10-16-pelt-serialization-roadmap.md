@@ -77,7 +77,9 @@ how they depend on each other, the rules they share, and the order to do them in
 ## Order
 
 The versions plan's Phase 1, which fixed latent bugs, is done. So is the buffering that byte identity's Phase 4
-measurements recommended ([#1401]), which changes no file.
+measurements recommended ([#1401]), which changes no file. So are two of the strings document's hazard fixes: the
+default-locale fixes ([#1403]), and the first step for `StringEscape` ([#1402]), after which legend-pure's own code
+writes the reference ID escapes that byte identity's Phase 0 specifies.
 
 1. **Now, in parallel:**
    - byte identity's Phase 4 measurements of Option 4 against today's compression, which need no new product
@@ -85,8 +87,7 @@ measurements recommended ([#1401]), which changes no file.
      its encoder prototype, since Option 4 falls short on size in directories;
    - byte identity's Phase 0, the specification of the serializable form and the encoding, with the strings
      document's decisions on the format (its decisions 1, 9, and 10);
-   - the strings document's hazard fixes (its section 8), one per bug, of which the default-locale fixes and the
-     first step for `StringEscape` ([#1402]) are in review, and its scans of existing models.
+   - the strings document's remaining hazard fixes (its section 8), one per bug, and its scans of existing models.
 2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification exists.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 2 is done.
    Meanwhile, byte identity's decision gate, and its Phase 5 if the gate chooses Option 1.
@@ -98,3 +99,4 @@ measurements recommended ([#1401]), which changes no file.
 
 [#1401]: https://github.com/finos/legend-pure/pull/1401
 [#1402]: https://github.com/finos/legend-pure/pull/1402
+[#1403]: https://github.com/finos/legend-pure/pull/1403
