@@ -95,7 +95,8 @@ writes the reference ID escapes that byte identity's Phase 0 specifies.
    work, once the strings document's decisions on coordinates (its decisions 3 to 5) are made; and the versions
    plan's Phase 3, with the first new version of either extension.
 5. **Separately:** the strings document's decisions on the Pure language and its string functions, which no PELT
-   work waits for.
+   work waits for. Decision 11, `Locale.ROOT` wherever a locale is required, was made on 2026-11-20, and its fixes
+   join the hazard fixes in item 1.
 
 [#1401]: https://github.com/finos/legend-pure/pull/1401
 [#1402]: https://github.com/finos/legend-pure/pull/1402
