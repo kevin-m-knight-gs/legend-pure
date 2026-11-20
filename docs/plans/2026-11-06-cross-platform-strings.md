@@ -6,7 +6,7 @@ section 8's item 2 and the first step of its item 9 went into review, and sectio
 Turkish default locale, `/` parses with the wrong precedence rather than failing to compile. Both are merged:
 [#1402] on 2026-11-19 and [#1403] on 2026-11-20. Decision 11 was made on 2026-11-20: `Locale.ROOT` wherever a
 locale is required. [#1404] carried it out in legend-pure the same day. The default-charset fixes for legend-pure
-(section 8, item 1) were written on 2026-11-20 and are not yet merged.
+(section 8, item 1) went into review on 2026-11-20 as [#1405].
 Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 [PELT consistency checks](2026-10-15-pelt-consistency-checks.md),
 [path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md), and the
@@ -236,7 +236,7 @@ character, so nothing reports it.
     `:155`, `PureRepositoryJarMetadata.java:96` to `:124`), which hold element paths, ASCII today because the
     grammars allow only ASCII names. Pure source IDs are ASCII too (`CodeStorageTools.java:29`), so the code
     coverage files, which hold only source IDs and numbers, never depended on the charset. A scan of the compiled
-    classes for default-charset calls found these, and many in tests. Section 8's item 1 has the fixes;
+    classes for default-charset calls found these, and many in tests. Section 8's item 1 has the fixes ([#1405]);
   - legend-engine: the interpreted `encodeBase64`, `encrypt`, and `decrypt` (`EncodeBase64.java:52`,
     `Cipher.java:56`, and `Decipher.java:56` and `:63`), whose compiled counterparts use UTF-8, so the two modes
     disagree for non-ASCII text on Windows with JDK 17; JSON property encryption
@@ -585,15 +585,15 @@ serialization.
 Each is a small, separate fix that can start now:
 
 1. **Default charset.** Name UTF-8 at the sites in 1.7, and add a build rule that forbids default-charset APIs. In
-   legend-pure, the fixes are written but not yet merged: one commit per bug, each with a test that fails without
-   its fix under a windows-1252 default charset (`-Dfile.encoding=windows-1252`, which JDK 25 honors), one commit
-   for the sites with no effect today, and one for tests. For the build rule, the forbidden-apis Maven plugin's
-   `check` and `testCheck` goals with signatures for the default-charset APIs alone, since its bundled `jdk-unsafe`
-   signatures also forbid every `String.format` without a locale, even where the output cannot depend on one
-   (item 2), and the default time zone. Whether its current version runs on JDK 25, which the build uses, is not yet
-   checked. The rule cannot see a `null` charset argument (`MemoryFileManager`'s case), defaults inside other
-   libraries, or the Java that the compiled engine generates and compiles at run time. Elsewhere, legend-engine's
-   and legend-shared's sites in 1.7 remain.
+   legend-pure, [#1405], in review, makes the fixes: one commit per bug, each with a test that fails without its fix
+   under a windows-1252 default charset (`-Dfile.encoding=windows-1252`, which JDK 25 honors), one commit for the
+   sites with no effect today, and one for tests. For the build rule, the forbidden-apis Maven plugin's `check` and
+   `testCheck` goals with signatures for the default-charset APIs alone, since its bundled `jdk-unsafe` signatures
+   also forbid every `String.format` without a locale, even where the output cannot depend on one (item 2), and the
+   default time zone. Whether its current version runs on JDK 25, which the build uses, is not yet checked. The rule
+   cannot see a `null` charset argument (`MemoryFileManager`'s case), defaults inside other libraries, or the Java
+   that the compiled engine generates and compiles at run time. Elsewhere, legend-engine's and legend-shared's sites
+   in 1.7 remain.
 2. **Default locale.** Use `Locale.ROOT` for anything that becomes an identifier: the M3 parser's operator names,
    legend-sdlc's artifact IDs, the generators, and the default overloads in `TextTools`. In legend-pure, [#1403]
    made these fixes, one commit per bug: the sites in 1.7 except Pure's `toUpper` and `toLower`, the sites found
@@ -684,7 +684,7 @@ For the recommended combination. Items marked *now* are the hazards of section 8
 - **Corpus** (its Phase 3): supplementary characters in strings, in quoted property names, and before tokens on the
   same line; U+E000 to U+FFFF beside supplementary characters, for order; and sources with CRLF, CR only, and a
   BOM.
-- **Now:** merge the default-charset fixes (section 8, item 1), then add the build rule and the continuous
+- **Now:** merge the default-charset fixes ([#1405], section 8's item 1), then add the build rule and the continuous
   integration run that keep them fixed (items 1 and 8). The default-locale fixes are done ([#1403] and [#1404]).
 - **One home for the rules:** m4's tools package, for example an extension of `TextTools`, holding code point
   length and slicing, the O1 and O3 comparators, strict decoding, BOM removal, line terminators, and conversion
@@ -755,10 +755,10 @@ In one table:
 ## 11. Order of work
 
 1. **Now, independently:** the fixes in section 8, one per bug, of which item 2 and the first step of item 9 are
-   done ([#1403], [#1404], and [#1402]), and item 1 is written for legend-pure but not yet merged; the scans
-   (escapes in literals, unpaired surrogates, non-ASCII path segments, case-only collisions, and device names); and
-   PCT tests that record each store's current results for supplementary characters, with exclusions where needed, so
-   that the differences are visible before L2 changes them.
+   done ([#1403], [#1404], and [#1402]), and item 1 is in review for legend-pure ([#1405]); the scans (escapes in
+   literals, unpaired surrogates, non-ASCII path segments, case-only collisions, and device names); and PCT tests
+   that record each store's current results for supplementary characters, with exclusions where needed, so that the
+   differences are visible before L2 changes them.
 2. **With the byte-identity plan's Phases 0 and 3:** the string rules in `pelt-format.md` (6.1 to 6.5), and the
    corpus cases.
 3. **After decisions 1, 3, 4, and 5:** V2 enforcement, C2 in legend-pure's parsers and language server,
@@ -800,3 +800,4 @@ In one table:
 [#1402]: https://github.com/finos/legend-pure/pull/1402
 [#1403]: https://github.com/finos/legend-pure/pull/1403
 [#1404]: https://github.com/finos/legend-pure/pull/1404
+[#1405]: https://github.com/finos/legend-pure/pull/1405

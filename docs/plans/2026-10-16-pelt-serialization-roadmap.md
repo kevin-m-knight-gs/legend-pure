@@ -88,7 +88,7 @@ after which legend-pure's own code writes the reference ID escapes that byte ide
    - byte identity's Phase 0, the specification of the serializable form and the encoding, with the strings
      document's decisions on the format (its decisions 1, 9, and 10);
    - the strings document's remaining hazard fixes (its section 8), one per bug, beginning with merging the
-     default-charset fixes for legend-pure, which are written; and its scans of existing models.
+     default-charset fixes for legend-pure ([#1405]); and its scans of existing models.
 2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification exists.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 2 is done.
    Meanwhile, byte identity's decision gate, and its Phase 5 if the gate chooses Option 1.
@@ -103,3 +103,4 @@ after which legend-pure's own code writes the reference ID escapes that byte ide
 [#1402]: https://github.com/finos/legend-pure/pull/1402
 [#1403]: https://github.com/finos/legend-pure/pull/1403
 [#1404]: https://github.com/finos/legend-pure/pull/1404
+[#1405]: https://github.com/finos/legend-pure/pull/1405
