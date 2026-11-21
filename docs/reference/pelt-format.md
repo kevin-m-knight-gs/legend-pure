@@ -50,7 +50,10 @@ with version 1.
 
 ### 1.2 Conventions
 
-- **Must** states a requirement. A file that breaks one does not conform, and a writer must not write one.
+- **Must** states a requirement. So does every statement of what an encoding writes, such as a width, an order, or a
+  choice between two forms, whether or not it says must. A file that breaks one does not conform, and a writer must
+  not write one. Conformance tools reject such a file. Other readers may accept it, unless this document says that
+  they reject it.
 - **Integers** are big-endian and two's complement: `i8`, `i16`, `i32`, and `i64` take 1, 2, 4, and 8 bytes. `u8`
   is an unsigned byte. The one exception, three-byte string IDs, is in section 4.5.
 - **Byte values** are in hexadecimal, as in `0xC0`. A byte that combines fields is written as a sum of hexadecimal
@@ -144,6 +147,8 @@ with their IDs:
 | -42 | `Root` | -86 | `meta::pure::metamodel::multiplicity::ZeroOne` |
 | -43 | `collection` | -87 | `import` |
 | -44 | `function` | | |
+
+The ID -1 stands for no string at all. No form holds one, so it never appears in a conforming file.
 
 ## 3. Primitives
 
@@ -267,14 +272,17 @@ table, its ID, 0, is the byte `0xD7`, and the special string `::`, -3, is `0xD4`
 ## 5. Serializable forms
 
 A serializable form is what a file holds, apart from how it is encoded. A file's form is what decoding it gives, and
-encoding a form gives the file. Two files hold the same content when their forms are equal, whatever element,
+encoding a form gives a file. Two files hold the same content when their forms are equal, whatever element,
 metadata, and string index versions wrote them.
 
 **Rules for every form:**
 
-- Every encoding of a form is a function of the form alone.
-- A form keeps everything that any encoding keeps, so that two files written with the same versions that differ
-  never decode to equal forms.
+- Every encoding of a form is a function of the form alone, apart from compression: which deflate stream a writer
+  produces is not specified yet (section 6.3). For element version 2 and metadata version 3, a file's uncompressed
+  counterpart (sections 6.3 and 7.4) is a function of its form.
+- A form keeps everything that any encoding keeps. So for conforming files written with the same versions, forms are
+  equal exactly when the files are equal, or, for element version 2 and metadata version 3, exactly when their
+  uncompressed counterparts are.
 - An encoder must reject a form that its version cannot represent. It must never drop or alter part of one.
 
 ### 5.1 Elements
@@ -318,9 +326,9 @@ Each value has one of these kinds:
   from 0 to 127. The subsecond is a digit string of one or more digits.
 - **A time** has an hour and a minute, and then optionally a second, and then optionally a subsecond, with the same
   ranges as in a date.
-- **A decimal numeral** has a sign, negative or not, an integer part, which is a digit string, and optionally a
-  fraction part, which is also a digit string. Numerals compare as written: `007.50`, `7.50`, and `7.5` are three
-  different numerals, and `-0.0` differs from `0.0`.
+- **A decimal numeral** has a sign, negative or not, an integer part, and optionally a fraction part. Each part is a
+  digit string of one or more digits. Numerals compare as written: `007.50`, `7.50`, and `7.5` are three different
+  numerals, and `-0.0` differs from `0.0`.
 - **An integer** compares by value. How an encoding writes it depends only on its value.
 
 Forms with different reference ID versions are never equal, since the version is part of the form. They can be
@@ -347,9 +355,9 @@ sorted must be in that order and hold no duplicates; a list of entries with a ke
   which is required.
 - **Source metadata:** a module name; and its sources, sorted by source ID in code unit order. A source ID belongs to
   the module: after an optional leading `/`, it begins with the module's name and a `/`; in the root module, named
-  `root`, it has no `/` after the optional leading one. Each source has a source ID and a list of sections, in the
-  order they appear in the source. Each section has the name of its parser and the paths of its elements, in the
-  order they appear in it.
+  `root`, it is not empty and has no `/` after the optional leading one. Each source has a source ID and a list of
+  sections, in the order they appear in the source. Each section has the name of its parser and the paths of its
+  elements, in the order they appear in it.
 - **External references:** a module name; a reference ID version; and its elements, sorted by path in code unit
   order. Each element has a path and the reference IDs that the element refers to outside itself, sorted in code
   unit order.
@@ -397,7 +405,8 @@ new attribute of instances or metadata, it grows by additions only:
 | Element version | `i32` | 1 or 2 |
 | Reference ID version | `i32` | the form's reference ID version |
 
-The payload follows the header.
+The payload follows the header, and the file ends where the payload ends. legend-pure's readers stop at the end of
+the payload and do not notice bytes after it, so conformance tests check this rule.
 
 ### 6.2 Element version 1
 
@@ -476,14 +485,16 @@ month, or day: its `p` is 3, 6, or 5.
 ### 6.3 Element version 2
 
 The payload is element version 1's payload for the same form, compressed as one raw deflate stream (RFC 1951),
-without a zlib or gzip wrapper. The stream must end exactly at the end of the file. legend-pure's reader stops at
-the end of the stream and does not notice bytes after it, so conformance tests check this rule.
+without a zlib or gzip wrapper. The stream must end exactly at the end of the file, as section 6.1 requires of every
+payload.
 
 The **uncompressed counterpart** of an element version 2 file is the file that element version 1 writes for the same
 form: the same header with the version 1, followed by the inflated payload.
 
 Which deflate stream a writer produces is not specified yet: legend-pure's Java implementation uses the JDK's zlib
-at level 7, whose output depends on the zlib build. A canonical encoder will specify it.
+at level 7, whose output depends on the zlib build. A canonical deflate encoder will specify it, with the
+level-7-like setting chosen on 2026-11-20. Its draft, `docs/plans/2026-11-20-pelt-canonical-deflate.md`, moves into
+this document when legend-pure adopts the encoder (Phase 5 of `docs/plans/2026-10-15-pelt-byte-identity.md`).
 
 ### 6.4 Compile states
 
@@ -497,6 +508,8 @@ Element version 1 writes the set of compile states as an integer whose bits are 
 | `COMPILE_EVENT_EXTRA_STATE_2` | 8 |
 | `COMPILE_EVENT_EXTRA_STATE_3` | 16 |
 | `COMPILE_EVENT_EXTRA_STATE_4` | 32 |
+
+Every other bit is 0.
 
 ## 7. Module metadata files
 
@@ -516,7 +529,7 @@ Element version 1 writes the set of compile states as an integer whose bits are 
 | Back reference index | `PureBRIndex` | `0x014FD4C3472D71A9` |
 | Function names | `PureFuncName` | `0x2F39EBC0940C7D86` |
 
-The payload follows the header.
+The payload follows the header, and the file ends where the payload ends, as for element files (section 6.1).
 
 ### 7.2 Metadata version 2
 
@@ -611,7 +624,10 @@ with the digits `0` to `9` and `a` to `v`, with no leading zeros, and padded on 
 This is `SpreadFunctions.longSpreadOne` from Eclipse Collections (EPL-1.0 and EDL-1.0).
 
 Since a module's names are case-sensitive and some file systems are not, element paths that differ only in letter
-case name files that collide on Windows and macOS. Whether writers must reject them is not yet decided.
+case name files that collide on Windows and macOS. Windows also reserves device names, compared without regard to
+case: `NUL` at least, and on earlier versions also `CON`, `PRN`, `AUX`, `COM1` to `COM9`, and `LPT1` to `LPT9`, with
+or without an extension. Whether writers must reject either is not yet decided (decision 7 of
+`docs/plans/2026-10-15-pelt-byte-identity.md`, and section 6.5 of `docs/plans/2026-11-06-cross-platform-strings.md`).
 
 ## 9. Reference IDs, version 1
 
@@ -654,10 +670,17 @@ is written as itself.
 
 ### 9.3 Reading
 
-Readers accept at least what writers write. legend-pure's parser also accepts whitespace around names and indexes,
-names with letters and digits outside ASCII, property names in quotes, `.p[name='k']`, and escapes in keys that
-writers never write: octal escapes, `\u` escapes with more than one `u` or with a `+`, and a backslash before any
-other character, or at the end, which it drops. Such IDs do not conform.
+Readers accept at least what writers write. legend-pure's parser accepts more, for example:
+
+- whitespace around names and indexes;
+- names with letters and digits outside ASCII, and property names in quotes;
+- `.p[name='k']`;
+- indexes with a sign, with leading zeros, or with digits outside ASCII, such as `.p[+3]`, `.p[03]`, and `.p[-0]`;
+- text inside the brackets before or after a quoted key, which it ignores, as in `.p[x'k']` and `.p['k'x]`;
+- escapes in keys that writers never write: octal escapes; `\u` escapes with more than one `u`, with a `+` or `-`
+  sign, or with digits outside ASCII; and a backslash before any other character, or at the end, which it drops.
+
+Such IDs do not conform.
 
 ## 10. Digests
 
@@ -731,7 +754,8 @@ digest. Any other change to the encoding takes a new digest prefix (section 10.2
 ### 10.2 Content digests
 
 The content digest of an element is the SHA-256 hash of the ASCII bytes `pelt-content-1`, a zero byte, and the
-digest encoding of the element's form. It is the same whatever versions wrote the element's file.
+digest encoding of the element's form. It is the same whatever element and string index versions wrote the element's
+file. The reference ID version is part of the form (section 5.1), so it is part of the digest.
 
 A digest of a projection of a form, such as one that leaves out source information, or of a form together with
 other data, uses the same encoding under a prefix of its own. So would a digest of module metadata. Whatever
@@ -793,11 +817,12 @@ A back reference is an object with one key, its kind: `application`, `modelEleme
 
 - Keys are in the orders above, and each level is indented by two spaces.
 - Each object member and array item is on its own line, except that `sourceInformation`, `compileStates`, and each
-  value object are on one line, with one space after each `:` and `,` in them. An empty array is `[]`.
+  value object are on one line, with one space after each `,` in them. An empty array is `[]`.
+- Each `:` after a key is followed by one space.
 - Strings use the escapes `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, and `\t`, and `\u` with four lowercase hexadecimal
   digits for every other character below U+0020 or above U+007F, with a surrogate pair for a supplementary
   character. Every other character is written as itself.
-- The last line ends with a line feed.
+- Every line, the last included, ends with a line feed (U+000A), with no space or carriage return before it.
 
 ## 12. Departures of the Java implementation
 
@@ -817,10 +842,14 @@ changes files written today comes after a scan of existing models shows which it
 4. **Metadata version 1 drops dependencies.** It writes a manifest that has dependencies without them, rather than
    rejecting it (section 7.3).
 5. **Source IDs of instances.** Element version 1 writes one source ID for the element, and does not check that each
-   instance's source information has the same one (section 6.2).
+   instance's source information has the same one (section 6.2). No file is affected: an instance with source
+   information belongs to the element only when the element's source information contains it, which requires the
+   same source ID (`SerializerV1.java:573`).
 6. **Reference usages that tie** on owner, property name, and offset keep the order in which they were added, since
    the comparison ignores their source information (`BackReference.java:503`). Section 5.2 orders them by source
-   information.
+   information. And since duplicates are removed only when they are next to each other (`ListHelper.java:116`,
+   called from `ElementBackReferenceMetadata.java:237`), two equal reference usages with a tie between them both
+   remain, although section 5.2 allows no duplicates.
 7. **Names outside ASCII** in element paths and module names are written, not rejected (section 8.2). legend-pure's
    M3 grammar and its check on module names do not let them arise.
 8. **The Java form classes.** `Value` holds Float and Decimal values as `BigDecimal`, which loses a negative zero,
@@ -838,8 +867,9 @@ changes files written today comes after a scan of existing models shows which it
 
 ## 13. Test vectors
 
-**Orders (section 2.3).** In index order: `a`, `b`, U+00E9, U+E000, U+FFFD, `ab`, `zz`, U+10B00. In code unit order,
-U+10000 sorts before U+E000.
+**Orders (section 2.3).** In index order: `a`, `b`, U+00E9, U+E000, U+FFFD, `ab`, `zz`, U+10B00, and U+E000
+followed by `a`. The last two show the exception in section 2.3: by code points, U+E000 followed by `a` would sort
+first. In code unit order, U+10000 sorts before U+E000.
 
 **String indexes (section 4).** Each is a payload with the given strings written, in turn, after the index:
 
@@ -855,6 +885,10 @@ U+10000 sorts before U+E000.
 | `a[k='v']` | `00 00 00 03 00 00 00 04 02 01 61 02 01 6B 02 01 76 C4 D7 D8 D9 DA` |
 | `a['']` | `00 00 00 03 00 00 00 02 02 01 61 C8 D7 D5 D8` |
 | `a[k='']` | `00 00 00 03 00 00 00 03 02 01 61 02 01 6B C4 D7 D8 D5 D9` |
+| U+E000 followed by `a`, then U+10B00 | `00 00 00 03 00 00 00 02 02 04 F0 90 AC 80 02 04 EE 80 80 61 D8 D7` |
+
+In the last row, U+10B00 is first in the table, with the ID 0, since its first code unit, U+D802, is less than
+U+E000.
 
 The next three are simple bracketed (section 4.2), although legend-pure's writer fails on them today (section
 12, item 2):
