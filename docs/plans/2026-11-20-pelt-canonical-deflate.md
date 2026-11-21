@@ -1,7 +1,8 @@
 # Canonical deflate encoder: specification
 
-Status: draft for the prototype, 2026-11-20. It becomes normative only if the decision gate adopts Option 1, and it
-then moves into the format specification that Phase 0 writes.
+Status: draft, 2026-11-20. The decision gate adopted Option 1 on 2026-11-20, with the level-7-like setting. This
+specification becomes normative when it moves into the format specification that Phase 0 writes, as
+[Phase 5](2026-10-15-pelt-byte-identity.md#phase-5-adopting-the-canonical-encoder) adopts the encoder.
 
 This is the encoder that
 [Option 1 of the byte-identity plan](2026-10-15-pelt-byte-identity.md#option-1-a-specified-canonical-deflate-encoder)
@@ -17,6 +18,8 @@ The prototype's measurements are in
 ## 1. Settings and constants
 
 A setting fixes five values. A frozen encoder has exactly one setting, and changing any value changes the output.
+The encoder's setting is the level-7-like one. The prototype was also measured with the level-9-like setting, which
+this document keeps only so that those measurements can be reproduced.
 
 | Value | Meaning | Level-7-like | Level-9-like |
 |---|---|---|---|

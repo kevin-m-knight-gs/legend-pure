@@ -79,21 +79,20 @@ how they depend on each other, the rules they share, and the order to do them in
 The versions plan's Phase 1, which fixed latent bugs, is done. So is the buffering that byte identity's Phase 4
 measurements recommended ([#1401]), which changes no file. So are two of the strings document's hazard fixes: the
 default-locale fixes ([#1403], and [#1404] for its decision 11), and the first step for `StringEscape` ([#1402]),
-after which legend-pure's own code writes the reference ID escapes that byte identity's Phase 0 specifies.
+after which legend-pure's own code writes the reference ID escapes that byte identity's Phase 0 specifies. So is
+byte identity's Phase 4: Option 4 fell short on size in directories, a prototype of the canonical encoder wrote
+files smaller than today's at today's speed
+([PELT compression measurements](2026-11-18-pelt-compression-measurements.md)), and on 2026-11-20 the gate chose
+Option 1, the canonical encoder, with its level-7-like setting.
 
 1. **Now, in parallel:**
-   - byte identity's decision gate. Its Phase 4 has measured Option 4 against today's compression, and then,
-     since Option 4 falls short on size in directories, a prototype of the canonical encoder
-     ([PELT compression measurements](2026-11-18-pelt-compression-measurements.md)). The prototype's files are
-     smaller than today's, in jars and in directories, at today's speed. What remains is the decision itself, and
-     the encoder's setting (its decisions 1 and 12);
    - byte identity's Phase 0, the specification of the serializable form and the encoding, with the strings
      document's decisions on the format (its decisions 1, 9, and 10);
    - the strings document's remaining hazard fixes (its section 8), one per bug, beginning with merging the
      default-charset fixes for legend-pure ([#1405]); and its scans of existing models.
 2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification exists.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 2 is done.
-   Meanwhile, byte identity's Phase 5, if the gate chooses Option 1.
+   Meanwhile, byte identity's Phase 5, which adopts the canonical encoder.
 4. **When wanted:** byte identity's Phase 6, rules for compilers and a second implementation, with the non-Java
    work, once the strings document's decisions on coordinates (its decisions 3 to 5) are made; and the versions
    plan's Phase 3, with the first new version of either extension.

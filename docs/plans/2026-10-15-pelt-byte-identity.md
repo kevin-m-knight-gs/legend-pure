@@ -1,6 +1,7 @@
 # Plan: byte-identical PELT files
 
-Status: proposal, 2026-10-15.
+Status: proposal, 2026-10-15. The decision gate chose Option 1, the canonical encoder, with its level-7-like
+setting, on 2026-11-20.
 
 ## Goal
 
@@ -362,8 +363,9 @@ inflater, and nothing above the extensions changes. With F1, compressed bytes be
 gives true byte identity.
 
 **The encoder.** Every choice is fixed. The values below were the starting points for the prototype, and its draft
-specification, [Canonical deflate encoder](2026-11-20-pelt-canonical-deflate.md), keeps them all. What remains is
-to choose the matching settings, and then freeze the encoder ([decision 12](#9-decisions-to-make)).
+specification, [Canonical deflate encoder](2026-11-20-pelt-canonical-deflate.md), keeps them all. Its matching
+settings are zlib's for level 7 ([decision 12](#9-decisions-to-make)), and it is frozen from the first release
+that writes with it ([Phase 5](#phase-5-adopting-the-canonical-encoder)).
 
 1. **Input.** The complete uncompressed payload, compressed in one pass. Element files are small, and module
    metadata is written from an object model that is already fully in memory, so buffering its payload as well is
@@ -658,6 +660,9 @@ measurement confirms. Option 1 is the likely one, but Option 4 is measured first
      goals byte identity serves can be met another way: 5a for one-digest comparisons, and a `FileSerializer` that
      compares decompressed payloads before rewriting a file. The invariant then becomes identical uncompressed
      counterparts.
+
+   On 2026-11-20 the gate chose Option 1, with the level-7-like setting: its files are smaller than Option 5's, and
+   it costs no measurable time ([decisions 1 and 12](#9-decisions-to-make)).
 5. **On adopting Option 1,** the compressing extensions switch encoders (Phase 5), and every Java-produced PELT
    becomes byte-identical across environments. Whether non-Java writers use the encoder from the start, or stock
    deflate until they publish PELTs, is [decision 4](#9-decisions-to-make).
@@ -804,10 +809,10 @@ the largest models: [PELT compression measurements](2026-11-18-pelt-compression-
 short on size in directories, so the encoder prototype followed: a draft specification,
 [Canonical deflate encoder](2026-11-20-pelt-canonical-deflate.md), and a Java prototype, measured in
 [section 10](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder) of the results. At the
-level-7-like setting, its files are smaller than today's, at no measurable cost in time. What remains is the
-gate's decision itself, and the encoder's setting ([decisions 1 and 12](#9-decisions-to-make)). The product
-change that the measurements point to, a buffer after each inflater and before each deflater, is merged
-([#1401]). It changes no file, and its reader side speeds up loading whatever the gate decides.
+level-7-like setting, its files are smaller than today's, at no measurable cost in time, and on 2026-11-20 the
+gate chose Option 1 with that setting ([decisions 1 and 12](#9-decisions-to-make)). The product change that the
+measurements point to, a buffer after each inflater and before each deflater, is merged ([#1401]). It changes no
+file, and its reader side speeds up loading with either encoder.
 
 - **Choose module sets:** platform, the legend-engine module set, and at least one of the largest models.
 - **Measure today's variants on those sets, in directories and in jars:**
@@ -830,8 +835,16 @@ change that the measurements point to, a buffer after each inflater and before e
   than one block. Measure it on the same sets, at a level-7-like setting and at a higher-ratio setting, and decide
   according to section 6.
 
-### Phase 5: adopting the canonical encoder (if the gate chooses Option 1)
+### Phase 5: adopting the canonical encoder
 
+The gate chose Option 1, with the level-7-like setting, on 2026-11-20.
+
+- **The encoder joins legend-pure,** written from the specification and the prototype, with the prototype's tests
+  and fuzzing. Its [specification](2026-11-20-pelt-canonical-deflate.md) moves into Phase 0's document, with the
+  level-7-like setting alone.
+- **Before the first release that writes with it,** check its output with an inflater outside zlib's lineage, such
+  as Rust's `miniz_oxide`. Every inflater the prototype was tested with derives from zlib. From that release on,
+  the encoder is frozen.
 - **The compressing extensions switch encoders.** That covers `ConcreteElementSerializerV2`,
   `ModuleMetadataSerializerV3`, and any other extension that compresses.
 - **The corpus's compiled files come from the canonical encoder,** and every implementation's tests add
@@ -902,13 +915,14 @@ critical path for the invariant.
 
 ## 9. Decisions to make
 
-1. **The outcome.** Restore byte identity through the gate in section 6 (recommended): Option 4 if it is within
-   the tolerances, otherwise Option 1, with Option 2 if Option 1 falls short. Or settle at Option 5 if byte
-   identity costs more than it is worth.
+1. **The outcome:** decided on 2026-11-20: restore byte identity with Option 1, the canonical encoder. Option 4
+   fell short on size in directories, and Option 1 is within the gate in section 6
+   ([measurements](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder)).
 2. **Gate tolerances:** how much size, serialization time, and load time byte identity is worth, measured against
    Option 5. Size is the most important of the three. It counts in directories as well as in jars (decided
    2026-11-19): in some larger projects, directory size is itself a problem, and PELT files are used outside jars
-   too.
+   too. No other tolerance was needed: at the level-7-like setting, Option 1's files are smaller than Option 5's,
+   and it costs no measurable time.
 3. **Marking canonical files with a new extension version.** Not recommended: canonicality can be checked by
    re-encoding, and avoiding a new version keeps forward compatibility. The price is that the encoder is frozen,
    and any revision comes with a new version.
@@ -933,12 +947,11 @@ critical path for the invariant.
 11. **Float and Decimal in the serializable form:** the sign and digit strings as written (recommended), or
     numeric values, with every encoder writing canonical digit strings. The second changes the bytes of any
     element with a negative zero or leading zeros in such a value.
-12. **The canonical encoder's setting, under Option 1.** The encoder is frozen with one setting, and changing it
-    later takes a new extension version. The prototype measured two
+12. **The canonical encoder's setting:** decided on 2026-11-20: the level-7-like setting. The encoder is frozen
+    with one setting, and changing it later takes a new extension version. The prototype measured two
     ([results](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder)):
-    - **Level-7-like (recommended):** zlib's matching settings for level 7. Its files are 0.07% to 0.10% smaller
-      than today's, and it compresses and serializes in the same time. It meets the gate's size tolerance with no
-      cost in time.
+    - **Level-7-like (chosen):** zlib's matching settings for level 7. Its files are 0.07% to 0.10% smaller than
+      today's, and it compresses and serializes in the same time.
     - **Level-9-like:** zlib's matching settings for level 9. Its files are 0.21% to 0.48% smaller than today's,
       for 1.8 to 2.8 times the compression time. A clean write of `core_relational` takes about 11 seconds
       more, a fifth more than with the level-7-like setting.

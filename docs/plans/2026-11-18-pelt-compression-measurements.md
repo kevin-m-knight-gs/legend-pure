@@ -1,7 +1,8 @@
 # PELT compression measurements
 
 Status: results, 2026-11-18. Directory size counts against the gate, decided 2026-11-19. A prototype of the
-canonical encoder was measured on 2026-11-20 ([section 10](#10-the-canonical-encoder)). The buffering recommended
+canonical encoder was measured on 2026-11-20 ([section 10](#10-the-canonical-encoder)), and the gate chose it, with
+its level-7-like setting, the same day. The buffering recommended
 here was merged on 2026-11-19 ([#1401]), and [section 9](#9-the-buffering-fix) measures its effect. Elsewhere,
 "today's readers" are those of legend-pure 5.112.1, from before that change. It leaves today's files unchanged.
 
@@ -44,7 +45,7 @@ Section 10 then compares a prototype of the canonical encoder (Option 1) the sam
   matching settings, the prototype's files are 0.07% to 0.10% smaller than today's, in jars and in directories,
   and it compresses, serializes, and loads in the same time. With level 9's, its files are 0.21% to 0.48% smaller,
   for 1.8 to 2.8 times the compression time. Every file it wrote inflates correctly with four inflaters, all of
-  zlib's lineage.
+  zlib's lineage. **Decided on 2026-11-20:** Option 1, with the level-7-like setting.
 - **Found along the way:**
   - Storing Option 4's entries uncompressed in jars makes reading them 14 to 18 times as slow as deflated entries,
     with today's readers.
@@ -539,6 +540,8 @@ Recommendations:
   of `core_relational`. Settings between the two were not measured.
 - **Before freezing the encoder, check it with an inflater of another lineage,** such as Rust's `miniz_oxide`,
   which a second implementation (the plan's Phase 6) would likely use.
+
+Decided on 2026-11-20: Option 1, with the level-7-like setting.
 
 ## 11. Not measured
 
