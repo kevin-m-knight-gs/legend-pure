@@ -683,7 +683,7 @@ Readers accept at least what writers write. legend-pure's parser accepts more, f
 - indexes with a sign, with leading zeros, or with digits outside ASCII, such as `.p[+3]`, `.p[03]`, and `.p[-0]`;
 - text inside the brackets before or after a quoted key, which it ignores, as in `.p[x'k']` and `.p['k'x]`;
 - escapes in keys that writers never write: octal escapes; `\u` escapes with more than one `u`, with a `+` or `-`
-  sign, or with digits outside ASCII; and a backslash before any other character, or at the end, which it drops.
+  sign, or with digits outside ASCII; and a backslash before any other character, which it drops.
 
 Such IDs do not conform.
 
