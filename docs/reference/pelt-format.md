@@ -289,10 +289,14 @@ metadata, and string index versions wrote them.
 
 An element's form has:
 
-- **a path:** the element's path, its package's names and its own joined with `::`, or `::` for the root package;
+- **a path:** the element's path: the names of its packages below the root package, and its own, joined with `::`;
+  the root package's path is its name, `Root`;
 - **a reference ID version:** the version of every reference ID in the form;
 - **instances:** a list, never empty, of the element itself, first, and the instances that belong to it. An
   instance's position in the list is its internal ID.
+
+Pure also takes `::` as the root package's path, and String values can hold it, as an import stub's `idOrPath` does.
+Paths and reference IDs in files never do: they always name the root package `Root`.
 
 Each instance has:
 
@@ -637,14 +641,14 @@ A reference ID names an instance by a path through the graph from a packageable 
 
 ```
 referenceId = elementPath edge*
-elementPath = "::" | name ("::" name)*
+elementPath = name ("::" name)*
 edge        = "." name selector?
 selector    = "[" index "]" | "['" key "']" | "[" name "='" key "']"
 ```
 
 - **Names,** of elements, properties, and key properties, are one or more ASCII letters, ASCII digits, `_`, or
   `$`.
-- **The element path** is the path of a packageable element, `::` for the root package.
+- **The element path** is the path of a packageable element (section 5.1), `Root` for the root package.
 - **Each edge** follows one property: `.p` its only value, `.p[3]` the value at index 3, from 0, `.p['k']` the value
   whose `name` is `k`, and `.p[q='k']` the value whose property `q` is `k`.
 - **An index** is written in decimal, with no sign and no leading zeros.
@@ -672,6 +676,7 @@ is written as itself.
 
 Readers accept at least what writers write. legend-pure's parser accepts more, for example:
 
+- `::` as the root package's path, which Pure also accepts in source code;
 - whitespace around names and indexes;
 - names with letters and digits outside ASCII, and property names in quotes;
 - `.p[name='k']`;
