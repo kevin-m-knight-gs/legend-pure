@@ -1,6 +1,6 @@
 # PELT format
 
-Status: draft, 2026-11-20. This document describes the PELT files that legend-pure writes and reads at `a67907c83`.
+Status: draft, 2026-11-21. This document describes the PELT files that legend-pure writes and reads at `a67907c83`.
 Three rules in it were decided on 2026-11-20: strings in files are well-formed UTF-8 (section 2.1), existing
 versions keep their UTF-16 orders (section 2.3), and path segments under path provider version 1 are ASCII
 (section 8.2). Three parts are proposals, not yet decided: the digest encoding (section 10), the text encoding
@@ -187,6 +187,9 @@ The first byte selects one of four forms. Writers choose the first that applies:
 Readers select the form by the byte's two high bits (`0x80`, `0x40`, `0xC0`, or `0x00`), and read the width from its
 two low bits. For example, `1234` is `00 04 0C 22` and `12345` is `00 05 0C 22 05`.
 
+No serializable form holds an empty digit string (section 5.1), so `0x80` never begins a digit string in a
+conforming file.
+
 ## 4. The string index, version 3
 
 A payload with a string index begins with an `i32` string index version, 3, and the table. Every string in the rest
@@ -335,6 +338,9 @@ Each value has one of these kinds:
   numerals, and `-0.0` differs from `0.0`.
 - **An integer** compares by value. How an encoding writes it depends only on its value.
 
+No form holds a value outside these ranges, so a writer must reject one, as it rejects a string that is not
+well-formed (section 2.1).
+
 Forms with different reference ID versions are never equal, since the version is part of the form. They can be
 compared only through what their reference IDs name, which is outside this document.
 
@@ -351,8 +357,9 @@ scale is 0 or less, as for `1e3d`, which is `1000`, and `1.5e1d`, which is `15`.
 ### 5.2 Module metadata
 
 Each module has five metadata files, and an element back reference file for each element, in the module or in
-another, that the module's elements refer back to. Their forms hold strings and lists. Every list described as
-sorted must be in that order and hold no duplicates; a list of entries with a key holds one entry for each key.
+another, that the module's elements refer back to. Their forms hold strings, integers, and lists. Every list
+described as sorted must be in that order and hold no duplicates; a list of entries with a key holds one entry for
+each key.
 
 - **Manifest:** a module name; its dependencies, the names of other modules, sorted in code unit order; and its
   elements, sorted by path in code unit order. Each element has a path, a classifier path, and source information,
@@ -367,7 +374,7 @@ sorted must be in that order and hold no duplicates; a list of entries with a ke
   unit order.
 - **Element back references:** an element path; a reference ID version; and the element's instances that the
   module's elements refer back to, sorted by reference ID in code unit order. Each instance has a reference ID and
-  its back references, sorted as below.
+  one or more back references, sorted as below.
 - **Function names:** a module name; and its function names, sorted in code unit order. Each function name has the
   paths of the module's functions with that name, sorted in code unit order.
 - **Back reference index:** a module name; and the paths of the elements that have back reference files in the
@@ -392,12 +399,15 @@ numbers.
 ### 5.3 How forms grow
 
 Forms have no version of their own. They leave a process only through encodings that carry versions: file headers,
-string index versions, digest prefixes, and the corpus release. When a form must grow, for a new kind of value or a
-new attribute of instances or metadata, it grows by additions only:
+string index versions, digest prefixes, and, for the text encoding, the release of the test corpus that holds the
+text. When a form must grow, for a new kind of value or a new attribute of instances or metadata, it grows by
+additions only:
 
 - each addition has an "absent" state, which every existing file means;
 - an encoder whose version cannot represent an addition rejects any form that uses it (section 5);
-- the digest encoding gives each addition a new tag, so that no existing digest changes (section 10).
+- the digest encoding gives each addition a new tag, so that no existing digest changes (section 10);
+- the text encoding gives each addition a new key, left out when absent, so that no existing text changes
+  (section 11).
 
 ## 6. Element files
 
@@ -483,8 +493,7 @@ month, or day: its `p` is 3, 6, or 5.
 
 - whose first instance has no source information;
 - in which an instance's source information has a source ID other than the first instance's: the payload holds one
-  source ID, and readers give it to every instance with source information;
-- with a value outside the ranges of section 5.1.
+  source ID, and readers give it to every instance with source information.
 
 ### 6.3 Element version 2
 
@@ -496,9 +505,7 @@ The **uncompressed counterpart** of an element version 2 file is the file that e
 form: the same header with the version 1, followed by the inflated payload.
 
 Which deflate stream a writer produces is not specified yet: legend-pure's Java implementation uses the JDK's zlib
-at level 7, whose output depends on the zlib build. A canonical deflate encoder will specify it, with the
-level-7-like setting chosen on 2026-11-20. Its draft, `docs/plans/2026-11-20-pelt-canonical-deflate.md`, moves into
-this document when legend-pure adopts the encoder (Phase 5 of `docs/plans/2026-10-15-pelt-byte-identity.md`).
+at level 7, whose output depends on the zlib build. A later revision will specify it.
 
 ### 6.4 Compile states
 
@@ -595,10 +602,14 @@ Paths below separate directories with `/`. In a directory, the platform's separa
 | External references | `org/finos/legend/pure/module/<module>.pxr` |
 | Back reference index | `org/finos/legend/pure/module/<module>.pbr` |
 | Function names | `org/finos/legend/pure/module/<module>.pfn` |
-| Element back references | `org/finos/legend/pure/module/<module>/`, then the element path as for its element file, with `.pbr` in place of `.pelt`; `Root.pbr` for the root package |
+| Element back references | `org/finos/legend/pure/module/<module>/`, then the element path's names, as file names, separated by `/`, with `.pbr` after the last; `Root.pbr` for the root package |
 
 So the element `meta::pure::metamodel::type::Class` is in `meta/pure/metamodel/type/Class.pelt`, and the platform
 module's manifest is `org/finos/legend/pure/module/platform.pmf`.
+
+In each path, the last name becomes a file name with the extension after it (section 8.2). Since `.pbr` is one
+character shorter than `.pelt`, a long last name can be cut and hashed differently in an element file and in the
+element's back reference files (section 13).
 
 ### 8.2 File names
 
@@ -629,9 +640,10 @@ This is `SpreadFunctions.longSpreadOne` from Eclipse Collections (EPL-1.0 and ED
 
 Since a module's names are case-sensitive and some file systems are not, element paths that differ only in letter
 case name files that collide on Windows and macOS. Windows also reserves device names, compared without regard to
-case: `NUL` at least, and on earlier versions also `CON`, `PRN`, `AUX`, `COM1` to `COM9`, and `LPT1` to `LPT9`, with
-or without an extension. Whether writers must reject either is not yet decided (decision 7 of
-`docs/plans/2026-10-15-pelt-byte-identity.md`, and section 6.5 of `docs/plans/2026-11-06-cross-platform-strings.md`).
+case. In a path with a directory, Windows 11 build 26300 reserves only `NUL`, and only without an extension, so
+there only a directory named `nul` collides: a package's, or a module's directory of element back reference files.
+Earlier versions reserve `CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, and `LPT1` to `LPT9`, each with or without
+an extension. Whether writers must reject either kind of name is not yet decided.
 
 ## 9. Reference IDs, version 1
 
@@ -824,6 +836,8 @@ A back reference is an object with one key, its kind: `application`, `modelEleme
 - Each object member and array item is on its own line, except that `sourceInformation`, `compileStates`, and each
   value object are on one line, with one space after each `,` in them. An empty array is `[]`.
 - Each `:` after a key is followed by one space.
+- Numbers are in decimal, with a leading `-` if negative, no leading zeros (`0` for zero), and no fraction or
+  exponent.
 - Strings use the escapes `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, and `\t`, and `\u` with four lowercase hexadecimal
   digits for every other character below U+0020 or above U+007F, with a surrogate pair for a supplementary
   character. Every other character is written as itself.
@@ -839,17 +853,20 @@ changes files written today comes after a scan of existing models shows which it
 2. **Bracketed strings whose two quotes would be one character.** For a string such as `x[']` or `a[k=']`, where
    the quote after `[` or `=` is also the quote before `]`, section 4.2 makes the string simple bracketed, but the
    string index writer throws `StringIndexOutOfBoundsException` (`StringWriterV3.java:415` and `:425`). So no
-   element or metadata that holds such a string can be serialized. Fixing it changes no file, since no file can hold
-   one.
+   element or metadata can be serialized that holds such a string, or a string that decomposes into one, such as
+   `a.x[']`. Fixing it changes no file, since no file can hold one.
 3. **Integers with leading zeros.** An Integer literal of more than 20 characters becomes a `BigInteger`, even when
    its value fits in an `i64`, as `000000000000000000001` does (`ModelRepository.java:602`). Element version 1 then
    writes it in the big integer form, which section 6.2 reserves for values outside the `i64` range.
 4. **Metadata version 1 drops dependencies.** It writes a manifest that has dependencies without them, rather than
    rejecting it (section 7.3).
 5. **Source IDs of instances.** Element version 1 writes one source ID for the element, and does not check that each
-   instance's source information has the same one (section 6.2). No file is affected: an instance with source
-   information belongs to the element only when the element's source information contains it, which requires the
-   same source ID (`SerializerV1.java:573`).
+   instance's source information has the same one (section 6.2). No file is known to be affected, although files
+   cannot show it, since each holds one source ID. An instance with source information belongs to the element only
+   when the element's source information contains it, which requires the same source ID (`SerializerV1.java:573`),
+   with one exception: a reference usage belongs to the element when its owner does (`SerializerV1.java:177`).
+   legend-pure gives a reference usage no source information, or that of the place where the reference is written,
+   in its owner's source.
 6. **Reference usages that tie** on owner, property name, and offset keep the order in which they were added, since
    the comparison ignores their source information (`BackReference.java:503`). Section 5.2 orders them by source
    information. And since duplicates are removed only when they are next to each other (`ListHelper.java:116`,
@@ -873,8 +890,9 @@ changes files written today comes after a scan of existing models shows which it
 ## 13. Test vectors
 
 **Orders (section 2.3).** In index order: `a`, `b`, U+00E9, U+E000, U+FFFD, `ab`, `zz`, U+10B00, and U+E000
-followed by `a`. The last two show the exception in section 2.3: by code points, U+E000 followed by `a` would sort
-first. In code unit order, U+10000 sorts before U+E000.
+followed by `a`. The last two show the exception in section 2.3: both have two code units, so they sort in code unit
+order, which puts U+10B00 first; comparing their code points instead would put U+E000 followed by `a` first. In code
+unit order, U+10000 sorts before U+E000.
 
 **String indexes (section 4).** Each is a payload with the given strings written, in turn, after the index:
 
@@ -915,13 +933,16 @@ The next three are simple bracketed (section 4.2), although legend-pure's writer
 | `Avestan` | -895,522,193,269,313,661 | `f74jn9tar8bs3` |
 | `longSpreadOne` | -5,733,343,490,630,880,054 | `b0roif34qbt6a` |
 
-**File names (section 8.2).** For the element `pkg::<name>`, where `<name>` repeats the alphabet:
+**File names (sections 8.1 and 8.2).** For the element `pkg::<name>`, where `<name>` repeats
+`abcdefghijklmnopqrstuvwxyz` up to the given length, the element file and the element back reference file under
+`org/finos/legend/pure/module/m/` are:
 
-| Length of `<name>` | Element file |
-|---|---|
-| 121 | `pkg/` + the name + `.pelt`, a file name of 126 characters |
-| 122 | `pkg/` + the first 108 characters + `52tisufrbfm28.pelt` |
-| 130 | `pkg/` + the first 108 characters + `74d13ahrei85t.pelt` |
+| Length of `<name>` | Element file | Element back reference file |
+|---|---|---|
+| 121 | `pkg/` + the name + `.pelt`, a file name of 126 characters | `pkg/` + the name + `.pbr`, a file name of 125 characters |
+| 122 | `pkg/` + the first 108 characters + `52tisufrbfm28.pelt` | `pkg/` + the name + `.pbr`, a file name of 126 characters |
+| 123 | `pkg/` + the first 108 characters + `bnno9dd9bvkme.pelt` | `pkg/` + the first 109 characters + `c323rv9kr7tfk.pbr` |
+| 130 | `pkg/` + the first 108 characters + `74d13ahrei85t.pelt` | `pkg/` + the first 109 characters + `4hr3v6q47lgr1.pbr` |
 
 **Headers (sections 6.1 and 7.1).** An element version 2 file with reference ID version 1 begins
 `01 4F D4 C4 B6 63 95 B9 00 00 00 02 00 00 00 01`, and a version 3 manifest begins
