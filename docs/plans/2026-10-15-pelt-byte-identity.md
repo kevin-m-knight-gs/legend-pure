@@ -361,7 +361,9 @@ and each language that writes PELTs implements it. The output is plain raw defla
 inflater, and nothing above the extensions changes. With F1, compressed bytes become a function of content, which
 gives true byte identity.
 
-**The encoder.** Every choice is fixed. The values below are starting points to tune in the prototype, then freeze.
+**The encoder.** Every choice is fixed. The values below were the starting points for the prototype, and its draft
+specification, [Canonical deflate encoder](2026-11-20-pelt-canonical-deflate.md), keeps them all. What remains is
+to choose the matching settings, and then freeze the encoder ([decision 12](#9-decisions-to-make)).
 
 1. **Input.** The complete uncompressed payload, compressed in one pass. Element files are small, and module
    metadata is written from an object model that is already fully in memory, so buffering its payload as well is
@@ -395,14 +397,16 @@ gives true byte identity.
 **Costs:**
 
 - **The specification:** a few pages plus test vectors.
-- **Java:** an encoder on the order of 1,000 lines, with tests and fuzzing against stock inflaters.
+- **Java:** an encoder of about 700 lines in the prototype, with tests and fuzzing against stock inflaters.
 - **Each language that writes PELTs:** one more encoder of similar size. Readers need nothing.
-- **Speed:** a pure-Java encoder will compress more slowly than native zlib. Only builds pay this.
+- **Speed:** with level 7's matching settings, the prototype compresses as fast as zlib through `Deflater`. With
+  level 9's, it takes 1.8 to 2.8 times as long. Only builds pay this.
 
 **Risks:**
 
-- The compression ratio may fall short of zlib level 7. It can use the same matching parameters, so it should come
-  close, but that must be measured.
+- The compression ratio might have fallen short of zlib level 7. It does not: with level 7's matching settings,
+  the prototype's files are 0.07% to 0.10% smaller than today's
+  ([measurements](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder)).
 - An encoder bug could produce valid deflate that differs from the reference. Byte comparison against the corpus
   catches that immediately.
 
@@ -536,8 +540,8 @@ its decompressed payload, so that `FileSerializer` can compare payloads before r
 | G3 Digests mean the same | Yes | Yes | Yes | Yes | Yes |
 | G4 Generic tools on raw files | Yes | Yes | Yes | Yes | No; with 5a, one index file per module |
 | G5 No spurious rewrites | Yes | Yes | Yes | Yes | If `FileSerializer` compares decompressed payloads before rewriting |
-| G6 Size and load speed | Close to today, and can be tuned for a better ratio; measure | Same as today | Unknown: likely larger, faster to decode | Expected losses in directories and jars; measure | Same as today |
-| G7 Cost per new language | An encoder of about 1,000 lines | Vendored zlib through FFI, or a port | No compressor, but a new format | None | None |
+| G6 Size and load speed | Measured: 0.07% to 0.10% smaller than today, at the same speed; up to 0.48% smaller for more build time | Same as today | Unknown: likely larger, faster to decode | Measured: within 1% in jars, but 3.1 to 4.0 times as large in directories; loads as fast or faster | Same as today |
+| G7 Cost per new language | An encoder of about 700 lines | Vendored zlib through FFI, or a port | No compressor, but a new format | None | None |
 | G8 Forward compatibility | Yes | Yes | No | Yes | Yes (5b: no) |
 | G9 Test a non-Java compiler | Yes | Yes | Yes | Yes | Yes, of uncompressed counterparts |
 
@@ -545,7 +549,7 @@ its decompressed payload, so that `FileSerializer` can compare payloads before r
 
 | Option | Specification | Java work | Format change | Ongoing burden | Main risk |
 |---|---|---|---|---|---|
-| 1. Canonical encoder | A few pages, plus vectors | An encoder, tests, and fuzzing | None | A frozen encoder; each writing language implements it | Ratio or build-time shortfall |
+| 1. Canonical encoder | A few pages, plus vectors | An encoder, tests, and fuzzing | None | A frozen encoder; each writing language implements it | Ratio or build-time shortfall (the prototype shows neither) |
 | 2. Pinned zlib | The version and settings | A bit-exact port, or JNI with native libraries | None | Port fidelity; frozen at one zlib | Port effort and fidelity |
 | 3. Compact format | A new format | A new serializer and deserializer | New versions | Two formats during the transition | May not match deflate's size |
 | 4. Container compression | None | Switch the default versions | None (existing versions) | None | Size and load regression |
@@ -636,7 +640,10 @@ measurement confirms. Option 1 is the likely one, but Option 4 is measured first
    decision. Together they already meet G1 and G3, and G2 by comparing uncompressed counterparts. That is Option 5
    without its one addition for G5: the interim state while the encoder is decided, and the baseline that the
    measurements compare against. G9 also needs F3's written rules, which follow in Phase 6.
-3. **Prototype Option 1 only if Option 4 falls short,** and measure it the same way.
+3. **Prototype Option 1 only if Option 4 falls short,** and measure it the same way. Option 4 fell short on size
+   in directories, and the prototype is measured: with zlib's level-7 matching settings, its files are smaller
+   than today's, in jars and in directories, and it serializes and loads in the same time
+   ([results](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder)).
 4. **Decision gate.** Each option is held to agreed tolerances on size (for example 2%), serialization time, and
    load time, measured against Option 5. Size is the most important of the three, given the multi-gigabyte jars of
    the largest models.
@@ -794,9 +801,13 @@ and across the matrix, or every difference is recorded for the compiler plan.
 The measurements need no new product code, so they start at once, in parallel with Phase 0. Only the encoder
 prototype waits, and it is built only if Option 4 falls short. Results so far, for every module set but one of
 the largest models: [PELT compression measurements](2026-11-18-pelt-compression-measurements.md). Option 4 falls
-short on size in directories, so the encoder prototype follows. The product change that the measurements point to,
-a buffer after each inflater and before each deflater, is merged ([#1401]). It changes no file, and its reader side
-speeds up loading whatever the gate decides.
+short on size in directories, so the encoder prototype followed: a draft specification,
+[Canonical deflate encoder](2026-11-20-pelt-canonical-deflate.md), and a Java prototype, measured in
+[section 10](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder) of the results. At the
+level-7-like setting, its files are smaller than today's, at no measurable cost in time. What remains is the
+gate's decision itself, and the encoder's setting ([decisions 1 and 12](#9-decisions-to-make)). The product
+change that the measurements point to, a buffer after each inflater and before each deflater, is merged
+([#1401]). It changes no file, and its reader side speeds up loading whatever the gate decides.
 
 - **Choose module sets:** platform, the legend-engine module set, and at least one of the largest models.
 - **Measure today's variants on those sets, in directories and in jars:**
@@ -922,6 +933,17 @@ critical path for the invariant.
 11. **Float and Decimal in the serializable form:** the sign and digit strings as written (recommended), or
     numeric values, with every encoder writing canonical digit strings. The second changes the bytes of any
     element with a negative zero or leading zeros in such a value.
+12. **The canonical encoder's setting, under Option 1.** The encoder is frozen with one setting, and changing it
+    later takes a new extension version. The prototype measured two
+    ([results](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder)):
+    - **Level-7-like (recommended):** zlib's matching settings for level 7. Its files are 0.07% to 0.10% smaller
+      than today's, and it compresses and serializes in the same time. It meets the gate's size tolerance with no
+      cost in time.
+    - **Level-9-like:** zlib's matching settings for level 9. Its files are 0.21% to 0.48% smaller than today's,
+      for 1.8 to 2.8 times the compression time. A clean write of `core_relational` takes about 11 seconds
+      more, a fifth more than with the level-7-like setting.
+
+    Settings between the two were not measured.
 
 ## Outside this plan
 

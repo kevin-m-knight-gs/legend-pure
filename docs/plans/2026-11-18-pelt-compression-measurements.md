@@ -1,6 +1,7 @@
 # PELT compression measurements
 
-Status: results, 2026-11-18. Directory size counts against the gate, decided 2026-11-19. The buffering recommended
+Status: results, 2026-11-18. Directory size counts against the gate, decided 2026-11-19. A prototype of the
+canonical encoder was measured on 2026-11-20 ([section 10](#10-the-canonical-encoder)). The buffering recommended
 here was merged on 2026-11-19 ([#1401]), and [section 9](#9-the-buffering-fix) measures its effect. Elsewhere,
 "today's readers" are those of legend-pure 5.112.1, from before that change. It leaves today's files unchanged.
 
@@ -8,6 +9,7 @@ These are the measurements for
 [Phase 4 of the byte-identity plan](2026-10-15-pelt-byte-identity.md#phase-4-measurements-encoder-prototype-and-decision-gate).
 They compare Option 4 (uncompressed PELT files: element V1 and module metadata V2, with compression left to the
 jar) against today's level-7 deflate (element V2 and module metadata V3), which is also Option 5 and the baseline.
+Section 10 then compares a prototype of the canonical encoder (Option 1) the same way.
 
 ## Summary
 
@@ -37,7 +39,12 @@ jar) against today's level-7 deflate (element V2 and module metadata V3), which 
   those settings reproduced the compressed size of every entry but 3 of legend-engine's 95,217 PELT entries.
 - **Decision: Option 4 falls short** ([section 8](#8-the-decision-gate)). It meets the size tolerance in jars, and
   loads at least as fast, but directory size counts against the tolerance too, and its directories are 3.1 to 4.0
-  times as large. Under the gate, the canonical encoder (Option 1) is prototyped next.
+  times as large. Under the gate, the canonical encoder (Option 1) was prototyped next.
+- **The canonical encoder meets the gate** ([section 10](#10-the-canonical-encoder)). With zlib's level-7
+  matching settings, the prototype's files are 0.07% to 0.10% smaller than today's, in jars and in directories,
+  and it compresses, serializes, and loads in the same time. With level 9's, its files are 0.21% to 0.48% smaller,
+  for 1.8 to 2.8 times the compression time. Every file it wrote inflates correctly with four inflaters, all of
+  zlib's lineage.
 - **Found along the way:**
   - Storing Option 4's entries uncompressed in jars makes reading them 14 to 18 times as slow as deflated entries,
     with today's readers.
@@ -344,7 +351,7 @@ problem, and PELT files are used outside jars too.
 Recommendations:
 
 - **Option 4 falls short on size in directories.** Under the gate, the next step is Phase 4's prototype of the
-  canonical encoder (Option 1), measured the same way.
+  canonical encoder (Option 1), measured the same way. [Section 10](#10-the-canonical-encoder) has the results.
 - **Buffer after each inflater, whatever the encoder.** Done in [#1401]. Element V2 and metadata V3 decoded
   straight from an `InflaterInputStream`. A `BufferedInputStream` after it makes reading today's files 1.8 to 2.7
   times as fast, from class loaders and directories alike. [Section 9](#9-the-buffering-fix) measures the
@@ -402,7 +409,138 @@ over two sessions and 6 runs of each build. Its timings support no ratio, though
 time to read and decode ([section 6](#6-element-v1s-bytes-for-option-3)). It leaves the decision unchanged, since
 Option 4 falls short on size.
 
-## 10. Not measured
+## 10. The canonical encoder
+
+Option 4 fell short, so Phase 4's prototype of the canonical encoder (Option 1) followed: a draft specification,
+[Canonical deflate encoder](2026-11-20-pelt-canonical-deflate.md), and a Java prototype of it in the measurement
+harness, 705 lines of code. It was measured under the conditions of [section 1](#1-method), at two settings:
+
+- **Level-7-like:** zlib's matching settings for level 7, today's level.
+- **Level-9-like:** zlib's matching settings for level 9, for a better ratio.
+
+Each setting's files are today's files with every payload deflated by the prototype in place of `Deflater`: the
+same headers, and the same uncompressed payloads. The harness made them from the uncompressed counterparts of
+section 1.
+
+### Correctness
+
+- **Every file inflates to its payload, with four inflaters.** At both settings, each of the 101,301 files of the
+  three sets inflates to the payload of its uncompressed counterpart, with nothing after the deflate stream,
+  through:
+  - Java's `Inflater`, on JDK 17.0.21;
+  - Python 3.12's `zlib`, with zlib 1.2.13;
+  - Node 20.10's `zlib`, with Chromium's zlib 1.2.13.1;
+  - .NET 11's `DeflateStream`, with zlib-ng 2.2.5.
+- **So do the specification's vectors and 2,000 generated inputs,** at both settings, with the same four
+  inflaters. The generated inputs mix random bytes, runs, small alphabets, and copies from any distance, and run up
+  to 300,000 bytes. The prototype's unit tests inflate 1,500 more at each of four settings, and check that its code
+  lengths are optimal and complete.
+- **Serialization reproduces the files.** Compiling platform from source and serializing it, with element V2 and
+  metadata V3 encoding through the prototype, gives files byte-identical to all 2,638 of each setting's files. For
+  `core_relational`, 8 to 22 of its 21,703 files differ from the expected ones in each run, whichever the encoder.
+  That is compiler nondeterminism ([section 7](#7-other-findings)): in each run, as many uncompressed counterparts
+  differ, and where the lists were compared, they are the same files.
+- **No file needs a stored block.**
+
+All four inflaters are zlib or derived from it. No inflater of another lineage, such as Go's `compress/flate` or
+Rust's `miniz_oxide`, was available to test.
+
+### Size
+
+PELT bytes in directories, and as jar entries deflated by the jar at level 6:
+
+| Set | Where | Today | Level-7-like | Change | Level-9-like | Change |
+|---|---|---|---|---|---|---|
+| platform | directory | 4,410,867 | 4,407,473 | -0.08% | 4,401,194 | -0.22% |
+| platform | jar | 4,409,332 | 4,406,143 | -0.07% | 4,400,165 | -0.21% |
+| legend-pure | directory | 5,093,727 | 5,089,272 | -0.09% | 5,082,276 | -0.22% |
+| legend-pure | jar | 5,096,098 | 5,091,864 | -0.08% | 5,085,178 | -0.21% |
+| legend-engine | directory | 187,291,645 | 187,117,888 | -0.09% | 186,430,673 | -0.46% |
+| legend-engine | jar | 186,518,869 | 186,341,196 | -0.10% | 185,629,863 | -0.48% |
+
+- **Both settings are smaller than today everywhere.** Counting each file rounded up to 4 KiB, the level-7-like
+  setting saves nothing to 0.02%, and the level-9-like setting 0.03% to 0.15%. Whole jars shrink by 0.02% to
+  0.03%, and by 0.05% to 0.16%.
+- **Every kind of file shrinks,** summed over each set, except two of platform's at the level-7-like setting: its
+  manifest grows by 3 bytes, and its back-reference index keeps its size.
+- **At the level-7-like setting, the gain comes from the encoder's own choices,** since the matching settings are
+  zlib's. The specification lists how it differs from zlib.
+
+### Compression time
+
+The CPU time of deflating every payload, single-threaded and from memory, as in
+[section 5](#5-serialization-time). One JVM per set alternated the encoders between passes. Medians of 5 passes
+for platform and legend-pure, and of 3 for legend-engine, in seconds:
+
+| Set | Today: zlib level 7 | Level-7-like | Ratio | Level-9-like | Ratio |
+|---|---|---|---|---|---|
+| platform | 0.336 | 0.347 | 1.04 | 0.603 | 1.79 |
+| legend-pure | 0.373 | 0.395 | 1.06 | 0.674 | 1.81 |
+| legend-engine | 17.210 | 16.850 | 0.98 | 48.121 | 2.80 |
+
+At the level-7-like setting, the prototype, in Java, takes as long as zlib through `Deflater`.
+
+### Serialization
+
+`serializeModules`, as in [section 5](#5-serialization-time), with element V2 and metadata V3 as master has them
+since [#1401], against the same two classes deflating each payload whole with the prototype. Platform has 4 runs
+per build, and `core_relational` 2. Medians for platform, and the range of the runs for `core_relational`, in
+seconds:
+
+| Module | Step | Today: zlib level 7 | Level-7-like | Ratio | Level-9-like | Ratio |
+|---|---|---|---|---|---|---|
+| platform | clean write | 4.28 | 4.40 | 1.03 | 4.74 | 1.11 |
+| platform | encoding only | 1.35 | 1.36 | 1.01 | 1.62 | 1.20 |
+| `core_relational` | clean write | 52.41 to 72.85 | 60.52 to 62.41 | | 70.12 to 75.62 | |
+| `core_relational` | encoding only | 15.52 to 25.10 | 21.97 to 23.20 | | 33.15 to 34.13 | |
+
+- **At the level-7-like setting, serialization takes as long as today.** For `core_relational`, its runs fall
+  within today's. As in [section 9](#9-the-buffering-fix), `core_relational`'s timings vary too much across JVMs
+  for a ratio.
+- **The level-9-like setting adds about 11 seconds** to each step for `core_relational`, against the
+  level-7-like setting.
+
+### Load time
+
+Every PELT file read and decoded, with a buffer after each inflater as the readers since [#1401] have, measured
+as in [section 4](#read-and-decode). Warm medians in seconds:
+
+| Set | Source | Today | Level-7-like | Ratio | Level-9-like | Ratio |
+|---|---|---|---|---|---|---|
+| platform | jar | 0.386 | 0.387 | 1.00 | 0.402 | 1.04 |
+| platform | directory | 0.363 | 0.337 | 0.93 | 0.337 | 0.93 |
+| legend-engine | jar | 15.034 | 15.185 | 1.01 | 15.497 | 1.03 |
+| legend-engine | directory | 14.479 | 14.301 | 0.99 | 14.426 | 1.00 |
+
+- **The prototype's files load in the same time as today's.** The differences are within the noise. The
+  directories were measured in a separate run that also read a copy of today's directories, made just before it.
+  The copies took 0.341 and 13.964 seconds: 0.94 and 0.96 of the time for the same files in the originals.
+- **Platform's figures are medians of 12 warm passes.** legend-engine's are medians of 2 in jars, and of 4 in
+  directories. In jars, legend-engine took 18.2 to 19.0 seconds in the first repetition and 11.8 to 12.0 in the
+  second, and within each the three were within 4% of one another.
+
+### For the gate
+
+| Measure | Level-7-like against today | Level-9-like against today |
+|---|---|---|
+| Size in jars | -0.07% to -0.10% of PELT entry bytes | -0.21% to -0.48% |
+| Size in directories | -0.08% to -0.09%, or nothing to -0.02% in 4 KiB blocks | -0.22% to -0.46%, or -0.03% to -0.15% in 4 KiB blocks |
+| Compression time | 0.98 to 1.06 | 1.79 to 2.80 |
+| Serialization time | The same: 1.01 to 1.03 for platform, and within today's runs for `core_relational` | 1.11 to 1.20 for platform, and about 11 seconds more for `core_relational` |
+| Load time, readers since [#1401] | The same: 0.93 to 1.01 | The same: 0.93 to 1.04 |
+
+Recommendations:
+
+- **Option 1 meets the gate at the level-7-like setting.** Its files are smaller than today's, in jars and in
+  directories, and it serializes and loads in the same time. It costs nothing that these measurements can detect,
+  so it is within any tolerances that decision 2 sets, and under the gate, Option 1 is the outcome.
+- **Choose the level-7-like setting** (the plan's decision 12). The level-9-like setting saves another 0.13 to
+  0.38 percentage points, for 1.8 to 2.8 times the compression time, and about a fifth more time for a clean write
+  of `core_relational`. Settings between the two were not measured.
+- **Before freezing the encoder, check it with an inflater of another lineage,** such as Rust's `miniz_oxide`,
+  which a second implementation (the plan's Phase 6) would likely use.
+
+## 11. Not measured
 
 - One of the largest models.
 - A cold OS file cache, slow disks, and network file systems. In those settings, reading 3 to 4 times as many bytes
@@ -413,5 +551,9 @@ Option 4 falls short on size.
 - Stored PELT entries, and Option 4's files in directories, with the buffering fix.
 - The wall time of packaging. maven-jar-plugin compresses entries on several threads, and the figures in
   [section 5](#5-serialization-time) are single-threaded CPU time.
+- For the canonical encoder:
+  - an inflater outside zlib's lineage;
+  - settings between the level-7-like and level-9-like ones;
+  - end-to-end load times, for which read and decode stand in.
 
 [#1401]: https://github.com/finos/legend-pure/pull/1401
