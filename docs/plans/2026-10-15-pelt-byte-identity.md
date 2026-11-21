@@ -1,7 +1,8 @@
 # Plan: byte-identical PELT files
 
 Status: proposal, 2026-10-15. The decision gate chose Option 1, the canonical encoder, with its level-7-like
-setting, on 2026-11-20. Phase 0's draft was written the same day, and decision 6 was made with it.
+setting, on 2026-11-20. Phase 0's draft was written the same day, and decision 6 was made with it. The draft's
+first review, on 2026-11-21, corrected it and found bugs in the reference ID parser (Phase 0).
 
 ## Goal
 
@@ -706,9 +707,10 @@ serializable forms. It comes in Phase 6.
 
 Exit: someone can write a decoder, an encoder, and the content digest from the document alone. Phase 6 tests that.
 
-**Status (2026-11-20):** drafted, on branch `serialization/pelt_format`, with the strings document's decisions 1
-(for serialization), 9, and 10, and decision 6. Its digest encoding, its text encoding, and its rule that Float and
-Decimal numerals compare as written are proposals, for decisions 10 and 11. Its review remains.
+**Status (2026-11-21):** drafted on 2026-11-20, on branch `serialization/pelt_format`, with the strings document's
+decisions 1 (for serialization), 9, and 10, and decision 6. Its digest encoding, its text encoding, and its rule
+that Float and Decimal numerals compare as written are proposals, for decisions 10 and 11. Its first review, on
+2026-11-21, corrected it.
 
 - **Checked against the files.** A reader and writer written in Python from the draft alone decoded every element
   and module metadata file of the 5.112.1 platform and pure jars and of 151 legend-engine jars at 5.3.1-SNAPSHOT,
@@ -722,6 +724,28 @@ Decimal numerals compare as written are proposals, for decisions 10 and 11. Its 
   example, the string index writer fails on strings such as `x[']`, and an Integer literal of more than 20
   characters that fits in a `long` gets the big integer encoding. The fixes that change no file can come at once,
   one per bug; the others wait for a scan of existing models.
+- **The reference ID parser.** `GraphPath.parse`, which reads reference IDs (`ReferenceIdResolverV1.java:55`),
+  accepts more than the syntax (the draft's section 9.3). Some of that is by design and can stay: whitespace and
+  `.p[name='k']`, which its tests pin (`TestGraphPath.java:818` to `:868`), `::` for the root package
+  (`GraphPath.java:1074`), quoted property names, and names outside ASCII. The rest are bugs, side effects of how
+  it finds a key and reads an index or an escape, through which a malformed ID reads as another instead of failing
+  (verified):
+  - **Text in brackets that it ignores.** With a quoted key, it reads only the key and any key property before an
+    `=`, and drops any other text between the brackets (`GraphPath.java:1170` to `:1194`). So `.p[x'k']`,
+    `.p['k'x]`, and even `.p[3]['k']` read as `.p['k']`, and `.p[q= x 'k']` reads as `.p[q='k']`.
+  - **Indexes with a sign, leading zeros, or digits outside ASCII,** which `Integer.parseInt` reads
+    (`GraphPath.java:1177`). `.p[+3]` and `.p[03]` read as `.p[3]`, `.p[-0]` as `.p[0]`, and an index in
+    Arabic-Indic digits as the same index in ASCII digits.
+  - **Escapes in keys that writers never write,** which `StringEscape.unescape` reads (`GraphPath.java:1191`), as
+    listed in item 9 of the
+    [strings document's section 8](2026-11-06-cross-platform-strings.md#8-hazards-to-fix-whatever-is-chosen).
+
+  Fix them one per bug, so that the parser rejects such IDs. The fixes change no file, so like the departures'
+  fixes that change none, they can come at once. Item 9's fixes to `unescape` reject the malformed backslash-u
+  escapes in keys as well. Octal escapes and dropped backslashes wait there for the strings document's
+  decision 14, on literals, but keys need not wait, since no writer writes either. legend-engine, legend-sdlc, and
+  legend-shared never call `GraphPath.parse`, and every reference ID in the platform, pure, and engine files
+  follows the draft's sections 9.1 and 9.2 (verified), so no fix rejects an ID that a writer wrote.
 
 ### Phase 1: serializable-form tooling (F0, F2)
 

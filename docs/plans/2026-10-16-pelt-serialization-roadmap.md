@@ -89,10 +89,11 @@ Option 1, the canonical encoder, with its level-7-like setting.
    - byte identity's Phase 0, the specification of the serializable form and the encoding, with the strings
      document's decisions on the format, made on 2026-11-20: well-formed UTF-8 in files (its decision 1, for
      serialization), the UTF-16 orders in existing versions (9), and ASCII path segments in path provider V1 (10).
-     A draft, `docs/reference/pelt-format.md`, was written the same day. Its review remains, and so do byte
-     identity's decisions 10 and 11, on the digest encoding and on Float and Decimal, for which the draft proposes
-     answers;
-   - the fixes for the departures that the draft lists (its section 12) and that change no file, one per bug;
+     A draft, `docs/reference/pelt-format.md`, was written the same day, and its first review, on 2026-11-21,
+     corrected it. Byte identity's decisions 10 and 11, on the digest encoding and on Float and Decimal, remain,
+     and the draft proposes answers for them;
+   - the fixes for the departures that the draft lists (its section 12) and that change no file, and for the bugs
+     in the reference ID parser that its review found (byte identity's Phase 0), one per bug;
    - the strings document's remaining hazard fixes (its section 8), one per bug, beginning with merging the
      default-charset fixes for legend-pure ([#1405]); and its scans of existing models.
 2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification exists.

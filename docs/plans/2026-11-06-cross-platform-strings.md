@@ -463,6 +463,9 @@ same for the file-name hash, for the same reason.
 **Readers accept more than writers write.** `GraphPath.parse` reads a key with `StringEscape.unescape`, which also
 accepts the escapes that section 8's item 9 lists. The specification states what writers write, and readers accept
 at least that. Rejecting those escapes in literals cannot reject a reference ID, since `escape` writes none of them.
+The byte-identity plan's Phase 0 lists them among the reference ID parser's bugs: keys reject what item 9's fixes
+make errors, and need not wait for decision 14 to reject octal escapes and dropped backslashes, since writers never
+write them.
 
 ### 6.5 File names
 
