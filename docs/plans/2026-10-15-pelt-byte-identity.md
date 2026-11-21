@@ -2,7 +2,7 @@
 
 Status: proposal, 2026-10-15. The decision gate chose Option 1, the canonical encoder, with its level-7-like
 setting, on 2026-11-20. Phase 0's draft was written the same day, and decision 6 was made with it. The draft's
-first review, on 2026-11-21, corrected it and found bugs in the reference ID parser (Phase 0).
+two reviews, on 2026-11-21, corrected it, and the first found bugs in the reference ID parser (Phase 0).
 
 ## Goal
 
@@ -709,8 +709,8 @@ Exit: someone can write a decoder, an encoder, and the content digest from the d
 
 **Status (2026-11-21):** drafted on 2026-11-20, on branch `serialization/pelt_format`, with the strings document's
 decisions 1 (for serialization), 9, and 10, and decision 6. Its digest encoding, its text encoding, and its rule
-that Float and Decimal numerals compare as written are proposals, for decisions 10 and 11. Its first review, on
-2026-11-21, corrected it.
+that Float and Decimal numerals compare as written are proposals, for decisions 10, 13, and 11. Two reviews, on
+2026-11-21, corrected it. It stands on its own and cites no plan, since the plans may never be merged.
 
 - **Checked against the files.** A reader and writer written in Python from the draft alone decoded every element
   and module metadata file of the 5.112.1 platform and pure jars and of 151 legend-engine jars at 5.3.1-SNAPSHOT,
@@ -718,8 +718,8 @@ that Float and Decimal numerals compare as written are proposals, for decisions 
   built, passed, and so did their uncompressed counterparts, except four in one engine module that a case-only
   collision lost (section 5). The text encoding of module metadata was not exercised.
 - **Checked against Java.** Java reads the draft's worked example, which the Python writer produced, as the same
-  form. Java's writer produces the draft's file-name hashes and file names, and its string index test vectors
-  except the three on which it fails (the draft's section 12, item 2).
+  form. Java's writer produces the draft's file-name hashes and file names, those of element back reference files
+  included, and its string index test vectors except the three on which it fails (the draft's section 12, item 2).
 - **Departures.** The draft's section 12 lists where the Java implementation departs from it, each a bug: for
   example, the string index writer fails on strings such as `x[']`, and an Integer literal of more than 20
   characters that fits in a `long` gets the big integer encoding. The fixes that change no file can come at once,
@@ -1015,6 +1015,10 @@ critical path for the invariant.
       more, a fifth more than with the level-7-like setting.
 
     Settings between the two were not measured.
+13. **The text encoding,** in which the corpus holds forms (Phase 3): JSON in one fixed, indented layout, which
+    people can read and diff (recommended), or JSON canonicalized by RFC 8785, an existing scheme, which puts each
+    form on one line with its keys sorted. Either way, equal forms have equal text. The Phase 0 draft follows the
+    first.
 
 ## Outside this plan
 

@@ -280,8 +280,11 @@ character, so nothing reports it.
 - **File systems.** Windows and macOS are case-insensitive by default, both for PELT directories (the byte-identity
   plan's decision 7) and for legend-sdlc's entity files. Windows also reserves device names. On the Windows 11
   machine used for this review, `aux`, `con`, and `lpt1` work as directory names, but `nul` does not: creating it
-  does nothing, and writing `nul/x.pelt` fails (verified). Earlier Windows versions reserve `CON`, `PRN`, `AUX`,
-  `NUL`, `COM1` to `COM9`, and `LPT1` to `LPT9`, with or without an extension.
+  does nothing, and writing `nul/x.pelt` fails (verified). On the same machine, Windows 11 build 26300,
+  `RtlIsDosDeviceName_U`, which classifies a path without opening it, finds only `NUL` without an extension to be a
+  device name once a path has a directory, so `NUL.pelt` and `CON.pelt` are ordinary file names there (verified).
+  Earlier Windows versions reserve `CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, and `LPT1` to `LPT9`, with or
+  without an extension.
 - **Numbers as text.** Pure renders Floats with `DecimalFormat` and English symbols (`CompiledSupport.java:134`),
   which does not depend on the locale, and gave the same output on JDK 17 and 25 for 200,008 doubles (verified).
   `Double.toString` changed in JDK 19: 2,695 of 1,000,008 doubles print differently on JDK 17 and 25, such as
