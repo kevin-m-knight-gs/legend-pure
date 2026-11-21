@@ -6,7 +6,10 @@ section 8's item 2 and the first step of its item 9 went into review, and sectio
 Turkish default locale, `/` parses with the wrong precedence rather than failing to compile. Both are merged:
 [#1402] on 2026-11-19 and [#1403] on 2026-11-20. Decision 11 was made on 2026-11-20: `Locale.ROOT` wherever a
 locale is required. [#1404] carried it out in legend-pure the same day. The default-charset fixes for legend-pure
-(section 8, item 1) went into review on 2026-11-20 as [#1405].
+(section 8, item 1) went into review on 2026-11-20 as [#1405]. Decisions 9 and 10 were also made on 2026-11-20, and
+decision 1 for serialization: PELT files hold well-formed UTF-8, existing versions keep the UTF-16 orders (O1),
+and path provider V1 allows only ASCII path segments. The byte-identity plan's Phase 0 draft,
+`docs/reference/pelt-format.md`, states them.
 Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 [PELT consistency checks](2026-10-15-pelt-consistency-checks.md),
 [path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md), and the
@@ -422,9 +425,9 @@ encoding and the consistency checks' encoding of paths.
 
 ### 6.2 Well-formed UTF-8
 
-Files hold well-formed UTF-8, and writers reject unpaired surrogates (section 3). Loaders may keep decoding
-leniently, for speed. The conformance tools and the corpus tests decode strictly, so a malformed file fails where
-it is checked.
+Files hold well-formed UTF-8, and writers reject unpaired surrogates (section 3). Decided on 2026-11-20, as
+decision 1's part for serialization. Loaders may keep decoding leniently, for speed. The conformance tools and the
+corpus tests decode strictly, so a malformed file fails where it is checked.
 
 ### 6.3 Orders
 
@@ -436,11 +439,11 @@ it is checked.
 | Rust | `encode_utf16().count()`, and comparing `encode_utf16()` iterators | `chars().count()`, and `cmp`, since byte order is code point order | `len()` and `cmp` |
 | C | A short loop | A short loop | `memcmp` |
 
-**Recommendation:** O1 for every existing version, specified exactly, with test vectors that put supplementary
-characters next to U+E000 to U+FFFF. It is cheap in any language, and it changes nothing. A string index, metadata,
-or element version created later for another reason uses O3. Reference ID generation keeps its order until a new
-reference ID version (see the [versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md)), since
-that order decides content.
+**Decided on 2026-11-20 (decision 9):** O1 for every existing version, specified exactly, with test vectors that
+put supplementary characters next to U+E000 to U+FFFF. It is cheap in any language, and it changes nothing. A
+string index, metadata, or element version created later for another reason uses O3. Reference ID generation keeps
+its order until a new reference ID version (see the
+[versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md)), since that order decides content.
 
 ### 6.4 Reference ID text
 
@@ -463,8 +466,9 @@ at least that. Rejecting those escapes in literals cannot reject a reference ID,
 
 ### 6.5 File names
 
-- legend-pure's grammar allows only ASCII element names, so path provider V1 can say so, and serialization can
-  report any other path segment as a build-time error, after a scan of existing models. Two more checks belong with
+- legend-pure's grammar allows only ASCII element names, so path provider V1 says so (decision 10, made on
+  2026-11-20), and serialization reports any other path segment as a build-time error, after a scan of existing
+  models. Two more checks belong with
   it, as build-time errors on every platform: the case-only collisions of the byte-identity plan's decision 7, and
   Windows device names compared without regard to case (`NUL` at least; all of them, for earlier Windows versions).
 - If element names outside ASCII are ever needed, for example if legend-engine models with quoted identifiers
@@ -732,11 +736,12 @@ For the recommended combination. Items marked *now* are the hazards of section 8
 ## 10. Recommendation
 
 1. **The value:** strings are sequences of Unicode scalar values (V2), enforced where they are created or enter.
-   PELT writers reject unpaired surrogates, which settles the byte-identity plan's decision 6.
+   PELT writers reject unpaired surrogates, which settles the byte-identity plan's decision 6. This part was
+   decided on 2026-11-20.
 2. **Coordinates:** columns count code points (C2), under the rules in section 4.
 3. **The language:** string functions count code points (L2), as a separate language decision.
 4. **Serialization:** the mixed approach. UTF-8 with byte-count prefixes, as today; existing orders and escapes
-   specified as UTF-16 rules (O1); and UTF-8 throughout in later versions (O3).
+   specified as UTF-16 rules (O1, decided on 2026-11-20); and UTF-8 throughout in later versions (O3).
 5. **Hazards:** fix those in section 8 now.
 
 In one table:
@@ -760,7 +765,7 @@ In one table:
    that record each store's current results for supplementary characters, with exclusions where needed, so that the
    differences are visible before L2 changes them.
 2. **With the byte-identity plan's Phases 0 and 3:** the string rules in `pelt-format.md` (6.1 to 6.5), and the
-   corpus cases.
+   corpus cases. Phase 0's draft of 2026-11-20 states the rules; the corpus cases remain.
 3. **After decisions 1, 3, 4, and 5:** V2 enforcement, C2 in legend-pure's parsers and language server,
    legend-engine's end columns, and the front ends' conversions, under one release note.
 4. **After decision 6:** L2 in both Java engines, the Java platform binding, and the relational dialects, with PCT
@@ -769,7 +774,9 @@ In one table:
 
 ## 12. Decisions to make
 
-1. **The string value:** V2 (recommended), or V1.
+1. **The string value:** V2 (recommended), or V1. Decided on 2026-11-20 for serialization, at least: PELT files
+   hold well-formed UTF-8, and writers reject unpaired surrogates (6.2). That settles the byte-identity plan's
+   decision 6. Whether V2 also binds the language, for literals, function results, and data from outside, is open.
 2. **Unpaired surrogates arriving at run time** from stores, JSON, or files: reject them, or replace them with
    U+FFFD.
 3. **The column unit:** C2 (recommended), C1, or C3.
@@ -779,9 +786,9 @@ In one table:
 7. **`trim`:** for all three functions, either Java whitespace, as `ltrim` and `rtrim` use today, or code points up
    to U+0020, as `trim` uses today.
 8. **`split`:** a literal separator, as documented, or a set of characters, as implemented.
-9. **Orders in existing versions:** O1 written down (recommended), or new versions now.
-10. **Path segments in path provider V1:** ASCII only (recommended), or a new path provider version now, by one of
-    the options in 6.5.
+9. **Orders in existing versions:** decided on 2026-11-20: O1, written down in `pelt-format.md`, section 2.3.
+10. **Path segments in path provider V1:** decided on 2026-11-20: ASCII only, with any other segment a build-time
+    error (`pelt-format.md`, section 8.2). Names outside ASCII wait for a later path provider version (decision 13).
 11. **Case mapping:** decided on 2026-11-20: `Locale.ROOT` everywhere a locale is required, for case mapping and for
     formatting alike, with any locale-aware variants as separate functions. Done in legend-pure ([#1404]).
 12. **A code point escape in literals,** such as `\u{1F600}`: add it, or not.

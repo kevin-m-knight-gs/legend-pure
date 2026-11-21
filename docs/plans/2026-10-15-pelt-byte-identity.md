@@ -1,7 +1,7 @@
 # Plan: byte-identical PELT files
 
 Status: proposal, 2026-10-15. The decision gate chose Option 1, the canonical encoder, with its level-7-like
-setting, on 2026-11-20.
+setting, on 2026-11-20. Phase 0's draft was written the same day, and decision 6 was made with it.
 
 ## Goal
 
@@ -573,29 +573,39 @@ it the three benefits above. Whether they are worth more than today's compressio
 ## 5. Other details a specification has to pin down
 
 - **String order and length.** Defined on UTF-16 code units, matching `String.compareTo` and `String.length()`.
-  Non-Java implementations must convert or compare accordingly.
-- **Unpaired surrogates.** Writers should reject them with an error naming the element and property. Java's
-  current behavior writes `?` and loses the value. First, scan existing models to confirm none occur. The scan has
-  to look at sources or compiled graphs, since existing binaries already hold `?` in their place.
+  Non-Java implementations must convert or compare accordingly. Decided on 2026-11-20 for every existing version
+  (the strings document's decision 9).
+- **Unpaired surrogates.** Writers reject them with an error naming the element and property (decision 6, made on
+  2026-11-20). Java's current behavior writes `?` and loses the value. First, scan existing models to confirm none
+  occur. The scan has to look at sources or compiled graphs, since existing binaries already hold `?` in their
+  place.
 - **Values in the serializable form.** It keeps everything that an encoding keeps (F0):
   - **Float and Decimal.** V1 writes a sign and digit strings taken from the instance name (`BaseV1.java:175`),
     but `Value` holds a `BigDecimal` (`Value.java:318` and `:338`), which loses the sign of a negative zero and
     any leading zeros. If such names occur, files that differ decode to equal serializable forms. The serializable
-    form keeps the sign and the digit strings, and compares by them; the `BigDecimal` stays available.
+    form keeps the sign and the digit strings, and compares by them; the `BigDecimal` stays available. Java's own
+    names cannot hold either: they are `BigDecimal.toPlainString()` (`SimpleFloatCoreInstance`,
+    `SimpleDecimalCoreInstance`), so `-0.0` is named `0.0` and `007.50` is `7.5` as a Float and `7.50` as a Decimal
+    (verified). What `Value` does lose is an exponent's scale: `1e3d` is `1E+3` in the graph and `1000` once
+    decoded, equal as numbers but not under `BigDecimal.equals`.
   - **Integers** are values, whatever Java type holds them. `Value` compares them by Java type, so an `Integer` 5
     differs from a `Long` 5, and V1 chooses between its two integer encodings by Java type too (`BaseV1.java:222`).
     Both are consistent today, because `ModelRepository` and the deserializer choose types the same way. The
-    specification states the rules by value, as other languages need, and `Value` and the encoder follow them.
+    specification states the rules by value, as other languages need, and `Value` and the encoder follow them. One
+    case departs from the rule by value: `ModelRepository` makes an Integer literal of more than 20 characters a
+    `BigInteger` even when its value fits in a `long`, as `000000000000000000001` does, and V1 then writes the
+    big integer encoding (verified; `ModelRepository.java:602`). None occurs in the files checked in Phase 0.
   - **Compile states** are a set of named states. The bitset, which depends on the order of the `CompileState`
     enum, is V1's encoding of that set.
-- **File names.** The 126-unit limit applies to each path segment, extension included. A longer segment is cut so
-  that the kept part, a 13-character hash suffix, and the extension fill exactly 126 units, except that the cut
-  moves back one unit rather than split a surrogate pair. The hash runs over the code points of the part cut off.
-  Starting from zero, for each code point, the hash applies Eclipse Collections' `SpreadFunctions.longSpreadOne`
-  to the running value and adds the code point. `longSpreadOne` is five operations on a 64-bit value: three
-  xor-shifts and two multiplications by constants. Specify it exactly, with test vectors, and credit Eclipse
-  Collections (EPL-1.0 and EDL-1.0) as its source; base-32 digits `0-9a-v` (`Long.toUnsignedString(x, 32)`);
-  left-padded with `0` to 13 characters.
+- **File names.** Path segments are ASCII in path provider V1, and serialization reports any other as a build-time
+  error (decided on 2026-11-20, the strings document's decision 10). The 126-unit limit applies to each path segment,
+  extension included. A longer segment is cut so that the kept part, a 13-character hash suffix, and the extension
+  fill exactly 126 units, except that the cut moves back one unit rather than split a surrogate pair. The hash runs
+  over the code points of the part cut off. Starting from zero, for each code point, the hash applies Eclipse
+  Collections' `SpreadFunctions.longSpreadOne` to the running value and adds the code point. `longSpreadOne` is five
+  operations on a 64-bit value: three xor-shifts and two multiplications by constants. Specify it exactly, with test
+  vectors, and credit Eclipse Collections (EPL-1.0 and EDL-1.0) as its source; base-32 digits `0-9a-v`
+  (`Long.toUnsignedString(x, 32)`); left-padded with `0` to 13 characters.
 - **Keeping the file-name hash.** `SpreadFunctions` does not document its output as stable, so two writers with
   different Eclipse Collections versions could name the same file differently. A copy of `longSpreadOne` in
   `FilePathTools`, with tests that pin its output, removes that risk along with the runtime dependency; only the
@@ -620,7 +630,11 @@ it the three benefits above. Whether they are worth more than today's compressio
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
   directory, the later write silently replaces the earlier file. A build-time error on every platform is the
   simplest fix. Such models build today on case-sensitive file systems, so first scan existing models for any that
-  the error would break.
+  the error would break. Phase 0's check of the corpora found one: in legend-engine,
+  `legend-engine-xt-analytics-quality-pure` defines the enumerations `INVALID` and `Invalid`, and `invalid1` and
+  `Invalid1`, in one package, as test data for its naming checks (verified). Its jar holds all eight of their
+  files, but written to or unpacked onto a case-insensitive file system, four of them are lost without an error.
+  The error would need one enumeration of each pair renamed first.
 - **Constants.** File signatures (for example `Long.parseLong("PureManifest", 36)`) and version numbers, listed as
   numbers.
 - **Special strings.** The special-string table in `BaseStringIndex` (`SPECIAL_STRING_IDS`), listed in full.
@@ -691,6 +705,23 @@ The rest of F3, including how reference IDs are generated, is what a compiler mu
 serializable forms. It comes in Phase 6.
 
 Exit: someone can write a decoder, an encoder, and the content digest from the document alone. Phase 6 tests that.
+
+**Status (2026-11-20):** drafted, on branch `serialization/pelt_format`, with the strings document's decisions 1
+(for serialization), 9, and 10, and decision 6. Its digest encoding, its text encoding, and its rule that Float and
+Decimal numerals compare as written are proposals, for decisions 10 and 11. Its review remains.
+
+- **Checked against the files.** A reader and writer written in Python from the draft alone decoded every element
+  and module metadata file of the 5.112.1 platform and pure jars and of 151 legend-engine jars at 5.3.1-SNAPSHOT,
+  re-encoded each to the same bytes, and computed each file's path (verified). The compressed files, as released or
+  built, passed, and so did their uncompressed counterparts, except four in one engine module that a case-only
+  collision lost (section 5). The text encoding of module metadata was not exercised.
+- **Checked against Java.** Java reads the draft's worked example, which the Python writer produced, as the same
+  form. Java's writer produces the draft's file-name hashes and file names, and its string index test vectors
+  except the three on which it fails (the draft's section 12, item 2).
+- **Departures.** The draft's section 12 lists where the Java implementation departs from it, each a bug: for
+  example, the string index writer fails on strings such as `x[']`, and an Integer literal of more than 20
+  characters that fits in a `long` gets the big integer encoding. The fixes that change no file can come at once,
+  one per bug; the others wait for a scan of existing models.
 
 ### Phase 1: serializable-form tooling (F0, F2)
 
@@ -930,12 +961,13 @@ critical path for the invariant.
    they publish PELTs.
 5. **The module index of content digests (5a):** needed if the plan settles at Option 5, useful in the interim,
    and unnecessary once byte identity is restored, since raw files then work with generic tools.
-6. **Unpaired surrogates:** reject them (recommended), or encode them, for example as WTF-8, which is a format
-   change.
+6. **Unpaired surrogates:** decided on 2026-11-20: writers reject them, as the strings document's decision 1
+   requires of serialization. Encoding them, for example as WTF-8, would have been a format change.
 7. **Case-only path collisions:** a build-time error (recommended), or file-name escaping in a new path provider
-   version. Escaping renames every file it applies to, which depending on the scheme could be nearly all of them,
-   and neither earlier nor later readers would find those files across the change: readers compute file names with
-   the default path provider version, and nothing records which version wrote a module. The
+   version. The error would break one legend-engine module until it renames two test enumerations (section 5).
+   Escaping renames every file it applies to, which depending on the scheme could be nearly all of them, and neither
+   earlier nor later readers would find those files across the change: readers compute file names with the default
+   path provider version, and nothing records which version wrote a module. The
    [path provider and reference ID versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md)
    fixes this for later readers. Earlier readers would then reject each renamed module when they load its
    manifest.
@@ -946,7 +978,9 @@ critical path for the invariant.
     (F0).
 11. **Float and Decimal in the serializable form:** the sign and digit strings as written (recommended), or
     numeric values, with every encoder writing canonical digit strings. The second changes the bytes of any
-    element with a negative zero or leading zeros in such a value.
+    element with a negative zero or leading zeros in such a value. Java's names hold neither (section 5), so the
+    second changes no file Java writes if its canonical digit strings keep a Decimal's scale, as `toPlainString`
+    does. The Phase 0 draft follows the first.
 12. **The canonical encoder's setting:** decided on 2026-11-20: the level-7-like setting. The encoder is frozen
     with one setting, and changing it later takes a new extension version. The prototype measured two
     ([results](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder)):
