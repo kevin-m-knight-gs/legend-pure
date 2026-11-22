@@ -630,10 +630,19 @@ it the three benefits above. Whether they are worth more than today's compressio
     literals follow. Computed Decimals keep `BigDecimal`'s own scale, in arithmetic (`CompiledSupport.java:1363`),
     equality (`:1010`), and strings (`:1278`), so the compiled engine needs the same rule, or the two engines
     disagree on them.
+  - **`round(decimal, scale)`** exists to set a scale, in both engines (`RoundWithScale.java:58`,
+    `CoreHelper.java:508`). Under the rule, its result no longer keeps that scale: `1.5d->round(2)->toString()`
+    gives `1.5`, not `1.50`. Its PCT tests would not notice, since none of their values ends in zero
+    (`round.pure:140` to `:143`).
   - **Pure code** that turns Decimals into text writes canonical numerals too, for example `toRepresentation`
     (`toRepresentation.pure:46`), through which legend-engine's Pure grammar composer writes Decimals
-    (`toPureGrammar.pure:119`). So the scan covers legend-pure's and legend-engine's test expectations, as well as
-    the models' files.
+    (`toPureGrammar.pure:119`).
+  - **SQL.** legend-engine's SQL generation writes Decimal literals with `toString` by default
+    (`extensionDefaults.pure:135`). So `1.50d` goes out as `1.5`, and `1d` as `1.0` rather than `1`, which SQL
+    reads as a decimal or floating-point literal, not an integer. A database can then give the expression another
+    type, and its results another scale.
+  - **The scan** therefore covers legend-pure's and legend-engine's test expectations, as well as the models'
+    files.
 - **File names.** Path segments are ASCII in path provider V1, and serialization reports any other as a build-time
   error (decided on 2026-11-20, the strings document's decision 10). The 126-unit limit applies to each path segment,
   extension included. A longer segment is cut so that the kept part, a 13-character hash suffix, and the extension
@@ -1015,8 +1024,8 @@ critical path for the invariant.
   (`ClassPeltImplProcessor.java:438`).
 - **The value fixes** keep `Value`'s methods and change its equality only in the cases that section 5 lists.
 - **Canonical Decimal names** (decision 14) change no format, so earlier readers read the new files. They change
-  the bytes of every element with a Decimal that the rule renames, and what `==` and `toString` give for such
-  Decimals in both engines (section 5).
+  the bytes of every element with a Decimal that the rule renames, and the behavior that section 5 lists: what
+  `==`, `toString`, and `round` give in both engines, and the SQL that legend-engine generates.
 - **Comparisons by serializable form, and content digests,** change no file.
 - **Option 5's method for decompressed payloads,** added only if the plan settles there, has a default, so the
   interfaces stay compatible.
