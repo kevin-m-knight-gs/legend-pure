@@ -1,6 +1,6 @@
 # PELT serialization plans: roadmap
 
-Status: 2026-10-16.
+Status: 2026-10-16, last updated 2026-11-22.
 
 Three plans change PELT serialization. A fourth document sets out options for handling strings across platforms
 and languages: some of its decisions become rules in the byte-identity specification, and the rest reach beyond
@@ -10,7 +10,7 @@ how they depend on each other, the rules they share, and the order to do them in
 | Plan | What it does | When |
 |---|---|---|
 | [Byte-identical PELT files](2026-10-15-pelt-byte-identity.md) | Defines a serializable form of each element, makes every PELT file a function of its content alone, and specifies the format | Now |
-| [PELT consistency checks](2026-10-15-pelt-consistency-checks.md) | Finds, before any element loads, modules built against other versions of their dependencies | After the byte-identity plan's Phase 2 |
+| [PELT consistency checks](2026-10-15-pelt-consistency-checks.md) | Finds, before any element loads, modules built against other versions of their dependencies | After the byte-identity plan's Phase 3 and the versions plan's Phase 2 |
 | [More than one path provider or reference ID version](2026-10-16-pelt-path-provider-and-reference-id-versions.md) (the versions plan) | Lets modules written with different versions of either extension load together | Phase 1 done; Phase 2 early; Phase 3 when a new version is wanted |
 | [Strings across platforms and languages](2026-11-06-cross-platform-strings.md) (the strings document) | Sets out options for the string value, source coordinates, the language's string functions, and the format's string rules, and lists hazards to fix whatever is chosen | Hazard fixes now; format decisions with the byte-identity plan's Phase 0, coordinate decisions before its Phase 6, and language decisions separately |
 
@@ -19,13 +19,16 @@ how they depend on each other, the rules they share, and the order to do them in
 - **Byte identity depends on neither of the other plans.** It keeps today's file-name hash and recommends a
   build-time error for case-only path collisions. Only the alternative to that error, escaping, would need a new
   path provider version.
-- **The consistency checks depend on byte identity through its Phase 2:** the specification, including the
-  serializable form and its digest encoding (Phase 0), the serializable-form tooling (Phase 1), and the generator,
+- **The consistency checks depend on byte identity through its Phase 3:** the specification, including the
+  serializable form and its digest encoding (Phase 0), the serializable-form tooling (Phase 1), the generator,
   the encoders that take serializable forms, and canonical uncompressed payloads from a deterministic compiler
-  (Phase 2). ECDs are digests of the generator's serializable forms. They do not depend on byte identity's
-  decision about compression: their file's details are compressed however module metadata ends up compressed.
-- **The versions plan:** Phase 1, now done, depended on nothing. Phase 2 needs byte identity's specification.
-  Phase 3's new metadata version follows byte identity's decision about compression.
+  (Phase 2), and the conformance corpus, which their file joins (Phase 3). ECDs are digests of the generator's
+  serializable forms, so they do not depend on compression. Their file's details are compressed as module metadata
+  is: with today's deflater until byte identity's Phase 5 adopts the canonical encoder, and with that encoder from
+  then on. They also depend on the versions plan's Phase 2 (below).
+- **The versions plan:** Phase 1, now done, depended on nothing. Phase 2 adds to byte identity's specification,
+  so it waits for that specification to be merged. Phase 3 needs two new metadata versions, an uncompressed one
+  and a compressed one, since byte identity keeps both kinds of metadata in use (its F2).
 - **The strings document depends on none of the plans, and they wait for it only in text.** It agrees with byte
   identity's decisions 6 and 7, and adds Windows device names and non-ASCII path segments to decision 7's
   build-time error. Byte identity's specification (Phase 0) writes down the format rules it recommends: well-formed
@@ -80,24 +83,26 @@ The versions plan's Phase 1, which fixed latent bugs, is done. So is the bufferi
 measurements recommended ([#1401]), which changes no file. So are two of the strings document's hazard fixes: the
 default-locale fixes ([#1403], and [#1404] for its decision 11), and the first step for `StringEscape` ([#1402]),
 after which legend-pure's own code writes the reference ID escapes that byte identity's Phase 0 specifies. So is
-byte identity's Phase 4: Option 4 fell short on size in directories, a prototype of the canonical encoder wrote
-files smaller than today's at today's speed
+byte identity's decision gate, at the end of its Phase 4: Option 4 fell short on size in directories, a prototype
+of the canonical encoder wrote files smaller than today's at today's speed
 ([PELT compression measurements](2026-11-18-pelt-compression-measurements.md)), and on 2026-11-20 the gate chose
-Option 1, the canonical encoder, with its level-7-like setting.
+Option 1, the canonical encoder, with its level-7-like setting. None of the largest models was measured, and the
+gate was decided without them.
 
 1. **Now, in parallel:**
    - byte identity's Phase 0, the specification of the serializable form and the encoding, with the strings
      document's decisions on the format, made on 2026-11-20: well-formed UTF-8 in files (its decision 1, for
      serialization), the UTF-16 orders in existing versions (9), and ASCII path segments in path provider V1 (10).
-     A draft, `docs/reference/pelt-format.md`, was written the same day, and two reviews, on 2026-11-21, corrected
-     it. Byte identity's decisions 10, 11, and 13, on the digest encoding, on Float and Decimal, and on the text
-     encoding, remain, and the draft proposes answers for them;
+     A draft, `docs/reference/pelt-format.md`, was written the same day, and two reviews, on 2026-11-21, and a
+     third, on 2026-11-22, corrected it. Byte identity's decisions 10, 11, and 13, on the digest encoding, on Float
+     and Decimal, and on the text encoding, remain, and the draft proposes answers for them;
    - the fixes for the departures that the draft lists (its section 12) and that change no file, and for the bugs
      in the reference ID parser that its first review found (byte identity's Phase 0), one per bug;
    - the strings document's remaining hazard fixes (its section 8), one per bug, beginning with merging the
      default-charset fixes for legend-pure ([#1405]); and its scans of existing models.
-2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification exists.
-3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 2 is done.
+2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification is merged.
+3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 3 and the
+   versions plan's Phase 2 are done.
    Meanwhile, byte identity's Phase 5, which adopts the canonical encoder.
 4. **When wanted:** byte identity's Phase 6, rules for compilers and a second implementation, with the non-Java
    work, once the strings document's decisions on coordinates (its decisions 3 to 5) are made; and the versions

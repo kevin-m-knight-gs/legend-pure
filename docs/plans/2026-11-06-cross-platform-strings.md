@@ -18,12 +18,13 @@ Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 ## Purpose
 
 The [byte-identity plan](2026-10-15-pelt-byte-identity.md) defines string order and length in UTF-16 code units
-(its [section 5](2026-10-15-pelt-byte-identity.md#5-other-details-a-specification-has-to-pin-down)), and leaves
+(its [section 5](2026-10-15-pelt-byte-identity.md#5-other-details-a-specification-has-to-pin-down)), and left
 three string questions open: unpaired surrogates (its
 [decision 6](2026-10-15-pelt-byte-identity.md#9-decisions-to-make)), case-only path collisions (its decision 7),
 and the column units of source information (its
-[F3](2026-10-15-pelt-byte-identity.md#f3-graph-to-content-rules-for-a-second-compiler)). None of them can be
-settled for PELT alone. Column units belong to every parser and to every tool that shows a position. String lengths
+[F3](2026-10-15-pelt-byte-identity.md#f3-graph-to-content-rules-for-a-second-compiler)). Decision 1 here has since
+settled its decision 6 for serialization, but the language-wide parts of these questions cannot be settled for
+PELT alone. Column units belong to every parser and to every tool that shows a position. String lengths
 belong to the Pure language, which runs in two Java engines, in generated Java, and in databases, and may one day
 run in other languages. This document:
 
@@ -46,7 +47,9 @@ programs on Temurin JDK 25.0.5, by reading the OpenJDK jdk17u, jdk21u, and jdk25
 in a local Maven repository. Statements added or corrected on 2026-11-19 were checked at legend-pure `6352a7942`,
 by tests on Temurin JDK 25.0.5, and by small programs on JDK 11, 17, and 25. Statements updated on 2026-11-20,
 after those fixes merged, were checked at legend-pure `bfc29ad40` and legend-engine `cb5d33f4c65`, by reading the
-code and with small programs on Temurin JDK 25.0.5.
+code and with small programs on Temurin JDK 25.0.5. Statements corrected on 2026-11-22 were checked at legend-pure
+`a67907c83` and legend-engine `cb5d33f4c65`, by reading the code. The legend-pure line references in sections 1.3
+and 1.4 are to `a67907c83`.
 
 ## Terms
 
@@ -128,7 +131,7 @@ Strings are never normalized (to NFC or otherwise), and two strings are equal wh
 | Line terminators | The lexers start a new line at LF only, as ANTLR does; CR is whitespace and takes a column. Multi-line literals and documentation treat LF, CRLF, and CR as terminators and normalize them to LF (`MultilineTextLayout.java:50`), and single-line literals cannot contain CR or LF (`M4Fragment.g4:7`). So a CRLF checkout gives the same lines, token columns, and string values as an LF checkout (token positions verified). A lone CR ends a line in a multi-line literal and in editors, but not in line numbers. |
 | Tabs | One column. |
 | Identifiers | legend-pure: ASCII letters, digits, `_`, and `$` (`M4Fragment.g4:27`), except that property and column names may be quoted strings (`M3CoreParser.g4:104` and `:495`). legend-engine: any identifier may be a quoted string (`M3ParserGrammar.g4:8`), including package and element names (`CoreParserGrammar.g4:3`), so element names can hold any text. legend-sdlc: entity paths allow only ASCII letters, digits, `_`, and `$` (`EntityPaths.java`). |
-| Composed text | legend-engine's grammar composer escapes string literals with `escapeJava` (`PureGrammarComposerUtility.java:106`), which writes each non-ASCII character as backslash-u escapes of its UTF-16 code units. Text it composes, including legend-sdlc's `.pure` entity files, is therefore ASCII. |
+| Composed text | legend-engine's grammar composer escapes string literals with `escapeJava` (`PureGrammarComposerUtility.java:123`, and `:106` for double-quoted strings), which writes each non-ASCII character as backslash-u escapes of its UTF-16 code units. Text it composes, including legend-sdlc's `.pure` entity files, is therefore ASCII, except where it writes strings unescaped: `convertString` escapes only when its caller asks, and `renderObject` never does (`PureGrammarComposerUtility.java:200` to `:204`), as for file generation configuration values. |
 | In practice | 162 `.pure` files in legend-pure, and 233 in legend-engine, contain non-ASCII text, mostly punctuation in documentation. No `.pure` file in the four repositories contains a supplementary character, written literally or escaped (verified). |
 | Line endings in git | None of the four repositories has a `.gitattributes` file, so Windows checkouts with `core.autocrlf=true` get CRLF. |
 
@@ -140,7 +143,7 @@ stream's:
 
 | Parsers | Char stream | Start columns | End columns |
 |---|---|---|---|
-| legend-pure: M3 (`M3AntlrParser.java:654`), M4, diagram, graph, path, relational, aggregation-aware, enumeration mapping, and relation mapping | `ANTLRInputStream` | UTF-16 code units | Start plus the token text's UTF-16 length (`AntlrSourceInformation.java:86`): consistent |
+| legend-pure: M3 (`M3AntlrParser.java:701`), M4, diagram, graph, path, relational, aggregation-aware, enumeration mapping, and relation mapping | `ANTLRInputStream` | UTF-16 code units | Start plus the token text's UTF-16 length (`AntlrSourceInformation.java:86`): consistent |
 | legend-pure: sections (`TopParser.java:57`), mapping (`MappingParser.java:191`), and operation (`OperationParser.java:158`) | `CharStreams.fromString` | Code points | Start plus the token text's UTF-16 length: mixed |
 | legend-engine: every grammar parser, in 48 files (for example `PureGrammarParser.java:115`) | `CharStreams.fromString` | Code points | Start plus the token text's UTF-16 length (`ParseTreeWalkerSourceInformation.java:111`): mixed |
 
@@ -181,10 +184,10 @@ The functions' documentation speaks of characters without defining them. In both
 | `length` | UTF-16 code units | `CompiledSupport.java:1569`; interpreted `Length.java:49` |
 | `substring`, `substr` | UTF-16 indexes; can split a pair | `CompiledSupport.java:1546`; `SubString.java:56` |
 | `indexOf`, `lastIndexOf`, `idxOf` | UTF-16 indexes | `CompiledSupport.java:1531` |
-| `reverseString` | Code points: `StringBuilder.reverse` keeps pairs together (verified) | `CoreHelper.java:1219`; `ReverseString.java:51` |
-| `toUpper`, `toLower` | Java's full case mapping in the JVM's default locale; the length can change (U+00DF uppercases to `SS`) | `CoreHelper.java:1224`; `ToUpper.java:51` |
-| `trim` | Removes code points up to U+0020 (`String.trim`) | `CoreHelper.java:1234`; `Trim.java:51` |
-| `ltrim`, `rtrim` | Remove Java whitespace (`StringUtils.stripStart` and `stripEnd`), so they disagree with `trim`: only `trim` removes U+0001, and only `ltrim` and `rtrim` remove U+2003 (verified) | `CoreHelper.java:1239`; `LTrim.java:52` |
+| `reverseString` | Code points: `StringBuilder.reverse` keeps pairs together (verified) | `CoreHelper.java:1220`; `ReverseString.java:51` |
+| `toUpper`, `toLower` | Java's full case mapping in the root locale (the JVM's default locale before [#1404]; the Java platform binding's generated code still uses the default, 1.7); the length can change (U+00DF uppercases to `SS`) | `CoreHelper.java:1225` and `:1230`; `ToUpper.java:52` |
+| `trim` | Removes code points up to U+0020 (`String.trim`) | `CoreHelper.java:1235`; `Trim.java:51` |
+| `ltrim`, `rtrim` | Remove Java whitespace (`StringUtils.stripStart` and `stripEnd`), so they disagree with `trim`: only `trim` removes U+0001, and only `ltrim` and `rtrim` remove U+2003 (verified) | `CoreHelper.java:1240`; `LTrim.java:52` |
 | `split` | `StringTokenizer`: the separator is a set of code points, and empty pieces are dropped, though the documentation says the separator is matched literally. `'ab'->split('ba')` returns an empty collection (verified). | `CompiledSupport.java:207`; `Split.java:54` |
 | `compare`, `sort`, `<` | UTF-16 code unit order (`String.compareTo`) | `CompiledSupport.java:583` |
 | `ascii` (legend-engine) | The first UTF-16 code unit | `FunctionsHelper.java:285` |
@@ -219,7 +222,7 @@ character, so nothing reports it.
 | Length prefixes | UTF-8 byte counts, in the string index and in m4's `writeString`. |
 | String index order | UTF-16 length, then UTF-16 code unit order (`StringWriterV3.java:307`). |
 | Other orders | Module metadata (`String.compareTo`, at the five sites that the byte-identity plan lists in its section 1.1), node properties by name (`SerializerV1.java:544`), and candidate paths in reference ID generation, by UTF-16 length and then code unit order (`ReferenceIdGenerator.java:412`). The last is a generation rule: it decides content, not only its encoding. |
-| Reference ID text | Keys are escaped by `StringEscape.escape` (`GraphPath.java:871`). It puts a backslash before `'` and `\`, writes `\b`, `\t`, `\n`, `\f`, and `\r` for those five control characters, and writes every other code unit outside U+0020 to U+007F as a backslash-u escape with four uppercase hex digits (`StringEscape.java:150` to `:156`). IDs are ASCII, with UTF-16 escapes. legend-pure's own code has done the work since [#1402]; a third-party library did before (6.4). |
+| Reference ID text | Keys are escaped by `StringEscape.escape` (`GraphPath.java:871`). It puts a backslash before `'` and `\`, writes `\b`, `\t`, `\n`, `\f`, and `\r` for those five control characters, and writes every other code unit outside U+0020 to U+007F as a backslash-u escape with four uppercase hex digits (`StringEscape.java:150` to `:156`). Keys are ASCII, with UTF-16 escapes, so IDs are ASCII whenever their property names are, as the metamodel's own are; a property declared with a quoted name can put other text in an ID (`pelt-format.md`, section 12, item 9). legend-pure's own code has done the work since [#1402]; a third-party library did before (6.4). |
 | Source information | Six integers per node, in the unit of whichever parser produced them. No unit is recorded. |
 | File names | Each path segment, extension included, is limited to 126 UTF-16 code units, to fit 255 bytes of UTF-16 (`FilePathTools.java:24`). The overflow hash runs over code points (`FilePathTools.java:205`). Linux file systems such as ext4 limit a name to 255 bytes, which 126 characters from U+0800 to U+FFFF exceed in UTF-8 (378 bytes). This cannot happen today, since legend-pure's grammar allows only ASCII element names. Section 6.5 has options for names outside ASCII. |
 
@@ -307,7 +310,9 @@ character, so nothing reports it.
 | R6 | Existing binaries keep loading, and format changes follow the roadmap's shared rules. |
 
 Today, R3 and R4 fail after supplementary characters, and R5 fails for unpaired surrogates and malformed input. R1
-failed on the default locale, in legend-pure's parsers and generators, until [#1403].
+failed on the default locale, in legend-pure's parsers and generators, until [#1403]. It still fails on
+case-insensitive file systems for modules whose element paths differ only in case (the byte-identity plan's
+decision 7): unpacked on Windows, legend-engine's `core_analytics_quality` loses four of its files.
 
 ## 3. The string value
 
@@ -329,10 +334,11 @@ it the question of how to store one. Enforcement points:
   character under code point indexes (section 5); legend-engine's `char`, which should reject surrogates and values
   above U+10FFFF; and decoding functions such as `decodeBase64`, which should decode strictly.
 - **Data from outside** (stores, JSON, and files): reject it, or replace with U+FFFD and say so (decision 2).
-- **PELT writers:** reject, as the byte-identity plan's decision 6 recommends. Under V2 this is a backstop.
+- **PELT writers:** reject, as the byte-identity plan's decision 6 requires, decided on 2026-11-20. Under V2 this
+  is a backstop.
 
-The byte-identity plan already scans existing models for unpaired surrogates before writers reject them. The same
-scan informs the rule for literals.
+The byte-identity plan's Phase 2 scans existing models for unpaired surrogates before writers reject them.
+The same scan informs the rule for literals.
 
 ## 4. Source coordinates
 
@@ -423,8 +429,9 @@ same time (decisions 7 and 8).
 ### 6.1 Length prefixes
 
 UTF-8 byte counts, as today. A reader can skip or allocate without decoding, and every language has the count at
-hand. The specification says "the length in bytes of the UTF-8 encoding", and so do the byte-identity plan's digest
-encoding and the consistency checks' encoding of paths.
+hand. The specification says so in its section 2.2: "A length that precedes UTF-8 bytes counts the bytes." Its
+digest encoding (section 10.1), which the consistency checks also use for paths, writes a `u32` count of UTF-8
+bytes.
 
 ### 6.2 Well-formed UTF-8
 
@@ -436,17 +443,19 @@ corpus tests decode strictly, so a malformed file fails where it is checked.
 
 | | O1. UTF-16 (today) | O2. Code points | O3. UTF-8 bytes |
 |---|---|---|---|
-| Sort key | UTF-16 length, then code units | Code point count, then code points | Byte length, then bytes |
+| Sort key | Code units; the string index puts the UTF-16 length first | Code points; the string index puts the code point count first | Bytes; the string index puts the byte length first |
 | Existing files that change | None | Those with a supplementary character in a sorted string | Those with any non-ASCII sorted string, such as documentation |
 | Java | Built in | A comparator and a count | The writer has the bytes anyway |
 | Rust | `encode_utf16().count()`, and comparing `encode_utf16()` iterators | `chars().count()`, and `cmp`, since byte order is code point order | `len()` and `cmp` |
 | C | A short loop | A short loop | `memcmp` |
 
 **Decided on 2026-11-20 (decision 9):** O1 for every existing version, specified exactly, with test vectors that
-put supplementary characters next to U+E000 to U+FFFF. It is cheap in any language, and it changes nothing. A
-string index, metadata, or element version created later for another reason uses O3. Reference ID generation keeps
-its order until a new reference ID version (see the
+put supplementary characters next to U+E000 to U+FFFF. It is cheap in any language, and it changes nothing.
+Reference ID generation keeps its order until a new reference ID version (see the
 [versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md)), since that order decides content.
+
+**Recommended for later versions:** a string index, metadata, or element version created later for another reason
+uses O3, as the specification allows (its section 2.3). Decision 9 covers existing versions only.
 
 ### 6.4 Reference ID text
 
@@ -464,11 +473,11 @@ unit and what `unescape` accepts. m4 no longer depends on commons-lang3. The byt
 same for the file-name hash, for the same reason.
 
 **Readers accept more than writers write.** `GraphPath.parse` reads a key with `StringEscape.unescape`, which also
-accepts the escapes that section 8's item 9 lists. The specification states what writers write, and readers accept
-at least that. Rejecting those escapes in literals cannot reject a reference ID, since `escape` writes none of them.
-The byte-identity plan's Phase 0 lists them among the reference ID parser's bugs: keys reject what item 9's fixes
-make errors, and need not wait for decision 14 to reject octal escapes and dropped backslashes, since writers never
-write them.
+accepts the escapes that section 8's item 9 lists, except those with fewer than four hex digits, which it rejects.
+The specification states what writers write, and readers accept at least that. Rejecting those escapes in literals
+cannot reject a reference ID, since `escape` writes none of them. The byte-identity plan's Phase 0 lists them among
+the reference ID parser's bugs: keys reject what item 9's fixes make errors, and need not wait for decision 14 to
+reject octal escapes and dropped backslashes, since writers never write them.
 
 ### 6.5 File names
 
@@ -559,8 +568,8 @@ N2 keeps names readable, and holds unless APFS counts UTF-8 bytes. Both keep V1'
 files, and leaves no margin at the most common limit. Two checks would inform the choice:
 
 1. On a Mac with JDK 17, write a hashed N2 name of Korean text to an APFS volume, and see whether it fails.
-2. Measure N2's and N3's checks against V1's with JMH. In a rough first run, both added well under a microsecond
-   per path, N3 more than N2.
+2. Measure N2's and N3's checks against V1's with JMH. A rough first run suggested that both are cheap, N3 more
+   than N2.
 
 ### 6.6 Source information
 
@@ -638,16 +647,17 @@ Each is a small, separate fix that can start now:
    charset, so without such a run they would not notice a fix being undone.
 9. **`StringEscape`.** First, replace commons-lang3 with legend-pure's own code, with no change in behavior (6.4),
    which [#1402] did. Then fix what literals inherit from the library. The grammar names `\b`, `\t`, `\n`, `\f`,
-   `\r`, `\"`, `\'`, `\\`, and backslash-u escapes (`M4Fragment.g4:41`), but `unescape` also accepts these
-   (verified):
+   `\r`, `\"`, `\'`, `\\`, and backslash-u escapes (`M4Fragment.g4:41`), but these get past the lexers too, and
+   `unescape` accepts all of them except fewer than four hex digits (verified):
    - **A sign, or digits outside ASCII, in a backslash-u escape,** since the four characters go to
      `Integer.parseInt`: `'\u-123'` holds U+FEDD. `parseInt` also takes any Unicode decimal digit and the fullwidth
      Latin letters, so a backslash and `u` followed by U+0660, U+0660, U+0664, and U+0661 (Arabic-Indic digits)
      read as `A`. The lexers end a backslash-u escape at the first character that is not an ASCII hex digit, so
      these characters pass through them as ordinary text.
    - **`\u+0041` and `\uuuu0041`,** each read as `A`.
-   - **Fewer than four hex digits.** The lexers accept them (`M4Fragment.g4:50`), and `unescape` then fails with
-     the library's message, reported at the literal rather than at the escape.
+   - **Fewer than four hex digits.** The lexers accept them (`M4Fragment.g4:50`), and `unescape` then rejects them
+     with an error of its own (`StringEscape.java:297` and `:308`), reported at the literal rather than at the
+     escape.
    - **Octal escapes,** from `\0` to `\377`, although the grammar calls a backslash before any other character an
      invalid escape (`M4Fragment.g4:43`). `\400` is a space followed by `0`.
    - **A backslash before any other character,** which is dropped: `\q` is `q`.
@@ -758,7 +768,7 @@ In one table:
 | Source columns | UTF-16 code units in legend-pure; code points, with mixed end columns, in legend-engine | Code points (C2) |
 | Lengths, indexes, and slices in Pure | UTF-16 code units | Code points (L2) |
 | PELT length prefixes | UTF-8 bytes | UTF-8 bytes, unchanged |
-| PELT orders | UTF-16 length, then code units | Unchanged in existing versions (O1); UTF-8 bytes in later ones (O3) |
+| PELT orders | Code units; the string index puts the UTF-16 length first | Unchanged in existing versions (O1); UTF-8 bytes in later ones (O3) |
 | Reference ID escapes | UTF-16 code units, written by legend-pure's own code ([#1402]) | Unchanged |
 | PELT file-name limit | 126 UTF-16 code units per segment | ASCII path segments; for other names, a later path provider version, by an option in 6.5 not yet chosen |
 | Editor positions (LSP, Monaco) | UTF-16 code units | Converted from code points where they are shown |
@@ -770,10 +780,12 @@ In one table:
    literals, unpaired surrogates, non-ASCII path segments, case-only collisions, and device names); and PCT tests
    that record each store's current results for supplementary characters, with exclusions where needed, so that the
    differences are visible before L2 changes them.
-2. **With the byte-identity plan's Phases 0 and 3:** the string rules in `pelt-format.md` (6.1 to 6.5), and the
-   corpus cases. Phase 0's draft of 2026-11-20 states the rules; the corpus cases remain.
-3. **After decisions 1, 3, 4, and 5:** V2 enforcement, C2 in legend-pure's parsers and language server,
-   legend-engine's end columns, and the front ends' conversions, under one release note.
+2. **With the byte-identity plan's Phases 0 and 3:** the string rules of this document's 6.1 to 6.5 in
+   `pelt-format.md` (its sections 2, 8, and 9), and the corpus cases. Phase 0's draft of 2026-11-20 states the
+   rules; the corpus cases remain.
+3. **After the rest of decision 1 (literals, function results, and outside data), and decisions 3, 4, and 5:** V2
+   enforcement, C2 in legend-pure's parsers and language server, legend-engine's end columns, and the front ends'
+   conversions, under one release note.
 4. **After decision 6:** L2 in both Java engines, the Java platform binding, and the relational dialects, with PCT
    on every store.
 5. **Only with a version made for another reason:** O3.

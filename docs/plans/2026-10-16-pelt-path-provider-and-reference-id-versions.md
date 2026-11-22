@@ -1,9 +1,10 @@
 # Plan: more than one path provider or reference ID version
 
-Status: proposal, 2026-10-16. This plan merges two earlier ones, on path provider versions (2026-10-15) and on
-reference ID versions (2026-10-16), which shared their mechanism. Phase 1 is done: its four fixes are merged
-([#1371], [#1372], [#1373], and [#1398]). Phase 2 can be done once the PELT specification exists.
-Phase 3 waits until a second version of either extension is wanted.
+Status: proposal, 2026-10-16, revised 2026-11-22. This plan merges two earlier ones, on path provider versions
+(2026-10-15) and on reference ID versions (2026-10-16), which shared their mechanism. Phase 1 is done: its four
+fixes are merged ([#1371], [#1372], [#1373], and [#1398]). Phase 2 adds to the PELT specification, now a reviewed
+draft, so it can be done once that draft is merged. Phase 3 waits until a second version of either extension is
+wanted.
 Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 [PELT consistency checks](2026-10-15-pelt-consistency-checks.md), and the
 [roadmap](2026-10-16-pelt-serialization-roadmap.md) for how the plans fit together.
@@ -75,14 +76,16 @@ long after startup, partway through execution.
 
 - **Every name comes from the default version.** Like every extensible serializer, `FilePathProvider` defaults to
   its newest loaded extension (`ExtensibleSerializer.java:142`), and `FileSerializer` and `FileDeserializer` use
-  that default. `FileDeserializer` has overloads that take a version (for example, `FileDeserializer.java:99`), but
+  that default. `FileDeserializer` has overloads that take a version (for example, `FileDeserializer.java:93`), but
   no loader passes one.
 - **Only path provider V1 exists,** so every existing binary was written with it.
 - **Readers start from the manifest.** Loaders know module names, compute each manifest's location, and read the
   manifest before any other file of the module: `PureCompilerLoader` (`PureCompilerLoader.java:472`) and
-  `MetadataPelt` (`MetadataPelt.java:299`). legend-engine loads through `MetadataPelt`. `ElementLoader` finds an
-  element's module through `MetadataIndex.getElementModuleName` (`MetadataIndex.java:238`), and back-reference
-  lookups already take a module name.
+  `MetadataPelt` (`MetadataPelt.java:299`). legend-engine loads through `MetadataPelt`. `MetadataIndex` already
+  maps each element to its module (`getElementModuleName`, `MetadataIndex.java:238`), although `ElementLoader`
+  reads element files by path alone today (`ElementLoader.java:368` and `:393`). Back-reference lookups already
+  take a module name, which `ElementLoader` gets from `MetadataIndex.getBackReferenceModuleNames`
+  (`ElementLoader.java:233` and `:283`).
 - **The manifest has no room for another field.** Metadata V2's manifest holds a string index, the module name,
   the dependencies, and the elements (`ModuleMetadataSerializerV2.java:68`), and V3 deflates it. Each metadata
   file's header carries its own version, so a writer can choose the version file by file.
@@ -161,10 +164,10 @@ were written with V1.
   their element or follow back-reference properties, and each step of a V1 ID (a to-one property, or a to-many
   property by index or by string key) can be followed in a serializable form. Every later version must work this
   way too.
-- **R4. No ID means different things in different versions.** If two versions both accept an ID, they resolve it
-  to the same instance. The simplest way to keep this rule is to give each later version a syntax that earlier
-  versions reject, except for packageable elements (R5). A misrouted ID then fails as invalid instead of resolving
-  to another instance, as G3 requires.
+- **R4. No ID means different things in different versions.** Each version rejects every other version's IDs,
+  except those of packageable elements, which every version accepts and resolves to the same element (R5). So any
+  two versions' syntaxes share only those IDs, and a misrouted ID fails as invalid instead of resolving to another
+  instance, as G3 requires.
 - **R5. A packageable element's ID is its path, in every version.** V1 already does this
   (`ReferenceIdGenerator.java:171`). Element roots, including virtual packages, then match across versions, and so
   do generated-code lookups of classes and other types.
@@ -184,9 +187,10 @@ were written with V1.
 - `ModuleManifest` gains a list of version records, each an extension name and a version, sorted by name. Only
   versions other than 1 are listed, so for most modules the list is empty. Two names are defined: one for the path
   provider, and one for reference IDs.
-- A new metadata serializer version writes the list as part of the manifest. Metadata V1 to V3 cannot hold it:
-  they write a manifest only if its list is empty, and reading any of them gives an empty list.
-- A manifest uses the new metadata version only when its list is not empty. Otherwise, it is written exactly as
+- New metadata serializer versions write the list as part of the manifest: an uncompressed one, and a compressed
+  one that deflates it (see the costs below). Metadata V1 to V3 cannot hold it: they write a manifest only if its
+  list is empty, and reading any of them gives an empty list.
+- A manifest uses a new metadata version only when its list is not empty. Otherwise, it is written exactly as
   today.
 - Readers read the manifest at the frozen location, then follow its records: the path provider version for the
   module's other files, and the reference ID version for its IDs ([section 7](#7-reading)).
@@ -209,13 +213,15 @@ name instead of another metadata version.
 
 **Costs:**
 
-- **A metadata version that manifests use only sometimes.** The usual rule, that writers use the newest version,
-  no longer holds for manifests: a writer picks the lowest metadata version that can hold the manifest. A caller
-  that asks for an older version than the manifest needs gets an error.
-- **Possibly two new metadata versions, not one.** If the byte-identity plan keeps both uncompressed and
-  compressed metadata in use, the list goes into a new uncompressed version, and a new compressed version deflates
-  it, as V3 deflates V2. For the other kinds of metadata file, the new versions are the same as their
-  predecessors, and writers keep using the predecessors.
+- **A metadata version that manifests use only sometimes.** The usual rule, that writers use the default version,
+  no longer holds for manifests: a writer uses the default metadata version unless the manifest has records, and
+  then the lowest version at or above the default (compressed, if the default compresses) that can hold them. A
+  caller that asks for an older version than the manifest needs gets an error.
+- **Two new metadata versions, not one.** The byte-identity plan keeps uncompressed and compressed metadata both
+  in use: under its F2, V2 is V3's uncompressed counterpart, and its determinism checks and its corpus use V2. So
+  the list goes into a new uncompressed version, and a new compressed version deflates it, as V3 deflates V2. For
+  the other kinds of metadata file, the new versions are the same as their predecessors, and writers keep using
+  the predecessors.
 - **Coupling.** The metadata format now carries values that belong to other extensions. It holds them as opaque
   names and numbers, so the coupling is small.
 
@@ -454,7 +460,9 @@ R4 keeps self-describing IDs open, if a later version ever has to reach generate
 ## 8. Writing
 
 - `FileSerializer` computes the recorded path provider version ([section 4](#4-what-a-module-records)) when it
-  writes a module's manifest, and writes the manifest at the lowest metadata version that can hold it.
+  writes a module's manifest. It writes the manifest in the default metadata version unless the manifest has
+  records, and then in the lowest version at or above the default (compressed, if the default compresses) that can
+  hold them.
 - `ModuleMetadataGenerator` builds manifests without records, as now. `FileSerializer` adds them as it writes.
 - A writer uses one reference ID version for a module's element files and its module metadata, as
   `PureCompilerSerializer` has done since [#1373], and writes each back-reference file in its target's version,
@@ -495,9 +503,12 @@ Output does not change.
 
 ### Phase 2: rules for every later version
 
-This needs the PELT specification, from the byte-identity plan's Phase 0, and nothing else.
+This needs the PELT specification, from the byte-identity plan's Phase 0, merged, and nothing else.
 
-- The specification states the frozen manifest location ([section 2](#2-rules)), and R3 to R6.
+- The specification states the frozen manifest location ([section 2](#2-rules)), and R3 to R6. That widens its
+  scope, which today takes in reference ID version 1's syntax only and leaves what IDs name to a later revision:
+  its section 1, the reference ID row of its table of versions, and its section 5.1 change to match, and its
+  section 8 gains a subsection on the frozen manifest location.
 - It states which reference ID version each kind of file uses: the module's own version for element files and
   external-reference metadata, and for back-reference files, the target's version, or the writing module's own
   version when the target is a virtual package.
@@ -514,10 +525,10 @@ Output does not change.
 
 This starts when a new version of either extension is wanted, and ships with that version, or before it.
 
-- `ModuleManifest` gains the list of version records. The new metadata version or versions carry it, following the
-  byte-identity plan's outcome on compression, and come with their specification, the records' addition to the
-  manifest's serializable form, the uncompressed counterpart of any compressed version, and conformance-corpus
-  entries, as that plan requires of every new version. Metadata V1 to V3 refuse to write a manifest with records.
+- `ModuleManifest` gains the list of version records. Two new metadata versions carry it, an uncompressed one and
+  a compressed one that deflates it, and come with their specification, the records' addition to the manifest's
+  serializable form, the compressed version's uncompressed counterpart, and conformance-corpus entries, as the
+  byte-identity plan requires of every new version. Metadata V1 to V3 refuse to write a manifest with records.
 - `FilePathProvider` computes manifest locations by the frozen rule. `FileSerializer` computes the recorded path
   provider version and picks the manifest's metadata version.
 - `FileDeserializer` gains module-scoped reading, and `PureCompilerLoader`, `MetadataPelt`, and `ElementLoader` use
@@ -565,11 +576,11 @@ Exit: a new version of either extension can ship.
   lacks reference ID V2 rejects the V2 module at its manifest, before it needs those files.
 - **External-reference files** keep the version of their module's element files. Anything that reads them later
   must compare their IDs with others by resolving them (R3), not as strings (R2).
-- **Phase 1's API changes.** Two `FileSerializer.serializeElement` overloads take a reference ID version, and
-  `ModuleMetadataGenerator.getReferenceIdVersion` is public ([#1373]). A new interface, `BackReferencesByVersion`,
-  groups back references by version ([#1398]). `ElementBuilder.buildVirtualPackage`, the constructors of the
-  virtual-package base classes, the `initialize` method of generated virtual-package classes, and the
-  `collectBackReferences` helper that those call take it in place of a `BackReferenceProvider` or a list of back
+- **Phase 1's API changes.** Two new `FileSerializer.serializeElement` overloads take only a reference ID
+  version, and `ModuleMetadataGenerator.getReferenceIdVersion` is public ([#1373]). A new interface,
+  `BackReferencesByVersion`, groups back references by version ([#1398]). `ElementBuilder.buildVirtualPackage`, the
+  constructors of the virtual-package base classes, the `initialize` method of generated virtual-package classes, and
+  the `collectBackReferences` helper that those call take it in place of a `BackReferenceProvider` or a list of back
   references. Only `Package` has virtual instances, so only legend-pure's own build generates those classes.
   legend-engine uses none of them.
 - **Phase 2's API change.** `ReferenceIdResolver` gains a method that returns the path of an ID's element (R6).
@@ -587,8 +598,8 @@ Exit: a new version of either extension can ship.
 2. **The records:** a list of named records (recommended), or one field per extension.
 3. **What a module records for the path provider:** the lowest version that gives the same names (recommended), or
    the version it was written with.
-4. **New metadata versions:** one compressed version, or an uncompressed and a compressed one, following the
-   byte-identity plan's outcome.
+4. **New metadata versions:** settled by the byte-identity plan's decision 1, made on 2026-11-20: an uncompressed
+   version and a compressed one ([section 3](#3-recording-versions-in-the-manifest)).
 5. **Back-reference files:** in their target's version (recommended), with two versions per file, or with one
    version per dependency closure.
 6. **When the back-reference check runs:** as elements load, with the consistency checks finding version skew

@@ -2,7 +2,8 @@
 
 Status: proposal, 2026-10-15. The decision gate chose Option 1, the canonical encoder, with its level-7-like
 setting, on 2026-11-20. Phase 0's draft was written the same day, and decision 6 was made with it. The draft's
-two reviews, on 2026-11-21, corrected it, and the first found bugs in the reference ID parser (Phase 0).
+first two reviews, on 2026-11-21, corrected it, and the first found bugs in the reference ID parser (Phase 0). A
+third, on 2026-11-22, corrected it and added test vectors.
 
 ## Goal
 
@@ -20,8 +21,8 @@ PELT content must be specified as precisely as the encoding itself (see
 The main violation is compression ([section 1.2](#12-compressed-bytes-break-the-invariant)). There are several
 ways to fix it, at different costs. A cheaper alternative, Option 5, keeps today's compression and delivers most
 of the benefits through a weaker invariant: files that are identical apart from their compression. It is the
-baseline for what byte identity costs, and it could be the outcome if today's compression proves worth more than
-byte identity. This plan:
+baseline for what byte identity costs, and it would have been the outcome had today's compression proved worth more
+than byte identity. This plan:
 
 - lays out the goals,
 - defines a serializable form of each element, which serializers encode and which comparisons and digests can use
@@ -29,7 +30,7 @@ byte identity. This plan:
 - describes the ways to restore byte identity, and the alternative,
 - compares their costs and benefits against that baseline,
 - recommends a staged path: measure the cheapest option at once, build the foundations that every option needs,
-  and then decide on the encoder.
+  and then decide on the encoder, as the gate did on 2026-11-20.
 
 "PELT files" means every file the serialization layer writes: element files (`.pelt`), the module files (`.pmf`,
 `.psr`, `.pxr`, `.pbr`, `.pfn`), and any kind added later. Every new kind of PELT file must satisfy the invariant
@@ -85,7 +86,7 @@ Nothing above the extensions knows about compression, and this plan keeps it tha
 ### 1.2 Compressed bytes break the invariant
 
 The compressing extensions use `java.util.zip.Deflater` at level 7 in raw mode
-(`ConcreteElementSerializerV2.java:35` and `:48`, `ModuleMetadataSerializerV3.java:37` and `:50`). `Deflater`
+(`ConcreteElementSerializerV2.java:37` and `:50`, `ModuleMetadataSerializerV3.java:41` and `:125`). `Deflater`
 delegates to native zlib, so the output depends on:
 
 - **the zlib version:** JDKs bundle different versions and update them in patch releases;
@@ -171,11 +172,13 @@ versions: file headers, the string index version in payloads, digest prefixes, a
 always produces the current shape, as module metadata V1 to V3 all decode to today's `ModuleManifest`. That shape
 seldom changes. Metamodel changes change content, not shape, since properties are data, and F3's rules change
 content from release to release, which the corpus and the consistency checks already allow for. When the shape
-must grow, for a new kind of value or a new attribute of instances, it grows by additions only:
+must grow, for a new kind of value or a new attribute of instances or metadata, it grows by additions only:
 
 - each addition has an "absent" state, which every existing file means;
 - an encoder whose version cannot represent the addition rejects any form that uses it (above);
-- the digest encoding gives a new kind of value a new tag, so no existing digest changes.
+- the digest encoding gives each addition a new tag, a field tag for an attribute and a value tag for a kind of
+  value, so no existing digest changes;
+- the text encoding gives each addition a new key, left out when absent, so no existing text changes.
 
 The versions plan's
 [version records](2026-10-16-pelt-path-provider-and-reference-id-versions.md#version-records-in-the-manifest) grow
@@ -212,8 +215,9 @@ them, and they are never serialized with the element. Comparisons can pair a ser
 
 **The content digest** of an element file is SHA-256 over the ASCII bytes `pelt-content-1`, a zero byte, and the
 element's serializable form in the *digest encoding*. The digest encoding is part of the specification (Phase 0).
-It writes each part of the serializable form in a fixed order: strings as UTF-8, each preceded by its length, and
-each value with a tag for its kind. It has no string index and no compression, and it is never written to a file.
+It writes the element, each instance, and each property as a record: tagged fields in ascending order of tag, with
+any absent field left out, and then a zero byte. Strings are UTF-8, each preceded by its length in bytes, and each
+value has a tag for its kind. It has no string index and no compression, and it is never written to a file.
 A digest of a projection, or of a serializable form together with back references from other elements, uses the
 same encoding under its own prefix, and so would a digest of module metadata, once something needs one.
 
@@ -226,10 +230,10 @@ same encoding under its own prefix, and so would a digest of module metadata, on
 - **It cannot grow.** It has no room for a new kind of value: all eight of its node-type codes are taken
   (`BaseV1.java:45`).
 
-The digest encoding can grow with the serializable form. A new kind of value gets a new tag, which changes no
-existing digest. Any other change to the encoding changes the prefix of every digest that uses it. A prefix is
-hashed into a digest, not stored with it, so anything that stores digests records which definition produced them,
-as the consistency checks' digest version does.
+The digest encoding can grow with the serializable form. A new attribute gets a new field tag, and a new kind of
+value a new value tag, so that neither changes an existing digest. Any other change to the encoding changes the
+prefix of every digest that uses it. A prefix is hashed into a digest, not stored with it, so anything that stores
+digests records which definition produced them, as the consistency checks' digest version does.
 
 **Reference IDs are names.** An external reference holds its target's reference ID, and each instance with an ID
 holds its own. Within one reference ID version, IDs are fixed names: the same ID always names the same instance of
@@ -320,7 +324,9 @@ Apart from back-reference properties, the compiled graph must be a function of t
 **Generation rules,** from graph to serializable form:
 
 - **Element membership.** `SerializerV1.isExternal` (`SerializerV1.java:565`) treats an instance as part of an
-  element when the element's source information subsumes the instance's.
+  element when the element's source information subsumes the instance's. An instance without source information
+  is part of the element unless it is a package (`SerializerV1.java:573`), and a reference usage is part of it
+  when its owner is (`SerializerV1.java:177`).
 - **Ordering.** Breadth-first node order, property order, and the sort order of internally held back-reference
   values.
 - **Back-reference properties.** Which properties are back-references
@@ -374,7 +380,7 @@ that writes with it ([Phase 5](#phase-5-adopting-the-canonical-encoder)).
 2. **Matching (LZ77).**
    - 32 KiB window; matches of 3 to 258 bytes.
    - A specified hash of the next three bytes indexes a table of 2^15 chain heads.
-   - Candidates are visited from the most recent, at most `maxChain` per position. A candidate replaces the best
+   - Candidates are visited from the most recent, at most `chain` per position. A candidate replaces the best
      match only if strictly longer, so the nearest wins ties.
    - Length-3 matches more than 4,096 bytes back are dropped.
    - One-step lazy evaluation with specified thresholds. zlib's level 7 settings (good 8, lazy 32, nice 128,
@@ -394,8 +400,9 @@ that writes with it ([Phase 5](#phase-5-adopting-the-canonical-encoder)).
 **Benefits:**
 
 - True byte identity, standard decoding everywhere, and no format change.
-- A slower encoder costs only build time, so it can be tuned for a better ratio than level 7 (longer match chains,
-  or better parsing) if size matters more than serialization time.
+- A slower encoder costs only build time, so a setting can trade build time for a better ratio than level 7's
+  (longer match chains, or better parsing). The setting is frozen once a release writes with it
+  ([decision 12](#9-decisions-to-make)), so a later one would take a new extension version.
 
 **Costs:**
 
@@ -626,16 +633,17 @@ it the three benefits above. Whether they are worth more than today's compressio
   [strings document](2026-11-06-cross-platform-strings.md#64-reference-id-text) recommended the same remedy as for
   the hash: legend-pure's own code, with no change in behavior, and tests that pin the escape of every code unit.
   [#1402] did that, so the specification (Phase 0, item 5) describes legend-pure's own code, and m4 no longer
-  depends on commons-lang3. The document also lists the escapes that readers accept but writers never write.
+  depends on commons-lang3. The specification also lists the escapes that readers accept but writers never write
+  (its section 9.3).
 - **Case-only differences.** Element paths that differ only in letter case, such as `a::B` and `a::b`, map to
   colliding file names on case-insensitive file systems, the default on Windows and macOS. When serializing to a
   directory, the later write silently replaces the earlier file. A build-time error on every platform is the
   simplest fix. Such models build today on case-sensitive file systems, so first scan existing models for any that
-  the error would break. Phase 0's check of the corpora found one: in legend-engine,
-  `legend-engine-xt-analytics-quality-pure` defines the enumerations `INVALID` and `Invalid`, and `invalid1` and
-  `Invalid1`, in one package, as test data for its naming checks (verified). Its jar holds all eight of their
-  files, but written to or unpacked onto a case-insensitive file system, four of them are lost without an error.
-  The error would need one enumeration of each pair renamed first.
+  the error would break. Phase 4's measurements found one, and Phase 0's check of the corpora confirmed it: in
+  legend-engine, `legend-engine-xt-analytics-quality-pure` defines the enumerations `INVALID` and `Invalid`, and
+  `invalid1` and `Invalid1`, in one package, as test data for its naming checks (verified). Its jar holds all eight
+  of their files, but written to or unpacked onto a case-insensitive file system, four of them are lost without an
+  error. The error would need one enumeration of each pair renamed first.
 - **Constants.** File signatures (for example `Long.parseLong("PureManifest", 36)`) and version numbers, listed as
   numbers.
 - **Special strings.** The special-string table in `BaseStringIndex` (`SPECIAL_STRING_IDS`), listed in full.
@@ -707,19 +715,24 @@ serializable forms. It comes in Phase 6.
 
 Exit: someone can write a decoder, an encoder, and the content digest from the document alone. Phase 6 tests that.
 
-**Status (2026-11-21):** drafted on 2026-11-20, on branch `serialization/pelt_format`, with the strings document's
+**Status (2026-11-22):** drafted on 2026-11-20, on branch `serialization/pelt_format`, with the strings document's
 decisions 1 (for serialization), 9, and 10, and decision 6. Its digest encoding, its text encoding, and its rule
 that Float and Decimal numerals compare as written are proposals, for decisions 10, 13, and 11. Two reviews, on
-2026-11-21, corrected it. It stands on its own and cites no plan, since the plans may never be merged.
+2026-11-21, corrected it, and a third, on 2026-11-22, corrected it and added test vectors. It stands on its own and
+cites no plan, since the plans may never be merged.
 
 - **Checked against the files.** A reader and writer written in Python from the draft alone decoded every element
-  and module metadata file of the 5.112.1 platform and pure jars and of 151 legend-engine jars at 5.3.1-SNAPSHOT,
-  re-encoded each to the same bytes, and computed each file's path (verified). The compressed files, as released or
-  built, passed, and so did their uncompressed counterparts, except four in one engine module that a case-only
-  collision lost (section 5). The text encoding of module metadata was not exercised.
+  and module metadata file of the 5.112.1 platform and pure jars and of 142 legend-engine jars at 5.3.1-SNAPSHOT,
+  re-encoded each payload to the same bytes, and computed each file's path (verified). It cannot reproduce zlib's
+  bytes, so for a compressed file it compared the re-encoded payload with the inflated one, and checked that the
+  deflate stream ends where the file does. The compressed files, as released or built, passed, and so did their
+  uncompressed counterparts, except four in one engine module that a case-only collision lost (section 5). The
+  text encoding of module metadata was not exercised.
 - **Checked against Java.** Java reads the draft's worked example, which the Python writer produced, as the same
   form. Java's writer produces the draft's file-name hashes and file names, those of element back reference files
   included, and its string index test vectors except the three on which it fails (the draft's section 12, item 2).
+  The vectors that the third review added, of string ID widths, wider lengths, values, and a manifest, were checked
+  against Java in the same way, and against a second reader and writer written from the draft alone.
 - **Departures.** The draft's section 12 lists where the Java implementation departs from it, each a bug: for
   example, the string index writer fails on strings such as `x[']`, and an Integer literal of more than 20
   characters that fits in a `long` gets the big integer encoding. The fixes that change no file can come at once,
@@ -859,17 +872,19 @@ and across the matrix, or every difference is recorded for the compiler plan.
 ### Phase 4: measurements, encoder prototype, and decision gate
 
 The measurements need no new product code, so they start at once, in parallel with Phase 0. Only the encoder
-prototype waits, and it is built only if Option 4 falls short. Results so far, for every module set but one of
-the largest models: [PELT compression measurements](2026-11-18-pelt-compression-measurements.md). Option 4 falls
-short on size in directories, so the encoder prototype followed: a draft specification,
+prototype waits, and it is built only if Option 4 falls short. Results, for platform, legend-pure, and the
+legend-engine module set: [PELT compression measurements](2026-11-18-pelt-compression-measurements.md). Option 4
+falls short on size in directories, so the encoder prototype followed: a draft specification,
 [Canonical deflate encoder](2026-11-20-pelt-canonical-deflate.md), and a Java prototype, measured in
 [section 10](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder) of the results. At the
 level-7-like setting, its files are smaller than today's, at no measurable cost in time, and on 2026-11-20 the
-gate chose Option 1 with that setting ([decisions 1 and 12](#9-decisions-to-make)). The product change that the
-measurements point to, a buffer after each inflater and before each deflater, is merged ([#1401]). It changes no
-file, and its reader side speeds up loading with either encoder.
+gate chose Option 1 with that setting ([decisions 1 and 12](#9-decisions-to-make)). None of the largest models was
+measured, and the gate was decided without them. The product change that the measurements point to, a buffer
+after each inflater and before each deflater, is merged ([#1401]). It changes no file, and its reader side speeds
+up loading with either encoder.
 
-- **Choose module sets:** platform, the legend-engine module set, and at least one of the largest models.
+- **Choose module sets:** platform, the legend-engine module set, and at least one of the largest models. The
+  measurements also covered legend-pure, but none of the largest models.
 - **Measure today's variants on those sets, in directories and in jars:**
 
   | Variant | What it represents |
@@ -896,7 +911,8 @@ The gate chose Option 1, with the level-7-like setting, on 2026-11-20.
 
 - **The encoder joins legend-pure,** written from the specification and the prototype, with the prototype's tests
   and fuzzing. Its [specification](2026-11-20-pelt-canonical-deflate.md) moves into Phase 0's document, with the
-  level-7-like setting alone.
+  level-7-like setting alone, and without this plan's terms: its phases, its options, the gate, and the names of
+  the settings. That document cites no plan.
 - **Before the first release that writes with it,** check its output with an inflater outside zlib's lineage, such
   as Rust's `miniz_oxide`. Every inflater the prototype was tested with derives from zlib. From that release on,
   the encoder is frozen.
@@ -932,8 +948,8 @@ critical path for the invariant.
 
 ### Phase 7: keeping it true
 
-- **The invariant holds from here on:** byte identity, or identical uncompressed counterparts if the plan settles
-  at Option 5. A change that breaks it is a bug, and the checks below catch it.
+- **The invariant holds from here on:** byte identity, since the gate chose Option 1. A change that breaks it is a
+  bug, and the checks below catch it.
 - **Any format change, new version, or new kind of PELT file** comes with its specification, the serializable form
   it encodes or any additions to it, the uncompressed counterpart of any file it compresses (F2), and its corpus
   entries, in the same PR. Under byte identity, a new compressing extension uses a specified, frozen encoder, as
@@ -999,7 +1015,7 @@ critical path for the invariant.
 9. **Which non-Java language comes first.**
 10. **The digest encoding:** a small encoding defined on the serializable form (recommended), or an existing
     payload, such as element V1's with its string index version pinned, which takes two passes and cannot grow
-    (F0).
+    (F0). The Phase 0 draft follows the first.
 11. **Float and Decimal in the serializable form:** the sign and digit strings as written (recommended), or
     numeric values, with every encoder writing canonical digit strings. The second changes the bytes of any
     element with a negative zero or leading zeros in such a value. Java's names hold neither (section 5), so the

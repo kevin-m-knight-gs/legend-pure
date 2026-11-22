@@ -1,8 +1,10 @@
 # Canonical deflate encoder: specification
 
-Status: draft, 2026-11-20. The decision gate adopted Option 1 on 2026-11-20, with the level-7-like setting. This
-specification becomes normative when it moves into the format specification that Phase 0 writes, as
-[Phase 5](2026-10-15-pelt-byte-identity.md#phase-5-adopting-the-canonical-encoder) adopts the encoder.
+Status: draft, 2026-11-20, revised 2026-11-22. The decision gate adopted Option 1 on 2026-11-20, with the
+level-7-like setting. This specification becomes normative when it moves into the format specification that
+Phase 0 writes, as [Phase 5](2026-10-15-pelt-byte-identity.md#phase-5-adopting-the-canonical-encoder) adopts the
+encoder. Since the format specification cites no plan, the move drops the phases, Option 1, the gate, and the names
+of the settings, and keeps the level-7-like setting's values alone.
 
 This is the encoder that
 [Option 1 of the byte-identity plan](2026-10-15-pelt-byte-identity.md#option-1-a-specified-canonical-deflate-encoder)
@@ -17,7 +19,7 @@ The prototype's measurements are in
 
 ## 1. Settings and constants
 
-A setting fixes five values. A frozen encoder has exactly one setting, and changing any value changes the output.
+A setting fixes five values. A frozen encoder has exactly one setting, and changing any value can change the output.
 The encoder's setting is the level-7-like one. The prototype was also measured with the level-9-like setting, which
 this document keeps only so that those measurements can be reproduced.
 
@@ -98,10 +100,11 @@ if held: emit the literal d[n − 1]
 
 ### 3.1 Division
 
-The symbol sequence splits into groups of `block` symbols, and the last group holds the rest. An empty input has
-one empty group. Each group is written as one block of the type that 3.5 chooses, except that stored data longer
-than 65,535 bytes is written as several stored blocks (3.6). BFINAL is 1 on the last block written for the last
-group, and 0 on every other block.
+The symbol sequence splits into groups of `block` symbols, and the last group holds the remaining 1 to `block`
+symbols. An empty input has one group, which is empty, and no other input has an empty group. A group's data is
+the input bytes that its symbols cover. Each group is written as one block of the type that 3.5 chooses, except
+that stored data longer than 65,535 bytes is written as several stored blocks (3.6). BFINAL is 1 on the last block
+written for the last group, and 0 on every other block.
 
 ### 3.2 Frequencies
 
@@ -124,14 +127,17 @@ The lengths for an alphabet with frequencies f, limited to B bits (15 for the li
       the second, the third with the fourth, and so on, dropping a last item without a partner) into packages,
       each weighing the sum of its two items. The list at level ℓ merges the sorted symbols with these packages
       in ascending order of weight, with a symbol before a package of equal weight.
-   4. Select the first 2n − 2 items of the list at level 1. Then, at each level from 1 down: every selected
-      symbol's length grows by 1, and if k of the selected items are packages, the first 2k items of the list at
-      the next level are selected.
+   4. Select the first 2n − 2 items of the list at level 1. Then, for each level ℓ from 1 to B: the length of each
+      symbol selected at level ℓ grows by 1, and if k of the items selected at level ℓ are packages, the first 2k
+      items of the list at level ℓ + 1 are selected.
 
 Either way the code is complete, and in case 2 it is optimal among codes of at most B bits. The codes follow from
 the lengths, as [RFC 1951] section 3.2.2 specifies.
 
 ### 3.4 The dynamic block header
+
+HLIT, HDIST, and HCLEN are counts here. The header's fields for them, of 5, 5, and 4 bits, hold them less 257, 1,
+and 4 ([RFC 1951] section 3.2.7).
 
 1. **HLIT** is max(257, one more than the highest literal/length symbol with a nonzero length). **HDIST** is
    max(1, one more than the highest distance symbol with a nonzero length).
@@ -178,8 +184,8 @@ The settings come from zlib, but the encoder is not zlib's and does not reproduc
 - **The input is whole.** Matching works on positions in the input, with no sliding buffer, and distances reach
   the full window of 32,768. zlib slides its window and stops 262 bytes short of it.
 - **The hash.** zlib shifts and XORs the three bytes, which drops three bits of the first. The multiplicative hash
-  spreads all 24 bits. With the level-7-like setting, it gave 0.02% fewer bytes than zlib's hash on platform's
-  files, and 0.04% fewer on legend-engine's.
+  spreads all 24 bits. On platform's files, with the level-7-like setting, it gave slightly fewer bytes than
+  zlib's hash.
 - **Code lengths.** Package-merge gives optimal lengths under the limit by a short rule. zlib builds a Huffman tree
   with a heap and then shortens any code over the limit, and its ties follow its heap.
 - **Complete codes.** Every alphabet gets at least two codes, as in zlib, so every code is complete. RFC 1951
@@ -204,6 +210,7 @@ The inputs need no files:
 | `lines-5000` | For each n from 0 to 4,999, the line `line n: the quick brown fox jumps over the lazy dog`, with n in decimal, ending in a line feed |
 | `lcg-32768-copy-1000` | 32,768 bytes from the generator, followed by a copy of its first 1,000: a copy at exactly the window's distance |
 | `lcg-32769-copy-1000` | The same with 32,769 bytes, so the copy lies one byte beyond the window |
+| `pairs-8192` | The numbers 0 to 8,191, each as two bytes, high byte first: 16,384 bytes in which no three consecutive bytes recur, so 16,384 literals, exactly one group |
 
 The generator starts from x = 1, and for each byte sets x to (1,103,515,245 · x + 12,345) mod 2^31 and takes bits
 16 to 23 of x. Text is ASCII.
@@ -226,14 +233,17 @@ output except for `lines-5000`.
 | `lines-5000`, level-9-like | 273,890 | `327c6f2071428ba1e777d790fc2246492101172b735e6f886b0258e8c2d7fa18` | 12,684 | `820ebba5a7367e40fae8a6ec1964c556053fe3925dc5bbe60d3deeed4e1f6c33` |
 | `lcg-32768-copy-1000` | 33,768 | `5d579bc36184112cf0f4e4f423d4c8b793235fa8a26d55abb4be602178f3ebc4` | 32,828 | `92dd36412e0992aa33ea897f4004e07e09d18e7180a2a62ccee280ba0cf90166` |
 | `lcg-32769-copy-1000` | 33,769 | `c96d151822d3cac1a2e0b1db5f034a88e100d5b998961d87702a854749f48741` | 33,784 | `15d49ccd3dbfbca23b0fd2b2b15be3833e270fe3506be8daee2a0e805d2ad352` |
+| `pairs-8192` | 16,384 | `2b8bac8ddfa285d54974896f32ab0888489af08848483feff084df41ec4b92b8` | 14,866 | `e547c8f39062eb6e50a1dde86387f582ce78cd57ba52762845a7e9981aad3375` |
 
 Between them, the vectors cover the cases that Phase 4 lists: empty input, one byte, a long run of one byte,
-random data (stored blocks), input longer than the window, and input longer than one block.
+random data (stored blocks), input longer than the window, and input longer than one block. `pairs-8192` is one
+dynamic block, with BFINAL set: a group of exactly `block` symbols is the last.
 
 ## 6. Conformance and provenance
 
-An implementation conforms when it reproduces these vectors and the conformance corpus that Phase 3 builds. The
-prototype's own tests also check, for many generated inputs, that every output inflates to its input.
+An implementation conforms when it reproduces these vectors and the compiled files of the conformance corpus that
+Phase 3 builds, once they come from this encoder (Phase 5). The prototype's own tests also check, for many generated
+inputs, that every output inflates to its input.
 
 The prototype was written from [RFC 1951] and this document, with no code from any library. Package-merge is due
 to Larmore and Hirschberg (1990). The hash multiplier 0x9E3779B1 is the prime closest to 2^32 divided by the

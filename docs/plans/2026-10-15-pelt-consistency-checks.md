@@ -1,10 +1,11 @@
 # Plan: PELT consistency checks
 
-Status: proposal, 2026-10-15.
-Prerequisite: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md), through its Phase 2. This plan starts
-after that phase, and does not wait for that plan's decision on compression.
-Related: [path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md),
-and the [roadmap](2026-10-16-pelt-serialization-roadmap.md) for how the plans fit together.
+Status: proposal, 2026-10-15, revised 2026-11-22.
+Prerequisites: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md), through its Phase 3, whose
+conformance corpus this plan's Phase 1 adds to; and
+[path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md), through its
+Phase 2, which adds the R6 that reduces each external reference to its element. This plan starts after both.
+Related: the [roadmap](2026-10-16-pelt-serialization-roadmap.md), for how the plans fit together.
 
 ## Goal
 
@@ -32,9 +33,9 @@ only on a digest mismatch and checks whether the change affects what the module 
   produce the same logical content in every environment and language, and its uncompressed encoding is canonical.
   Digests here are computed from that plan's
   [serializable form](2026-10-15-pelt-byte-identity.md#f0-the-serializable-form) of each element, in its digest
-  encoding, never from a file's bytes. So they do not depend on how that plan settles compression, or on which
-  format versions write the files. The file this plan adds must preserve whatever invariant that plan settles on:
-  byte identity, or identical uncompressed counterparts.
+  encoding, never from a file's bytes. So they depend neither on compression nor on which format versions write
+  the files. The file this plan adds must preserve that plan's invariant, byte identity, which its gate chose on
+  2026-11-20.
 - **Existing binaries must keep loading.** They carry no consistency data, so the checks skip them.
 - **Builds may insist** that dependencies carry consistency data.
 - **There is more than one loader.** `PureCompilerLoader`, `MetadataPelt` (used in legend-engine by `PureModel`,
@@ -50,7 +51,7 @@ only on a digest mismatch and checks whether the change affects what the module 
    added property with a lower bound above zero is as much a problem as a removed one. *Addressed by the
    footprint check.*
 2. **Model change.** An element a module references changed or disappeared. A positional reference ID can then
-   resolve to a different instance without error, and a dependent's back-references can land on the wrong
+   resolve to a different instance without error, and a dependent's back references can land on the wrong
    instances. *Addressed by the referenced-element check.*
 3. **Anything else that changed.** The fast path detects that *something* changed, and the slow path decides
    whether it matters.
@@ -85,9 +86,9 @@ At load time:
 ### Element content digest (ECD)
 
 `ECD(e)` is SHA-256 over the ASCII bytes `pelt-ecd-1`, a zero byte, and the element's serializable form in the
-byte-identity plan's digest encoding, without source information (no source ID, and no source information on any
-node). Whichever format versions write the element's file, its ECD is the same; reference ID versions are another
-matter (below).
+byte-identity plan's digest encoding, without source information: every instance record leaves out its field
+with tag 3 (`pelt-format.md`, section 10.1). Whichever format versions write the element's file, its ECD is the
+same; reference ID versions are another matter (below).
 
 **Why ignore source information:** a line shift in a dependency does not make its dependents inconsistent.
 Including it would send every platform edit down the slow path.
@@ -104,10 +105,10 @@ the same content differently must not change ECDs. Otherwise, a dependency rebui
 fail the referenced-element check of every dependent that was not rebuilt, though nothing they rely on changed.
 The element V1 payload, for example, is fixed only in part: it starts with a string index that records its own
 version (`StringIndexer.java:46`), and the newest loaded string index version is the default. The digest encoding
-has no string index, and a new kind of value only adds a tag to it. The prefix changes, to `pelt-ecd-2`, only if
-the digest encoding changes in a way that changes existing digests, and the digest version changes with it. A
-prefix is hashed into a digest, not stored with it, so the consistency file records the digest version of every
-digest it holds ([Files and formats](#files-and-formats)).
+has no string index, and a new attribute or kind of value only adds a tag to it. The prefix changes, to
+`pelt-ecd-2`, only if the digest encoding changes in a way that changes existing digests, and the digest version
+changes with it. A prefix is hashed into a digest, not stored with it, so the consistency file records the digest
+version of every digest it holds ([Files and formats](#files-and-formats)).
 
 **Reference ID versions do change ECDs.** A dependency rebuilt with another reference ID version has different IDs,
 and IDs are content. Its dependents' back-reference files are keyed by those IDs, so they need rebuilding, and the
@@ -118,7 +119,9 @@ versions plan](2026-10-16-pelt-path-provider-and-reference-id-versions.md)).
 ### Module consistency digest (MCD)
 
 `MCD(M)` is SHA-256 over the ASCII bytes `pelt-mcd-1`, a zero byte, and then, for each element of M in manifest
-order (sorted by path): the path as length-prefixed UTF-8, followed by its ECD.
+order (sorted by path, in code unit order): the path as a string of the digest encoding (a `u32` count of UTF-8
+bytes, then the bytes; `pelt-format.md`, section 10.1), followed by its ECD, in the size that
+[decision 2](#decisions-and-open-questions) settles.
 
 **An MCD covers only M's own content, not its dependencies'.** Every loaded module is checked against its own
 recorded dependencies, so chaining digests through dependencies would only add false mismatches.
@@ -130,9 +133,9 @@ digests in every environment.
 
 ### Footprint
 
-For each exact classifier K of any node that M serializes, the footprint records:
+For each exact classifier K of any instance that M serializes, the footprint records:
 
-- **The writer shape.** Every property of K, sorted by name. Each entry has:
+- **The writer shape.** Every property of K, sorted by name, in code unit order. Each entry has:
   - the name,
   - the source type (the owning class or association),
   - the multiplicity: lower bound, upper bound or unbounded, or a multiplicity parameter,
@@ -146,9 +149,9 @@ For each exact classifier K of any node that M serializes, the footprint records
 - **Observed value types.** For each property, the classifiers of its instance values and the primitive types of
   its primitive values. Only types that conformed to the declared type at build time are recorded.
 
-Back-references stored in module metadata are not part of the footprint. Loader code applies them from typed
+Back references stored in module metadata are not part of the footprint. Loader code applies them from typed
 records, so a change to them is a metadata format change, handled by format versions. Back-reference properties
-whose values are written in the element stream *are* in the footprint, like any other property.
+whose values are written in the element files *are* in the footprint, like any other property.
 
 ### Declarations
 
@@ -258,12 +261,16 @@ one file rather than adding two kinds.
 **Layout.** The file follows the conventions of the other module files: a signature, a version, string indexes,
 and big-endian integers. It starts with the summary, uncompressed, so the fast path reads only the start of the
 file, whether from a directory or from a jar, where reading the start of an entry inflates little more than that
-start. The details follow, compressed the way module metadata is compressed under the byte-identity plan's
-outcome: with its encoder, or not at all if it settles on uncompressed files. As the byte-identity plan's
+start. The details follow, compressed as module metadata is: with module metadata's current deflater until the
+byte-identity plan's [Phase 5](2026-10-15-pelt-byte-identity.md#phase-5-adopting-the-canonical-encoder) adopts the
+canonical encoder, and with that encoder from then on. Phase 5's first build rewrites each compressed file once, this
+one included. As the byte-identity plan's
 [F2](2026-10-15-pelt-byte-identity.md#f2-an-uncompressed-counterpart-for-every-compressed-file) requires of every
-compressed file, the extension states the file's uncompressed counterpart, which is the same file with its details
-uncompressed, and its envelope rule: compressed details are exactly one raw deflate stream, ending at the end of
-the file.
+compressed file, the extension states the file's uncompressed counterpart and its envelope rule. Like module
+metadata, with its versions 2 and 3, the format has two versions from the start: version 1, with the details
+uncompressed, and version 2, the default, with them compressed, so the header tells the two apart. A version 2 file's
+counterpart is the same file with version 1 in its header and its details inflated. Its envelope rule: compressed
+details are exactly one raw deflate stream, ending at the end of the file.
 
 A path method goes on `FilePathProviderExtension` as a default method, to keep the interface compatible.
 
@@ -292,8 +299,8 @@ includes.
 - module name,
 - MCD,
 - an optional label (the Maven project version, passed in by the mojo),
-- for each transitive dependency, sorted by name: its name, MCD, digest version (which also covers its ECDs in the
-  details), reference ID version, and label.
+- for each transitive dependency, sorted by name, in code unit order: its name, MCD, digest version (which also
+  covers its ECDs in the details), reference ID version, and label.
 
 Every reference ID version is 1 until a module can record another, and every digest version is 1 until the digest
 encoding changes in a way that changes existing digests. Both fields are in the format from the start, so that the
@@ -346,9 +353,9 @@ definition instead.
   - Compute each element's ECD while serializing it, from the serializable form that the byte-identity plan's
     generator produces and the element's encoder writes: hash it in the digest encoding, without source
     information. The serializable form is already in memory, so this is one more pass over it, not over the graph.
-  - Collect the footprint from the same serializable form, which holds each node's classifier, its properties with
-    their source types, and its values. Only the classifiers of external references, and the check that observed
-    types conform, need the graph.
+  - Collect the footprint from the same serializable form, which holds each instance's classifier, its properties
+    with their source types, and its values. Only the classifiers of external references, and the check that
+    observed types conform, need the graph.
   - Collect the declarations.
   - Derive referenced elements from the same serializable form, using R6, and from the back-reference metadata
     that `ModuleMetadataGenerator` already produces.
@@ -463,9 +470,10 @@ then load with `PureCompilerLoader` and with an `ElementLoader` configured the w
 
 The footprint check needs instances whose classifier is defined in another module. Realistically that classifier
 is an M3 class, and M3 cannot be edited in a test. Instead, simulate the change: a test utility rewrites the
-dependency's consistency file, changing its declarations (for example, renaming `Stereotype.value` to `name`) and
-its MCD, then loads. That exercises the Annotation-rename case end to end. The same utility changes a dependency's
-digest version, for the digest-version scenario.
+dependency's consistency file, changing its declarations (for example, renaming `Annotation.value` to `name`,
+which `Stereotype` and `Tag` inherit) and its MCD, then loads. That exercises the case in
+[Error reporting](#error-reporting) end to end. The same utility changes a dependency's digest version, for the
+digest-version scenario.
 
 ### Performance
 

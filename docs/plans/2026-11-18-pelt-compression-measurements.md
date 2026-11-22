@@ -22,8 +22,9 @@ Section 10 then compares a prototype of the canonical encoder (Option 1) the sam
   that cost one native call per primitive read, and that cost dominates decoding.
   - With today's readers, Option 4 loads at the same speed as today from jars, and faster from directories: in
     0.69 to 0.77 of today's time end to end, and in 0.39 to 0.42 of today's time to read and decode.
-  - With a buffer after each inflater, a reader change, today's files read and decode as fast as Option 4's, in
-    jars and in directories. That makes today's reads 1.8 to 2.7 times as fast.
+  - With a buffer after each inflater, a reader change, today's files read and decode as fast as Option 4's in
+    jars. In directories, Option 4's then take 0.84 to 0.91 of today's time. The buffer makes today's reads 1.8 to
+    2.7 times as fast.
 - **The buffering fix, now merged ([#1401]),** takes 0.57 to 0.76 of the time to load end to end, and 0.54 of the
   time to encode platform with compression, with the output unchanged ([section 9](#9-the-buffering-fix)).
 - **Serialization: Option 4 writes faster, and moves compression into packaging.** A clean write takes 0.58 to
@@ -215,14 +216,16 @@ That accounts for every result above:
 
 ### End to end
 
-`loadAll`, then the realization of every element. Medians in seconds; the ratio compares the totals.
+`loadAll`, then the realization of every element. Each cell gives the total, and then, in parentheses, the times
+of `loadAll` and of the realization. Each of the three is a median over the runs, in seconds, so a total need not
+be the sum of the two medians beside it. The ratio compares the totals.
 
 | Set | Source | Runs | Today | Option 4 | Ratio |
 |---|---|---|---|---|---|
-| platform | jar | 6 | 0.29 + 1.22 = 1.50 | 0.27 + 1.20 = 1.47 | 0.98 |
-| platform | directory | 6 | 0.30 + 1.37 = 1.69 | 0.27 + 0.89 = 1.16 | 0.69 |
-| `core_relational` and its dependencies | jar | 3 | 1.57 + 31.79 = 33.36 | 1.36 + 31.78 = 33.14 | 0.99 |
-| `core_relational` and its dependencies | directory | 3 | 1.47 + 31.64 = 33.15 | 1.30 + 24.08 = 25.42 | 0.77 |
+| platform | jar | 6 | 1.50 (0.29, 1.22) | 1.47 (0.27, 1.20) | 0.98 |
+| platform | directory | 6 | 1.69 (0.30, 1.37) | 1.16 (0.27, 0.89) | 0.69 |
+| `core_relational` and its dependencies | jar | 3 | 33.36 (1.57, 31.79) | 33.14 (1.36, 31.78) | 0.99 |
+| `core_relational` and its dependencies | directory | 3 | 33.15 (1.47, 31.64) | 25.42 (1.30, 24.08) | 0.77 |
 
 Here too, the one configuration where every read is buffered (Option 4 in directories) is the fastest. In all four
 `core_relational` configurations, the third repetition was the fastest, by up to 31%.
@@ -268,7 +271,8 @@ Today's serialization also pays for writing through an unbuffered `DeflaterOutpu
 readers' cost. For `core_relational`, encoding with compression takes 19.0 seconds more than without it. Deflating
 the module's files whole takes 5.6 seconds. A buffer before the deflater would not change the output: deflating
 each file's payload in one call reproduces today's files byte for byte, all 97,851 of them in the platform and
-legend-engine sets.
+legend-engine sets. The count is once per set: the legend-engine set holds platform's files too, and its
+directories lack the 4 files that collide by case ([section 7](#7-other-findings)).
 
 ## 6. Element V1's bytes, for Option 3
 
@@ -329,7 +333,7 @@ gives 7.5% less. No structural encoding was measured.
   10 ms, against 0.2 ms for the existing file. That is consistent with real-time scanning of new files. As a result,
   serializing platform again over unchanged files takes 26 to 54 seconds, against 2.2 to 3.4 seconds for a clean
   write. Comparing the new bytes in memory with the existing file, before writing anything, would avoid the cost.
-  It bears on G5, and on the overload F2 adds to `FileWriteTools` if the plan settles at Option 5.
+  It bears on G5, and on the plan's Phase 5, whose `FileSerializer` keeps comparing bytes before rewriting a file.
 - **Class-path lookups across many directories are slow.** Looking up all of legend-engine's PELT files through
   one class loader over its 151 directories takes 73 to 76 seconds, against 0.4 seconds over its 151 jars. It costs
   the same for either format, and it dominates reading from such a class path: 86 to 107 seconds in all.
@@ -382,16 +386,17 @@ put first on the class path, and the builds alternated.
 with today's versions, and to their uncompressed counterparts, with Option 4's. The PR's tests check that each V2
 and V3 payload equals a one-pass deflate of its V1 or V2 payload.
 
-**End to end.** `loadAll`, then the realization of every element, as in [section 4](#end-to-end). Medians in
-seconds; the ratio compares the totals.
+**End to end.** `loadAll`, then the realization of every element, as in [section 4](#end-to-end), and given the
+same way: the total, then the times of `loadAll` and of the realization, each a median over the runs, in seconds.
+The ratio compares the totals.
 
 | Set | Files | Source | Runs | Before | With the fix | Ratio |
 |---|---|---|---|---|---|---|
-| platform | today's | jar | 6 | 0.28 + 1.25 = 1.53 | 0.28 + 0.88 = 1.16 | 0.76 |
-| platform | today's | directory | 6 | 0.29 + 1.43 = 1.71 | 0.28 + 1.03 = 1.30 | 0.76 |
-| platform | Option 4's | jar | 6 | 0.29 + 1.25 = 1.53 | 0.29 + 0.87 = 1.16 | 0.76 |
-| `core_relational` and its dependencies | today's | jar | 3 | 1.42 + 22.69 = 24.10 | 1.27 + 12.41 = 13.69 | 0.57 |
-| `core_relational` and its dependencies | today's | directory | 3 | 1.34 + 29.43 = 30.76 | 1.21 + 18.59 = 19.82 | 0.64 |
+| platform | today's | jar | 6 | 1.53 (0.28, 1.25) | 1.16 (0.28, 0.88) | 0.76 |
+| platform | today's | directory | 6 | 1.71 (0.29, 1.43) | 1.30 (0.28, 1.03) | 0.76 |
+| platform | Option 4's | jar | 6 | 1.53 (0.29, 1.25) | 1.16 (0.29, 0.87) | 0.76 |
+| `core_relational` and its dependencies | today's | jar | 3 | 24.10 (1.42, 22.69) | 13.69 (1.27, 12.41) | 0.57 |
+| `core_relational` and its dependencies | today's | directory | 3 | 30.76 (1.34, 29.43) | 19.82 (1.21, 18.59) | 0.64 |
 
 - Today's files gain from the buffers after their inflaters, and Option 4's from the buffer around the class
   loader's stream. With the fix, the two load platform from jars in the same time.
@@ -426,8 +431,9 @@ section 1.
 ### Correctness
 
 - **Every file inflates to its payload, with four inflaters.** At both settings, each of the 101,301 files of the
-  three sets inflates to the payload of its uncompressed counterpart, with nothing after the deflate stream,
-  through:
+  three sets, counted once per set, inflates to the payload of its uncompressed counterpart, with nothing after the
+  deflate stream. The sets nest, so these are 95,213 distinct files: the legend-engine set's 95,217, less the 4 that
+  collide by case ([section 7](#7-other-findings)). The inflaters:
   - Java's `Inflater`, on JDK 17.0.21;
   - Python 3.12's `zlib`, with zlib 1.2.13;
   - Node 20.10's `zlib`, with Chromium's zlib 1.2.13.1;
@@ -527,7 +533,7 @@ as in [section 4](#read-and-decode). Warm medians in seconds:
 | Size in jars | -0.07% to -0.10% of PELT entry bytes | -0.21% to -0.48% |
 | Size in directories | -0.08% to -0.09%, or nothing to -0.02% in 4 KiB blocks | -0.22% to -0.46%, or -0.03% to -0.15% in 4 KiB blocks |
 | Compression time | 0.98 to 1.06 | 1.79 to 2.80 |
-| Serialization time | The same: 1.01 to 1.03 for platform, and within today's runs for `core_relational` | 1.11 to 1.20 for platform, and about 11 seconds more for `core_relational` |
+| Serialization time | The same: 1.01 to 1.03 for platform, and within today's runs for `core_relational` | 1.11 to 1.20 for platform, and, for `core_relational`, about 11 seconds more than the level-7-like setting |
 | Load time, readers since [#1401] | The same: 0.93 to 1.01 | The same: 0.93 to 1.04 |
 
 Recommendations:
