@@ -249,7 +249,7 @@ character, so nothing reports it.
     (`JsonPropertySerialization.java:105` and `:121`); and the Pure IDE server's responses (`PureSession.java:185`,
     `Suggestion.java`);
   - legend-shared: the basic authentication header (`BasicAuthenticationProvider.java:36`), and the static server's
-    copy of its configuration (`Server.java:55` to `:64`).
+    copy of its configuration (`Server.java:56` to `:64`).
 - **Default locale.** `String.toLowerCase()` and `toUpperCase()` use the JVM's default locale. In Turkish and
   Azerbaijani, `I` lowercases to U+0131 (dotless i), and `i` uppercases to U+0130; Lithuanian has rules of its own.
   In legend-pure, [#1403] fixed every site below except Pure's `toUpper` and `toLower`, which [#1404] fixed
@@ -676,7 +676,7 @@ For the recommended combination. Items marked *now* are the hazards of section 8
 
 - It handles no source information and no Pure strings.
 - Now: name UTF-8 in `BasicAuthenticationProvider.java:36` (the only charset RFC 7617 names for basic
-  authentication), and in the static server's copy of its configuration (`Server.java:55`).
+  authentication), and in the static server's copy of its configuration (`Server.java:56` and `:64`).
   `LegendSecurityLogic.java:212` lowercases a user agent with the default locale, which is harmless for the text it
   looks for, but `Locale.ROOT` is the rule.
 - Optionally, the same build rule against default-charset and default-locale APIs.

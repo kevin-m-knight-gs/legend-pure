@@ -80,7 +80,7 @@ long after startup, partway through execution.
   no loader passes one.
 - **Only path provider V1 exists,** so every existing binary was written with it.
 - **Readers start from the manifest.** Loaders know module names, compute each manifest's location, and read the
-  manifest before any other file of the module: `PureCompilerLoader` (`PureCompilerLoader.java:472`) and
+  manifest before any other file of the module: `PureCompilerLoader` (`PureCompilerLoader.java:472` and `:478`) and
   `MetadataPelt` (`MetadataPelt.java:299`). legend-engine loads through `MetadataPelt`. `MetadataIndex` already
   maps each element to its module (`getElementModuleName`, `MetadataIndex.java:238`), although `ElementLoader`
   reads element files by path alone today (`ElementLoader.java:368` and `:393`). Back-reference lookups already
@@ -216,7 +216,8 @@ name instead of another metadata version.
 - **A metadata version that manifests use only sometimes.** The usual rule, that writers use the default version,
   no longer holds for manifests: a writer uses the default metadata version unless the manifest has records, and
   then the lowest version at or above the default (compressed, if the default compresses) that can hold them. A
-  caller that asks for an older version than the manifest needs gets an error.
+  caller that asks for an older version than the manifest needs gets an error. The new versions must never become
+  the default, as they would today as soon as they are loaded ([Phase 3](#phase-3-record-versions-and-honor-them)).
 - **Two new metadata versions, not one.** The byte-identity plan keeps uncompressed and compressed metadata both
   in use: under its F2, V2 is V3's uncompressed counterpart, and its determinism checks and its corpus use V2. So
   the list goes into a new uncompressed version, and a new compressed version deflates it, as V3 deflates V2. For
@@ -515,9 +516,10 @@ This needs the PELT specification, from the byte-identity plan's Phase 0, merged
 - `ReferenceIdResolver` gains a method that returns the path of the element an ID points into (R6). V1 and the
   test-only version implement it, with tests, and the consistency checks use it to reduce external references to
   elements.
-- Each new reference ID version comes with tests showing that it rejects the other versions' non-root IDs, accepts
-  the same root IDs, names the element of each of its IDs (R6), and resolves against elements written with every
-  other version. `TestPrefixedReferenceIdExtension` checks the first two for the test version.
+- Each new reference ID version comes with tests showing that it and every other version reject each other's
+  non-root IDs, that it accepts the same root IDs, names the element of each of its IDs (R6), and resolves against
+  elements written with every other version. `TestPrefixedReferenceIdExtension` checks the first two for the test
+  version and V1, rejection in both directions (`TestPrefixedReferenceIdExtension.java:74` and `:75`).
 
 Output does not change.
 
@@ -529,6 +531,11 @@ This starts when a new version of either extension is wanted, and ships with tha
   a compressed one that deflates it, and come with their specification, the records' addition to the manifest's
   serializable form, the compressed version's uncompressed counterpart, and conformance-corpus entries, as the
   byte-identity plan requires of every new version. Metadata V1 to V3 refuse to write a manifest with records.
+- The new metadata versions never become the default. A serializer built without a default takes the newest loaded
+  version (`ExtensibleSerializer.java:142`), and the writers set none (`PureCompilerBinaryGenerator.java:313`,
+  `FSPeltPureGraphCache.java:92`). Once loaded, the new versions would then write every metadata file, and earlier
+  readers would reject every module. So the metadata serializer keeps version 3 as its default, set explicitly or
+  because the new versions decline to be the default, and the tests below run with the new versions loaded.
 - `FilePathProvider` computes manifest locations by the frozen rule. `FileSerializer` computes the recorded path
   provider version and picks the manifest's metadata version.
 - `FileDeserializer` gains module-scoped reading, and `PureCompilerLoader`, `MetadataPelt`, and `ElementLoader` use

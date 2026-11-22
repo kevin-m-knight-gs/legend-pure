@@ -3,15 +3,16 @@
 Status: proposal, 2026-10-15. The decision gate chose Option 1, the canonical encoder, with its level-7-like
 setting, on 2026-11-20. Phase 0's draft was written the same day, and decision 6 was made with it. The draft's
 first two reviews, on 2026-11-21, corrected it, and the first found bugs in the reference ID parser (Phase 0). A
-third, on 2026-11-22, corrected it and added test vectors.
+third, on 2026-11-22, corrected it and added test vectors, and decision 14, on Float and Decimal names, was made
+the same day.
 
 ## Goal
 
 PELT serialization is meant to be deterministic: every PELT file is a function of its logical content alone (see
-[F0](#f0-the-serializable-form)). Two writers that serialize the same content produce the same bytes, whatever the
-OS, JDK, CPU, zlib build, or programming language. That has always been the intent. Where it does not hold today,
-the existing system has a bug, and this plan addresses it. Afterward, other work can rely on the result as an
-invariant.
+[F0](#f0-the-serializable-form)). Two writers that serialize the same content with the same versions produce the
+same bytes, whatever the OS, JDK, CPU, zlib build, or programming language. That has always been the intent.
+Where it does not hold today, the existing system has a bug, and this plan addresses it. Afterward, other work can
+rely on the result as an invariant.
 
 One purpose stands out: a Pure compiler written in a language other than Java can be tested by compiling the same
 sources and comparing its binaries with those from the Java compiler. So the rules that turn a compiled graph into
@@ -77,7 +78,7 @@ Nothing above the extensions knows about compression, and this plan keeps it tha
 | Variable-width integers | `getIntWidth` and similar helpers: always the minimum width | Deterministic. |
 | String bytes | UTF-8 via `String.getBytes` (`AbstractBinaryReaderWriter.java:56`, `StringWriterV3.java:134`) | Deterministic for valid Unicode. Java silently writes `?` for an unpaired surrogate, and a Rust `String` cannot hold one. |
 | String index order | `StringWriterV3.java:307`: sort by `String.length()`, then `String.compareTo` | Deterministic, but both are defined on UTF-16 code units. Sorting by UTF-8 bytes or code points, the natural order in Rust and C, differs for supplementary characters. Lengths differ too: in UTF-8 bytes for all non-ASCII text, and in code points for supplementary characters. |
-| String decomposition | `StringWriterV3.processStrings` splits paths, dotted names, and bracketed IDs | A deterministic function of each string, with ASCII delimiters. |
+| String decomposition | `StringWriterV3.processStrings` splits source paths, import groups, dotted names, package paths, and bracketed strings | A deterministic function of each string, with ASCII delimiters. |
 | Module metadata ordering | Sorted by path, name, or ID with `String.compareTo` (`ModuleManifest.java:479`, `ModuleExternalReferenceMetadata.java:177`, `ElementBackReferenceMetadata.java:290`, `ModuleFunctionNameMetadata.java:175`, `ModuleSourceMetadata.java:380`) | Deterministic, with the same UTF-16 caveat. |
 | Node order in an element | Breadth-first from the element, properties sorted by name (`SerializerV1.java:544`), values in graph order | Deterministic for a given graph. Back-reference properties, the only ones whose order depends on processing order, are kept out of the element or written sorted (`SerializerV1.java:180` and `:249`). |
 | Numbers | Float and Decimal as digit strings from the instance name (`BaseV1.java:175`); Integer as a minimum-width long, or a digit string for BigInteger (`BaseV1.java:219`) | Deterministic. No binary floating-point formatting is involved. |
@@ -316,6 +317,7 @@ match, and every rule between that graph and the serializable forms must be spec
 
 - inferred generic types, resolved function applications, and generated properties (for example for
   milestoning), with values in the same order;
+- the names of Float and Decimal instances: canonical numerals (section 5 and decision 14);
 - source information: line and column numbering, column units for non-ASCII text (UTF-16 code units or code
   points), tab handling, and exactly which positions start and end columns denote.
 
@@ -500,8 +502,8 @@ V2, through the existing version selection. Jars compress their entries as usual
 
 **Open questions,** answered by Phase 4 except for the largest models:
 
-- How large the losses are, especially for the largest models. Without the largest models: none in load time, and
-  under 1% of size in jars.
+- How large the losses are, especially for the largest models. Without the largest models: none in load time,
+  under 1% of size in jars, and 3.1 to 4.0 times the bytes in directories.
 - Why the gains survive inside jars. If part of the load-time gain comes from the I/O path rather than from
   compression itself, for example from the number and size of reads, a reader change might recover it. Load time
   came from the number and size of reads, and the reader change, buffering, is merged ([#1401]).
@@ -590,12 +592,14 @@ it the three benefits above. Whether they are worth more than today's compressio
 - **Values in the serializable form.** It keeps everything that an encoding keeps (F0):
   - **Float and Decimal.** V1 writes a sign and digit strings taken from the instance name (`BaseV1.java:175`),
     but `Value` holds a `BigDecimal` (`Value.java:318` and `:338`), which loses the sign of a negative zero and
-    any leading zeros. If such names occur, files that differ decode to equal serializable forms. The serializable
-    form keeps the sign and the digit strings, and compares by them; the `BigDecimal` stays available. Java's own
-    names cannot hold either: they are `BigDecimal.toPlainString()` (`SimpleFloatCoreInstance`,
-    `SimpleDecimalCoreInstance`), so `-0.0` is named `0.0` and `007.50` is `7.5` as a Float and `7.50` as a Decimal
-    (verified). What `Value` does lose is an exponent's scale: `1e3d` is `1E+3` in the graph and `1000` once
-    decoded, equal as numbers but not under `BigDecimal.equals`.
+    any leading zeros. If such numerals occur, files that differ decode to equal serializable forms. Java's names
+    hold neither, since they are plain strings of `BigDecimal` values (below), but other writers' files could.
+    `Value` also errs the other way: it tells apart values that the form writes as one numeral. `1e3d` is `1E+3`
+    in the graph, but its name, and so its file, say `1000`, so a form built from the graph's `BigDecimal` differs
+    from the one read back from the file, although both hold the same number. Giving Decimal the Float rule
+    (below) removes that for the graphs Java builds, which then hold `1000.0`, as the file does. The serializable
+    form keeps the sign and the digit strings, and compares by them, which removes both problems for every writer;
+    the `BigDecimal` stays available.
   - **Integers** are values, whatever Java type holds them. `Value` compares them by Java type, so an `Integer` 5
     differs from a `Long` 5, and V1 chooses between its two integer encodings by Java type too (`BaseV1.java:222`).
     Both are consistent today, because `ModelRepository` and the deserializer choose types the same way. The
@@ -605,6 +609,31 @@ it the three benefits above. Whether they are worth more than today's compressio
     big integer encoding (verified; `ModelRepository.java:602`). None occurs in the files checked in Phase 0.
   - **Compile states** are a set of named states. The bitset, which depends on the order of the `CompileState`
     enum, is V1's encoding of that set.
+- **Float and Decimal names.** Each Float and Decimal is to be named by a canonical numeral, so that two names are
+  equal exactly when their numbers are, as real numbers rather than under `BigDecimal.equals` (decision 14). Float
+  names already are. Every Float that `ModelRepository` creates (`SimplePrimitiveCoreInstances.java:56`) goes
+  through `FloatCoreInstance.canonicalizeBigDecimal` (`FloatCoreInstance.java:29`), and its name is the result's
+  plain string, with at least one fractional digit and no other trailing zero. So `007.50` is named `7.5`, `1.0e3`
+  is `1000.0`, and `-0.0` is `0.0`, and the rule gives equal names exactly to equal numbers (verified on JDK 8,
+  11, 17, 21, and 25). Decimal names are not canonical: a Decimal keeps the `BigDecimal` it is given
+  (`SimplePrimitiveCoreInstances.java:51`), and its name is that value's plain string
+  (`SimpleDecimalCoreInstance.java:42`), so `7.50d` is named `7.50` but `7.5d` is `7.5`, and `1d` is `1` but
+  `1.0d` is `1.0`. The fix gives Decimal the Float rule. It changes values, not only names:
+  - **Files.** Every element with a Decimal that the rule renames gets new bytes, so the fix comes after a scan of
+    existing models (Phase 2), and before Phase 3's corpus records such names. The specification's note on what
+    Java's compiler writes changes with it.
+  - **The interpreted engine** compares primitive values with `equals` (`EqualityUtilities.java:71`) and gives a
+    primitive's name as its string (`ToString.java:56`), so `1.50d == 1.5d` becomes true, as it already is for
+    Floats, and `1.50d->toString()` becomes `1.5`. It makes the Decimals it computes through `ModelRepository`
+    (`NumericUtilities.java:164`), so they follow too.
+  - **The compiled engine** builds Decimal literals from names (`JavaPurePrimitiveTypeMapping.java:112`), so its
+    literals follow. Computed Decimals keep `BigDecimal`'s own scale, in arithmetic (`CompiledSupport.java:1363`),
+    equality (`:1010`), and strings (`:1278`), so the compiled engine needs the same rule, or the two engines
+    disagree on them.
+  - **Pure code** that turns Decimals into text writes canonical numerals too, for example `toRepresentation`
+    (`toRepresentation.pure:46`), through which legend-engine's Pure grammar composer writes Decimals
+    (`toPureGrammar.pure:119`). So the scan covers legend-pure's and legend-engine's test expectations, as well as
+    the models' files.
 - **File names.** Path segments are ASCII in path provider V1, and serialization reports any other as a build-time
   error (decided on 2026-11-20, the strings document's decision 10). The 126-unit limit applies to each path segment,
   extension included. A longer segment is cut so that the kept part, a 13-character hash suffix, and the extension
@@ -644,6 +673,13 @@ it the three benefits above. Whether they are worth more than today's compressio
   `invalid1` and `Invalid1`, in one package, as test data for its naming checks (verified). Its jar holds all eight
   of their files, but written to or unpacked onto a case-insensitive file system, four of them are lost without an
   error. The error would need one enumeration of each pair renamed first.
+- **Windows device names.** Windows also reserves device names, compared without regard to case. Which, and where,
+  depends on the version. In a path with a directory, Windows 11 build 26300 reserves only `NUL`, and only without
+  an extension, so of PELT paths only a directory named `nul` is affected: a package's, or a module's directory of
+  element back reference files. Earlier versions reserve `CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, and `LPT1`
+  to `LPT9`, each with or without an extension, and so element files such as `con.pelt` as well. The
+  [strings document](2026-11-06-cross-platform-strings.md#65-file-names) puts them under the same build-time error
+  as case-only differences, after their own scan, so decision 7 covers both.
 - **Constants.** File signatures (for example `Long.parseLong("PureManifest", 36)`) and version numbers, listed as
   numbers.
 - **Special strings.** The special-string table in `BaseStringIndex` (`SPECIAL_STRING_IDS`), listed in full.
@@ -762,14 +798,14 @@ cites no plan, since the plans may never be merged.
 
 ### Phase 1: serializable-form tooling (F0, F2)
 
-Phase 2 compares builds with these tools, so they come first.
+Phase 2 compares builds with these tools, so they come first. They rely on the value fixes in the serializable
+form (section 5): Float and Decimal values keep their sign and digit strings, and integers compare by value. So
+does Phase 2's encoder. The value fixes change no file, so they come at once, with the other such fixes (Phase 0);
+the one for Float and Decimal follows decision 11.
 
 - **Rename `DeserializedConcreteElement` to `SerializableConcreteElement`,** first, so that these tools are
   written against the new name (see section 8). Its javadoc says that it is the form an element is serialized in,
   since the name could be read as a kind of element.
-- **The value fixes in the serializable form** (section 5): Float and Decimal values keep their sign and digit
-  strings, and integers compare by value. Comparisons of serializable forms rely on them, and so does Phase 2's
-  encoder.
 - **A utility** that dispatches on signature and version to decode files and compute content digests. It needs no
   new dependencies.
 - **Envelope validation** for the compressing extensions (F2), in their tests and their own tooling.
@@ -800,7 +836,7 @@ Exit: two builds can be compared by serializable form in any environment, whatev
     `ConcreteElementSerializerV1` and `ConcreteElementSerializerV2` implement the interface, and legend-engine
     neither references it nor registers an implementation. `ConcreteElementSerializer` keeps its methods that take
     an element, and gains methods that take a serializable form.
-  - The encoder depends on Phase 1's value fixes. `SerializerV1` takes Float and Decimal digit strings from
+  - The encoder depends on the value fixes (section 5). `SerializerV1` takes Float and Decimal digit strings from
     instance names (section 5), so an encoder given values without them would change the bytes of any element with
     a negative zero or leading zeros.
   - Measure serialization time before and after the split, on Phase 4's module sets. The write side then holds
@@ -822,8 +858,11 @@ Exit: two builds can be compared by serializable form in any environment, whatev
     environment, such as file listing order.
 
   Any difference goes to a separate plan for fixing the compiler.
-- **Reject unpaired surrogates and case-only path collisions,** each after its scan of existing models (see
-  [section 5](#5-other-details-a-specification-has-to-pin-down)).
+- **Reject unpaired surrogates, case-only path collisions, and Windows device names,** each after its scan of
+  existing models (see [section 5](#5-other-details-a-specification-has-to-pin-down)).
+- **Give Decimal names the Float rule** (decision 14), after a scan shows which models' files and which test
+  expectations it changes (see [section 5](#5-other-details-a-specification-has-to-pin-down)). Both engines change
+  with it, with PCT tests of literal and computed Decimals, and it comes before Phase 3's corpus.
 - **Copy `longSpreadOne` into `FilePathTools`,** crediting Eclipse Collections, with tests that pin today's file
   names (see [section 5](#5-other-details-a-specification-has-to-pin-down)). No file name changes.
 
@@ -975,6 +1014,9 @@ critical path for the invariant.
   `InstanceData` keeps its name, since it appears unerased in generated constructors
   (`ClassPeltImplProcessor.java:438`).
 - **The value fixes** keep `Value`'s methods and change its equality only in the cases that section 5 lists.
+- **Canonical Decimal names** (decision 14) change no format, so earlier readers read the new files. They change
+  the bytes of every element with a Decimal that the rule renames, and what `==` and `toString` give for such
+  Decimals in both engines (section 5).
 - **Comparisons by serializable form, and content digests,** change no file.
 - **Option 5's method for decompressed payloads,** added only if the plan settles there, has a default, so the
   interfaces stay compatible.
@@ -994,17 +1036,20 @@ critical path for the invariant.
    2026-11-19): in some larger projects, directory size is itself a problem, and PELT files are used outside jars
    too. No other tolerance was needed: at the level-7-like setting, Option 1's files are smaller than Option 5's,
    and it costs no measurable time.
-3. **Marking canonical files with a new extension version.** Not recommended: canonicality can be checked by
-   re-encoding, and avoiding a new version keeps forward compatibility. The price is that the encoder is frozen,
-   and any revision comes with a new version.
+3. **Marking canonical files with a new extension version:** not done. Decision 1 settled this in effect, since
+   Phase 5 switches the existing extensions' encoders. Canonicality can be checked by re-encoding, and avoiding a
+   new version keeps forward compatibility. The price is that the encoder is frozen, and any revision comes with a
+   new version.
 4. **Non-Java writers under Option 1:** require the canonical encoder from the start, or allow stock deflate until
    they publish PELTs.
-5. **The module index of content digests (5a):** needed if the plan settles at Option 5, useful in the interim,
-   and unnecessary once byte identity is restored, since raw files then work with generic tools.
+5. **The module index of content digests (5a):** moot since decision 1. It was needed only if the plan settled at
+   Option 5. Once Phase 5 restores byte identity, raw files work with generic tools, and until then, comparisons by
+   serializable form (Phase 1) serve instead.
 6. **Unpaired surrogates:** decided on 2026-11-20: writers reject them, as the strings document's decision 1
    requires of serialization. Encoding them, for example as WTF-8, would have been a format change.
-7. **Case-only path collisions:** a build-time error (recommended), or file-name escaping in a new path provider
-   version. The error would break one legend-engine module until it renames two test enumerations (section 5).
+7. **Case-only path collisions and Windows device names:** a build-time error (recommended), or file-name escaping
+   in a new path provider version. The error for case-only collisions would break one legend-engine module until it
+   renames two test enumerations (section 5).
    Escaping renames every file it applies to, which depending on the scheme could be nearly all of them, and neither
    earlier nor later readers would find those files across the change: readers compute file names with the default
    path provider version, and nothing records which version wrote a module. The
@@ -1017,10 +1062,10 @@ critical path for the invariant.
     payload, such as element V1's with its string index version pinned, which takes two passes and cannot grow
     (F0). The Phase 0 draft follows the first.
 11. **Float and Decimal in the serializable form:** the sign and digit strings as written (recommended), or
-    numeric values, with every encoder writing canonical digit strings. The second changes the bytes of any
-    element with a negative zero or leading zeros in such a value. Java's names hold neither (section 5), so the
-    second changes no file Java writes if its canonical digit strings keep a Decimal's scale, as `toPlainString`
-    does. The Phase 0 draft follows the first.
+    numeric values, with every encoder writing canonical digit strings. Under the second, files that write one
+    number in different ways decode to equal serializable forms, and encoding such a form again can change the
+    file's bytes. Once Decimal names are canonical (decision 14), every numeral Java writes is canonical, so the two
+    agree on every file Java writes and differ only on other writers' files. The Phase 0 draft follows the first.
 12. **The canonical encoder's setting:** decided on 2026-11-20: the level-7-like setting. The encoder is frozen
     with one setting, and changing it later takes a new extension version. The prototype measured two
     ([results](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder)):
@@ -1035,6 +1080,10 @@ critical path for the invariant.
     people can read and diff (recommended), or JSON canonicalized by RFC 8785, an existing scheme, which puts each
     form on one line with its keys sorted. Either way, equal forms have equal text. The Phase 0 draft follows the
     first.
+14. **Float and Decimal names:** decided on 2026-11-22: every Float and Decimal is named by a canonical numeral, so
+    that names are equal exactly when the numbers are equal as real numbers, not under `BigDecimal.equals`. The
+    rule is the one Float follows today (section 5). Float needs no change. Decimal gets the rule in both engines,
+    after its scan (Phase 2).
 
 ## Outside this plan
 
@@ -1042,8 +1091,8 @@ critical path for the invariant.
 - **Double compression in jars.** Unless the packaging tool is configured otherwise, PELT entries are deflated a
   second time when packaged, for little gain. Storing them uncompressed (`STORED`) in jars would avoid that work at
   build and load time. Measure before changing. Phase 4 measured it with readers from before [#1401]: storing
-  today's files saves almost no space, and they read slightly slower. Stored entries have not been measured with
-  readers since then.
+  today's files saves no space, changing sizes by -0.05% to +0.42%, and they read 17% to 19% slower. Stored
+  entries have not been measured with readers since then.
 - **Byte-identical jars across environments** are out of reach from the PELT side alone. Jar bytes also depend on
   the JDK through compiled class files and the jar's own entry compression. PELT-level identity is the realistic
   scope.

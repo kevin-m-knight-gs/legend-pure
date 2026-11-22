@@ -10,22 +10,26 @@ how they depend on each other, the rules they share, and the order to do them in
 | Plan | What it does | When |
 |---|---|---|
 | [Byte-identical PELT files](2026-10-15-pelt-byte-identity.md) | Defines a serializable form of each element, makes every PELT file a function of its content alone, and specifies the format | Now |
-| [PELT consistency checks](2026-10-15-pelt-consistency-checks.md) | Finds, before any element loads, modules built against other versions of their dependencies | After the byte-identity plan's Phase 3 and the versions plan's Phase 2 |
-| [More than one path provider or reference ID version](2026-10-16-pelt-path-provider-and-reference-id-versions.md) (the versions plan) | Lets modules written with different versions of either extension load together | Phase 1 done; Phase 2 early; Phase 3 when a new version is wanted |
+| [PELT consistency checks](2026-10-15-pelt-consistency-checks.md) | Finds, before any element loads, modules built against other versions of their dependencies | After the byte-identity plan's Phase 3, the compiler fixes its Phase 2 calls for, and the versions plan's Phase 2 |
+| [More than one path provider or reference ID version](2026-10-16-pelt-path-provider-and-reference-id-versions.md) (the versions plan) | Lets modules written with different versions of either extension load together | Phase 1 done; Phase 2 once byte identity's specification is merged; Phase 3 when a new version is wanted |
 | [Strings across platforms and languages](2026-11-06-cross-platform-strings.md) (the strings document) | Sets out options for the string value, source coordinates, the language's string functions, and the format's string rules, and lists hazards to fix whatever is chosen | Hazard fixes now; format decisions with the byte-identity plan's Phase 0, coordinate decisions before its Phase 6, and language decisions separately |
 
 ## Dependencies
 
 - **Byte identity depends on neither of the other plans.** It keeps today's file-name hash and recommends a
-  build-time error for case-only path collisions. Only the alternative to that error, escaping, would need a new
-  path provider version.
+  build-time error for case-only path collisions and Windows device names. Only the alternative to that error,
+  escaping, would need a new path provider version.
 - **The consistency checks depend on byte identity through its Phase 3:** the specification, including the
   serializable form and its digest encoding (Phase 0), the serializable-form tooling (Phase 1), the generator,
-  the encoders that take serializable forms, and canonical uncompressed payloads from a deterministic compiler
-  (Phase 2), and the conformance corpus, which their file joins (Phase 3). ECDs are digests of the generator's
-  serializable forms, so they do not depend on compression. Their file's details are compressed as module metadata
-  is: with today's deflater until byte identity's Phase 5 adopts the canonical encoder, and with that encoder from
-  then on. They also depend on the versions plan's Phase 2 (below).
+  the encoders that take serializable forms, canonical uncompressed payloads, and the check of the compiler's
+  determinism (Phase 2), and the conformance corpus, which their file joins (Phase 3). They also depend on the
+  compiler fixes that the determinism check calls for, which byte identity leaves to a separate plan. Without
+  them, a dependency rebuilt from unchanged sources can get different ECDs, which fails the referenced-element
+  check of every module that depends on it, and two compilations of `core_relational` already differ
+  ([measurements, section 7](2026-11-18-pelt-compression-measurements.md#7-other-findings)). ECDs are digests of
+  the generator's serializable forms, so they do not depend on compression. Their file's details are compressed as
+  module metadata is: with today's deflater until byte identity's Phase 5 adopts the canonical encoder, and with
+  that encoder from then on. They also depend on the versions plan's Phase 2 (below).
 - **The versions plan:** Phase 1, now done, depended on nothing. Phase 2 adds to byte identity's specification,
   so it waits for that specification to be merged. Phase 3 needs two new metadata versions, an uncompressed one
   and a compressed one, since byte identity keeps both kinds of metadata in use (its F2).
@@ -95,14 +99,17 @@ gate was decided without them.
      serialization), the UTF-16 orders in existing versions (9), and ASCII path segments in path provider V1 (10).
      A draft, `docs/reference/pelt-format.md`, was written the same day, and two reviews, on 2026-11-21, and a
      third, on 2026-11-22, corrected it. Byte identity's decisions 10, 11, and 13, on the digest encoding, on Float
-     and Decimal, and on the text encoding, remain, and the draft proposes answers for them;
+     and Decimal in the serializable form, and on the text encoding, remain, and the draft proposes answers for
+     them;
    - the fixes for the departures that the draft lists (its section 12) and that change no file, and for the bugs
      in the reference ID parser that its first review found (byte identity's Phase 0), one per bug;
    - the strings document's remaining hazard fixes (its section 8), one per bug, beginning with merging the
-     default-charset fixes for legend-pure ([#1405]); and its scans of existing models.
+     default-charset fixes for legend-pure ([#1405]); and its scans of existing models;
+   - the scan for byte identity's decision 14, made on 2026-11-22, which names every Float and Decimal by a
+     canonical numeral. The fix for Decimal changes files, so it follows the scan, in byte identity's Phase 2.
 2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification is merged.
-3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 3 and the
-   versions plan's Phase 2 are done.
+3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 3, the
+   compiler fixes that its Phase 2 calls for, and the versions plan's Phase 2 are done.
    Meanwhile, byte identity's Phase 5, which adopts the canonical encoder.
 4. **When wanted:** byte identity's Phase 6, rules for compilers and a second implementation, with the non-Java
    work, once the strings document's decisions on coordinates (its decisions 3 to 5) are made; and the versions
