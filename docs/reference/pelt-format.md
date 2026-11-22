@@ -1,6 +1,6 @@
 # PELT format
 
-Status: draft, 2026-11-21. This document describes the PELT files that legend-pure writes and reads at `a67907c83`.
+Status: draft, 2026-11-22. This document describes the PELT files that legend-pure writes and reads at `a67907c83`.
 Three rules in it were decided on 2026-11-20: strings in files are well-formed UTF-8 (section 2.1), existing
 versions keep their UTF-16 orders (section 2.3), and path segments under path provider version 1 are ASCII
 (section 8.2). Three parts are proposals, not yet decided: the digest encoding (section 10), the text encoding
@@ -10,8 +10,8 @@ departure. Each departure is a bug.
 
 ## 1. Scope
 
-PELT serialization writes each compiled module as many files: one per concrete element, and a few per module for its
-metadata. This document specifies:
+PELT serialization writes each compiled module as many files: one for each concrete element, and, for its metadata,
+five files and one more for each element that the module's elements refer back to. This document specifies:
 
 - the serializable form of each kind of file, which says what the file holds apart from any encoding (section 5);
 - the binary encodings that legend-pure writes and reads (sections 3, 4, 6, and 7);
@@ -44,16 +44,18 @@ exist. String index versions 0 to 2 can be read, but version 3 has been the defa
 added, so this document does not specify them.
 
 A file's header names its element or metadata version. The string index version is the first field of each payload
-that has one. The reference ID version of an element file is in its header, and that of external reference and back
-reference metadata in their payloads. Nothing in a file names the path provider version: readers compute file names
-with version 1.
+that has one, which for element version 2 and metadata version 3 is the inflated payload. The reference ID version of
+an element file is in its header, and that of external reference and back reference metadata in their payloads.
+Nothing in a file names the path provider version: readers compute file names with version 1.
 
 ### 1.2 Conventions
 
 - **Must** states a requirement. So does every statement of what an encoding writes, such as a width, an order, or a
   choice between two forms, whether or not it says must. A file that breaks one does not conform, and a writer must
   not write one. Conformance tools reject such a file. Other readers may accept it, unless this document says that
-  they reject it.
+  they reject it. But a reader that cannot decode a file into a form fails, rather than produce some other form: for
+  example, on an unassigned code, on a string ID that names no string, or on a file that ends before its counts and
+  lengths say it does.
 - **Integers** are big-endian and two's complement: `i8`, `i16`, `i32`, and `i64` take 1, 2, 4, and 8 bytes. `u8`
   is an unsigned byte. The one exception, three-byte string IDs, is in section 4.5.
 - **Byte values** are in hexadecimal, as in `0xC0`. A byte that combines fields is written as a sum of hexadecimal
@@ -185,7 +187,7 @@ The first byte selects one of four forms. Writers choose the first that applies:
 | Two or more, not all the same | `0x00 + w` | the number of digits `n`, in width `w` as above; then `ceil(n / 2)` bytes: each pair of digits `d1 d2`, in order, as the value `10 * d1 + d2`, and a last unpaired digit `d` as the value `d` |
 
 Readers select the form by the byte's two high bits (`0x80`, `0x40`, `0xC0`, or `0x00`), and read the width from its
-two low bits. For example, `1234` is `00 04 0C 22` and `12345` is `00 05 0C 22 05`.
+two low bits. For example, `1234` is `00 04 0C 22`, `12345` is `00 05 0C 22 05`, and `777` is `C0 03 37`.
 
 No serializable form holds an empty digit string (section 5.1), so `0x80` never begins a digit string in a
 conforming file.
@@ -399,8 +401,8 @@ numbers.
 ### 5.3 How forms grow
 
 Forms have no version of their own. They leave a process only through encodings that carry versions: file headers,
-string index versions, digest prefixes, and, for the text encoding, the release of the test corpus that holds the
-text. When a form must grow, for a new kind of value or a new attribute of instances or metadata, it grows by
+string index versions, digest prefixes, and, for the text encoding, the revision of this document that the text
+follows. When a form must grow, for a new kind of value or a new attribute of instances or metadata, it grows by
 additions only:
 
 - each addition has an "absent" state, which every existing file means;
@@ -472,6 +474,9 @@ Readers decide whether source information and a reference ID are present by the 
 
 Here `n` is 1 for a negative number and 0 otherwise, and `d` is 2 when there is a fraction part and 0 otherwise.
 Readers select the kind of date or number by `byte & 0x18`.
+
+The width of internal IDs depends on the number of instances, not on the largest ID: in an element of 128 instances,
+every internal ID takes 2 bytes, although the largest, 127, fits in 1.
 
 **Dates.** The code `p` gives the last part present:
 
@@ -694,8 +699,9 @@ Readers accept at least what writers write. legend-pure's parser accepts more, f
 - `.p[name='k']`;
 - indexes with a sign, with leading zeros, or with digits outside ASCII, such as `.p[+3]`, `.p[03]`, and `.p[-0]`;
 - text inside the brackets before or after a quoted key, which it ignores, as in `.p[x'k']` and `.p['k'x]`;
-- escapes in keys that writers never write: octal escapes; `\u` escapes with more than one `u`, with a `+` or `-`
-  sign, or with digits outside ASCII; and a backslash before any other character, which it drops.
+- escapes in keys that writers never write: octal escapes; `\u` escapes with lowercase hexadecimal digits, with more
+  than one `u`, with a `+` or `-` sign, or with digits outside ASCII; and a backslash before any other character,
+  which it drops.
 
 Such IDs do not conform.
 
@@ -759,7 +765,8 @@ The digest encoding writes a serializable form as bytes, for digests only: it is
 
 - **A date** is an `i32` year; a `u8` for its last part present: 0 year, 1 month, 2 day, 3 hour, 4 minute, 5 second,
   6 subsecond; a `u8` for each of the month, day, hour, minute, and second that is present; and the subsecond, if
-  present, as a string of its digits.
+  present, as a string of its digits. These codes follow the order of the parts, unlike element version 1's codes
+  `p` (section 6.2).
 - **A time** is a `u8` for its last part present: 4 minute, 5 second, 6 subsecond; a `u8` each for the hour, the
   minute, and the second if present; and the subsecond, if present, as a string of its digits.
 - **A numeral** is written as text: `-` if negative, the integer part's digits, and, if there is a fraction part, `.`
@@ -830,12 +837,19 @@ A back reference is an object with one key, its kind: `application`, `modelEleme
 `qualifiedPropertyFromAssociation`, and `specialization` have a string; `referenceUsage` has an object with `owner`,
 `property`, `offset`, and `sourceInformation`, which is left out when absent.
 
-**Layout.** Corpora publish dumps in one layout, so that equal forms have equal text. Section 13 has an example.
+**Layout.** Corpora publish dumps in one layout, so that equal forms have equal text. Section 13 has two examples.
 
-- Keys are in the orders above, and each level is indented by two spaces.
-- Each object member and array item is on its own line, except that `sourceInformation`, `compileStates`, and each
-  value object are on one line, with one space after each `,` in them. An empty array is `[]`.
-- Each `:` after a key is followed by one space.
+- Keys are in the orders above.
+- `sourceInformation`, `compileStates`, each value object, and every empty array are on one line. An empty array is
+  `[]`. In the others, each `,` is followed by one space, and no space follows the opening bracket or precedes the
+  closing one.
+- Every other object or array is on several lines. Its opening bracket ends a line. Each member or item follows on a
+  line of its own, indented by two spaces more than the line with the opening bracket, and followed by `,` unless it
+  is the last. The closing bracket is on a line of its own, indented as the line with the opening bracket. The
+  outermost object begins the first line, with no indentation. So a back reference object is on several lines, and
+  so is a reference usage's object.
+- Each `:` after a key is followed by one space. Apart from indentation and the spaces that these rules name, no
+  space appears outside strings.
 - Numbers are in decimal, with a leading `-` if negative, no leading zeros (`0` for zero), and no fraction or
   exponent.
 - Strings use the escapes `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, and `\t`, and `\u` with four lowercase hexadecimal
@@ -874,10 +888,12 @@ changes files written today comes after a scan of existing models shows which it
    remain, although section 5.2 allows no duplicates.
 7. **Names outside ASCII** in element paths and module names are written, not rejected (section 8.2). legend-pure's
    M3 grammar and its check on module names do not let them arise.
-8. **The Java form classes.** `Value` holds Float and Decimal values as `BigDecimal`, which loses a negative zero,
-   leading zeros, and an exponent's scale, and compares integers by their Java type, so an `Integer` 5 differs from a
-   `Long` 5 (`Value.java:318`, `:338`, and `:358`). Section 5.1 compares numerals as written and integers by value.
-   The bytes are not affected: the encoder takes numerals from instance names.
+8. **The Java form classes.** `Value` holds Float and Decimal values as `BigDecimal`, which loses a negative zero
+   and leading zeros, and tells apart values that the form writes as one numeral: a Decimal `1e3d` built from a
+   compiled graph (`1E+3`) differs from the same value read back from its file (`1000`). It also compares integers by
+   their Java type, so an `Integer` 5 differs from a `Long` 5 (`Value.java:318`, `:338`, and `:358`). Section 5.1
+   compares numerals as written and integers by value. The bytes are not affected: the encoder takes numerals from
+   instance names.
 9. **Property names in reference IDs** are not checked against section 9.1 when IDs are generated
    (`ReferenceIdGenerator.java:230`, `:253`, and `:268`). Pure lets a property be declared with a quoted name, such
    as `'my prop'`, which would give any instance reached through that property an ID that is outside section 9.1's
@@ -922,12 +938,47 @@ The next three are simple bracketed (section 4.2), although legend-pure's writer
 | `[']` | `00 00 00 03 00 00 00 02 02 01 27 C0 D5 D7 D8` |
 | `a[k=']` | `00 00 00 03 00 00 00 03 02 01 61 02 03 6B 3D 27 C0 D7 D8 D9` |
 
+**String ID widths (section 4.5).** Each table holds the decimal numerals `0` to `n - 1`, which are simple, so the
+numeral `k` has the ID `k`. After the index, each payload writes `0`, the numeral `n - 1`, and `::`:
+
+| Strings in the table, `n` | Payload bytes | Payload SHA-256 | `0` | `n - 1` | `::` |
+|---|---|---|---|---|---|
+| 168 | 741 | `11b99d733bdc11a8f0038df569cbfacf4ac912cc6f09b567133f5a2c5ba8e898` | `D7` | `7E` | `D4` |
+| 169 | 749 | `dba6cc407a42dc42990f403dca9b5184f3f5c9b504c2813e626e08f5a01002b5` | `80 57` | `80 FF` | `80 54` |
+| 65,448 | 447,040 | `0069d63112521ceb83b8bccddb1462381aa01d66cb2c4eceb254b605d9e0f5e4` | `80 57` | `7F FE` | `80 54` |
+| 65,449 | 447,050 | `22247723c586b96fb53966f641484b94c3de9467d27bc46d6e5f8b7f39efe8a2` | `57 00 00` | `FF FF 00` | `54 00 00` |
+| 16,777,128 | 156,660,187 | `817dc9e04c5cfcea82a037619fec65fbb329572f912f6135f753e6af286e2b27` | `57 00 00` | `FE FF FF` | `54 00 00` |
+| 16,777,129 | 156,660,200 | `0a1953a943cec1ede06b5f13cc29989b939ebc3ea77014dea6cf9989383e59f6` | `00 00 00 00` | `00 FF FF A8` | `FF FF FF FD` |
+
+In the rows for 169, 65,449, and 16,777,129 strings, the last ID would fit in the next narrower width: the limits
+leave each width's top value unused.
+
+**Wider lengths and counts (section 4.4).** With `a` repeated 200 times, `a` repeated 40,000 times, and
+`a::a::...::a`, whose parts are 130 strings `a`, written in that order after the index, the payload has 40,355 bytes,
+with the SHA-256 `75fc191472b14d42431bc30f75fc1f843883c17318155801aabb365d4a37127b`. It is
+`00 00 00 03 00 00 00 04`; then `02 01 61`, for `a`; `01 00 C8` and 200 bytes `61`; `41 00 82` and 130 bytes `D7`,
+for the package path; `00 00 00 9C 40` and 40,000 bytes `61`; and then `D8 DA D9`.
+
+**Values (section 6.2).** Values without strings or references encode the same way in every payload. Written as in
+the text encoding (section 11), and read back by legend-pure as the same values:
+
+| Value | Bytes |
+|---|---|
+| Date `2026` | `C0 00 00 07 EA` |
+| DateTime `2026-11-20T13` | `D4 00 00 07 EA 0B 14 0D` |
+| DateTime `2026-11-20T13:05:09` | `D6 00 00 07 EA 0B 14 0D 05 09` |
+| StrictTime `08:30:15` | `66 08 1E 0F` |
+| Decimal `0.777` | `BA 40 30 C0 03 37` |
+| Integer `128` | `A1 00 80` |
+| Integer `2147483648` | `A3 00 00 00 00 80 00 00 00` |
+| Integer `11111111111111111111111` | `A8 C0 17 31` |
+
 **File-name hashes (section 8.2).**
 
-| String | Hash, as a signed 64-bit value | In base 32 |
+| String | Hash, as a signed 64-bit value | In base 32, padded to 13 characters |
 |---|---|---|
-| (empty) | 0 | `0` |
-| `a` | 97 | `31` |
+| (empty) | 0 | `0000000000000` |
+| `a` | 97 | `0000000000031` |
 | `ab` | -2,348,236,215,798,108,722 | `duqb3j9maaree` |
 | `abc` | 6,950,668,482,129,537,676 | `60tds522dbakc` |
 | `Avestan` | -895,522,193,269,313,661 | `f74jn9tar8bs3` |
@@ -942,7 +993,10 @@ The next three are simple bracketed (section 4.2), although legend-pure's writer
 | 121 | `pkg/` + the name + `.pelt`, a file name of 126 characters | `pkg/` + the name + `.pbr`, a file name of 125 characters |
 | 122 | `pkg/` + the first 108 characters + `52tisufrbfm28.pelt` | `pkg/` + the name + `.pbr`, a file name of 126 characters |
 | 123 | `pkg/` + the first 108 characters + `bnno9dd9bvkme.pelt` | `pkg/` + the first 109 characters + `c323rv9kr7tfk.pbr` |
+| 128 | `pkg/` + the first 108 characters + `0rq0a52sf28du.pelt` | `pkg/` + the first 109 characters + `019utp3t3pc72.pbr` |
 | 130 | `pkg/` + the first 108 characters + `74d13ahrei85t.pelt` | `pkg/` + the first 109 characters + `4hr3v6q47lgr1.pbr` |
+
+In the row for 128, both hashes have only 12 digits in base 32, so each begins with a `0` of padding.
 
 **Headers (sections 6.1 and 7.1).** An element version 2 file with reference ID version 1 begins
 `01 4F D4 C4 B6 63 95 B9 00 00 00 02 00 00 00 01`, and a version 3 manifest begins
@@ -1084,3 +1138,38 @@ C3 A9 00 00 02 00 00 00 0A 74 65 73 74 3A 3A 50
 ```
 
 So its content digest is `bf044c1887dbf1c6315eef971ec0549c8239be5cf368e4b0b93536c01063640b`.
+
+**A module manifest (sections 5.2, 7, and 11).** This made-up manifest has one dependency and one element. Its form,
+in the text encoding, is:
+
+```json
+{
+  "kind": "manifest",
+  "module": "m",
+  "dependencies": [
+    "platform"
+  ],
+  "elements": [
+    {
+      "path": "m::Example",
+      "classifier": "meta::pure::metamodel::type::Class",
+      "sourceInformation": ["/m/example.pure", 3, 1, 3, 7, 200, 1]
+    }
+  ]
+}
+```
+
+Its file with metadata version 2, which legend-pure writes for this form and reads back as it, is these 89 bytes.
+The end line, 200, takes the source information to the 2-byte width:
+
+```
+2F 39 EC 36 29 C7 26 AD 00 00 00 02 00 00 00 03
+00 00 00 07 02 01 6D 02 07 45 78 61 6D 70 6C 65
+02 07 65 78 61 6D 70 6C 65 02 08 70 6C 61 74 66
+6F 72 6D 42 02 D7 D8 22 02 D9 A6 82 02 D7 DC D7
+00 00 00 01 00 00 00 01 DA DB C3 DD 01 00 03 00
+01 00 03 00 07 00 C8 00 01
+```
+
+An encoder of metadata version 1 rejects this form, since it has a dependency (section 7.3). legend-pure's drops
+the dependency instead (section 12, item 4).
