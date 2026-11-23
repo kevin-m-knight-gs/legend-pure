@@ -80,12 +80,12 @@ long after startup, partway through execution.
   no loader passes one.
 - **Only path provider V1 exists,** so every existing binary was written with it.
 - **Readers start from the manifest.** Loaders know module names, compute each manifest's location, and read the
-  manifest before any other file of the module: `PureCompilerLoader` (`PureCompilerLoader.java:472` and `:478`) and
-  `MetadataPelt` (`MetadataPelt.java:299`). legend-engine loads through `MetadataPelt`. `MetadataIndex` already
-  maps each element to its module (`getElementModuleName`, `MetadataIndex.java:238`), although `ElementLoader`
-  reads element files by path alone today (`ElementLoader.java:368` and `:393`). Back-reference lookups already
-  take a module name, which `ElementLoader` gets from `MetadataIndex.getBackReferenceModuleNames`
-  (`ElementLoader.java:233` and `:283`).
+  manifest before any other file of the module: `PureCompilerLoader` (`PureCompilerLoader.java:303`) and
+  `MetadataPelt` (`MetadataPelt.java:299` and `:300`). legend-engine loads through `MetadataPelt`.
+  `MetadataIndex` already maps each element to its module (`getElementModuleName`, `MetadataIndex.java:238`),
+  although `ElementLoader` reads element files by path alone today (`ElementLoader.java:368` and `:393`).
+  Back-reference lookups already take a module name, which `ElementLoader` gets from
+  `MetadataIndex.getBackReferenceModuleNames` (`ElementLoader.java:233` and `:283`).
 - **The manifest has no room for another field.** Metadata V2's manifest holds a string index, the module name,
   the dependencies, and the elements (`ModuleMetadataSerializerV2.java:68`), and V3 deflates it. Each metadata
   file's header carries its own version, so a writer can choose the version file by file.
@@ -519,7 +519,8 @@ This needs the PELT specification, from the byte-identity plan's Phase 0, merged
 - Each new reference ID version comes with tests showing that it and every other version reject each other's
   non-root IDs, that it accepts the same root IDs, names the element of each of its IDs (R6), and resolves against
   elements written with every other version. `TestPrefixedReferenceIdExtension` checks the first two for the test
-  version and V1, rejection in both directions (`TestPrefixedReferenceIdExtension.java:74` and `:75`).
+  version and V1: rejection in both directions (`TestPrefixedReferenceIdExtension.java:74` and `:75`), and root
+  IDs (`:65` to `:67`).
 
 Output does not change.
 
@@ -532,10 +533,23 @@ This starts when a new version of either extension is wanted, and ships with tha
   serializable form, the compressed version's uncompressed counterpart, and conformance-corpus entries, as the
   byte-identity plan requires of every new version. Metadata V1 to V3 refuse to write a manifest with records.
 - The new metadata versions never become the default. A serializer built without a default takes the newest loaded
-  version (`ExtensibleSerializer.java:142`), and the writers set none (`PureCompilerBinaryGenerator.java:313`,
-  `FSPeltPureGraphCache.java:92`). Once loaded, the new versions would then write every metadata file, and earlier
-  readers would reject every module. So the metadata serializer keeps version 3 as its default, set explicitly or
-  because the new versions decline to be the default, and the tests below run with the new versions loaded.
+  version (`ExtensibleSerializer.java:142`), and no writer sets one: `PureCompilerBinaryGenerator.java:313`,
+  `FSPeltPureGraphCache.java:92`, `FSPeltGraphLoaderHybridPureGraphCache.java:134`,
+  `JavaStandaloneLibraryGenerator.java:190`, and `JavaCodeGeneration.java:457`, which
+  `legend-pure-maven-generation-java` runs. Once loaded, the new versions would then write every metadata file, and
+  earlier readers would reject every module. So `ModuleMetadataSerializer`'s builder defaults to version 3, not to
+  the newest, also after `clearDefaultVersion` (`ExtensibleSerializer.java:131`), and `withDefaultVersion`
+  (`ModuleMetadataSerializer.java:315`) refuses a new version. The choice stays in the builder: the extensions
+  cannot decline to be the default themselves, since `SerializerExtension` declares only `version()`
+  (`SerializerExtension.java:19`), and no interface gains a method ([section 10](#10-compatibility)). A writer
+  that wants version 2 sets it as the default, and gets the new uncompressed version for a manifest with records;
+  one that passes version 2 to `serializeManifest` (`ModuleMetadataSerializer.java:52`) gets an error. The tests
+  below run with the new versions loaded, and with default metadata versions 2 and 3.
+- Reference ID providers default to the newest loaded version too (`ReferenceIds.java:275`), as path providers do
+  ([section 1](#1-where-we-are)). So a new version of either, once loaded, is what every writer above uses. Every
+  module would then record a new reference ID version, and every module whose file names change, a new path
+  provider version; earlier readers would reject them all. Whether a new version is adopted that way, or only where
+  a writer chooses it, is decision 10.
 - `FilePathProvider` computes manifest locations by the frozen rule. `FileSerializer` computes the recorded path
   provider version and picks the manifest's metadata version.
 - `FileDeserializer` gains module-scoped reading, and `PureCompilerLoader`, `MetadataPelt`, and `ElementLoader` use
@@ -614,6 +628,11 @@ Exit: a new version of either extension can ship.
 7. **Generated code:** frozen at V1 (recommended), with the version recorded, or relying on self-describing IDs.
 8. **R3 to R6:** binding on every later version (recommended), or decided version by version.
 9. **When Phase 3 ships:** with the first new version (recommended), or ahead of it.
+10. **When a new version of either extension is adopted:** as soon as it is loaded, since the newest loaded version
+    is the default, as for every extensible serializer today; or only where a writer chooses it, until a later
+    release makes it the default ([Phase 3](#phase-3-record-versions-and-honor-them)). The first needs no setting,
+    but from the version's first release on, earlier readers reject every module that it changes. The second lets
+    readers that know the version spread before any module needs them.
 
 [#1371]: https://github.com/finos/legend-pure/pull/1371
 [#1372]: https://github.com/finos/legend-pure/pull/1372

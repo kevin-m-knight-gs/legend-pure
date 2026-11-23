@@ -48,8 +48,8 @@ in a local Maven repository. Statements added or corrected on 2026-11-19 were ch
 by tests on Temurin JDK 25.0.5, and by small programs on JDK 11, 17, and 25. Statements updated on 2026-11-20,
 after those fixes merged, were checked at legend-pure `bfc29ad40` and legend-engine `cb5d33f4c65`, by reading the
 code and with small programs on Temurin JDK 25.0.5. Statements corrected on 2026-11-22 were checked at legend-pure
-`a67907c83` and legend-engine `cb5d33f4c65`, by reading the code. The legend-pure line references in sections 1.3
-and 1.4 are to `a67907c83`.
+`a67907c83`, legend-engine `cb5d33f4c65`, and legend-shared `f9b8089`, by reading the code. The legend-pure line
+references in sections 1.3 and 1.4 are to `a67907c83`.
 
 ## Terms
 
@@ -483,9 +483,9 @@ reject octal escapes and dropped backslashes, since writers never write them.
 
 - legend-pure's grammar allows only ASCII element names, so path provider V1 says so (decision 10, made on
   2026-11-20), and serialization reports any other path segment as a build-time error, after a scan of existing
-  models. Two more checks belong with
-  it, as build-time errors on every platform: the case-only collisions of the byte-identity plan's decision 7, and
-  Windows device names compared without regard to case (`NUL` at least; all of them, for earlier Windows versions).
+  models. Two more checks belong with it, as build-time errors on every platform, if the byte-identity plan's
+  decision 7 takes the recommended error: case-only collisions, and Windows device names compared without regard to
+  case (`NUL` at least; all of them, for earlier Windows versions).
 - If element names outside ASCII are ever needed, for example if legend-engine models with quoted identifiers
   become PELTs, a new path provider version has to name their files. The rest of this section sets out options for
   that version, to consider when it is needed. None is chosen (decision 13).
@@ -696,8 +696,9 @@ For the recommended combination. Items marked *now* are the hazards of section 8
   (`CompiledSupport.java:1531` to `:1572`, and the interpreted natives), through a shared helper for code point
   offsets; PCT tests with supplementary characters; documentation that defines a character; and `split` and `trim`
   as decided.
-- **Serialization:** writers reject unpaired surrogates; non-ASCII path segments, case-only collisions, and Windows
-  device names are build-time errors, each after its scan.
+- **Serialization:** writers reject unpaired surrogates; non-ASCII path segments are a build-time error, and so are
+  case-only collisions and Windows device names if the byte-identity plan's decision 7 takes the recommended
+  error, each after its scan.
 - **Specification:** `pelt-format.md` (the byte-identity plan's Phase 0) states UTF-8 byte lengths, the O1 orders
   with test vectors, the reference ID escapes, and the file-name rules. The rules for compilers (its Phase 6) state
   the coordinate rules of section 4.

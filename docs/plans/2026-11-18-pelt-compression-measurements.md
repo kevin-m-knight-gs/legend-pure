@@ -235,12 +235,13 @@ Here too, the one configuration where every read is buffered (Option 4 in direct
 With PELT entries stored rather than deflated, today's reader reads Option 4's files straight from the jar file:
 each primitive read becomes a native file read. Reading and decoding take 12.264 seconds for platform, against
 0.667 deflated, and 584 seconds for legend-engine, against 41. Today's files are not affected that way, since
-their own inflater reads 512 bytes at a time, but stored entries still read 17% to 19% slower than deflated ones:
-0.825 seconds against 0.703 for platform, and 41.6 against 35.1 for legend-engine.
+their own inflater reads 512 bytes at a time, but stored entries still read slower than deflated ones for platform
+and legend-engine, by 17% and 19%: 0.825 seconds against 0.703, and 41.6 against 35.1. For legend-pure, they read
+as fast: 0.753 seconds against 0.762.
 
 So under Option 4, PELT entries must not be stored in jars until the readers buffer. With today's files, storing
-saves no space, changing sizes by -0.05% to +0.42% ([section 3](#in-jars)), and reads slower. For today's
-readers, that answers the plan's open item on double compression in jars
+saves almost no space, changing sizes by -0.05% to +0.42% ([section 3](#in-jars)), and reads slower for two of
+the three sets. For today's readers, that answers the plan's open item on double compression in jars
 ([Outside this plan](2026-10-15-pelt-byte-identity.md#outside-this-plan)).
 
 ## 5. Serialization time

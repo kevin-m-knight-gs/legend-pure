@@ -25,24 +25,24 @@ how they depend on each other, the rules they share, and the order to do them in
   determinism (Phase 2), and the conformance corpus, which their file joins (Phase 3). They also depend on the
   compiler fixes that the determinism check calls for, which byte identity leaves to a separate plan. Without
   them, a dependency rebuilt from unchanged sources can get different ECDs, which fails the referenced-element
-  check of every module that depends on it, and two compilations of `core_relational` already differ
-  ([measurements, section 7](2026-11-18-pelt-compression-measurements.md#7-other-findings)). ECDs are digests of
-  the generator's serializable forms, so they do not depend on compression. Their file's details are compressed as
-  module metadata is: with today's deflater until byte identity's Phase 5 adopts the canonical encoder, and with
-  that encoder from then on. They also depend on the versions plan's Phase 2 (below).
+  check of every module that refers to an element whose ECD changed, and two compilations of `core_relational`
+  already differ ([measurements, section 7](2026-11-18-pelt-compression-measurements.md#7-other-findings)). ECDs
+  are digests of the generator's serializable forms, so they do not depend on compression. Their file's details
+  are compressed as module metadata is: with today's deflater until byte identity's Phase 5 adopts the canonical
+  encoder, and with that encoder from then on. They also depend on the versions plan's Phase 2 (below).
 - **The versions plan:** Phase 1, now done, depended on nothing. Phase 2 adds to byte identity's specification,
   so it waits for that specification to be merged. Phase 3 needs two new metadata versions, an uncompressed one
   and a compressed one, since byte identity keeps both kinds of metadata in use (its F2).
 - **The strings document depends on none of the plans, and they wait for it only in text.** It agrees with byte
-  identity's decisions 6 and 7, and adds Windows device names and non-ASCII path segments to decision 7's
-  build-time error. Byte identity's specification (Phase 0) writes down the format rules it recommends: well-formed
-  UTF-8, lengths in bytes, today's UTF-16 orders and reference ID escapes, and ASCII path segments. Byte identity's
-  rules for compilers (Phase 6) write down the strings document's coordinate rules. Counting columns in code points
-  changes no format, and the consistency checks do not see it, since ECDs leave source information out. Departing
-  from what the format does today takes new versions: a new path provider version for path segments outside ASCII
-  (the strings document's section 6.5 lists options for it, none chosen), and a new reference ID version for
-  another order in reference ID generation (the versions plan's Phase 3). UTF-8 orders elsewhere come only with
-  versions made for other reasons.
+  identity's decisions 6 and 7, and decision 7 now covers Windows device names as it recommends. Its decision 10,
+  made on 2026-11-20, makes path segments outside ASCII a build-time error in path provider V1. Byte identity's
+  specification (Phase 0) writes down the format rules it recommends: well-formed UTF-8, lengths in bytes, today's
+  UTF-16 orders and reference ID escapes, and ASCII path segments. Byte identity's rules for compilers (Phase 6)
+  write down the strings document's coordinate rules. Counting columns in code points changes no format, and the
+  consistency checks do not see it, since ECDs leave source information out. Departing from what the format does
+  today takes new versions: a new path provider version for path segments outside ASCII (the strings document's
+  section 6.5 lists options for it, none chosen), and a new reference ID version for another order in reference ID
+  generation (the versions plan's Phase 3). UTF-8 orders elsewhere come only with versions made for other reasons.
 - **Where the consistency checks and the versions plan meet:**
   - ECDs include reference IDs, so a dependency rebuilt with another reference ID version changes its ECDs. The
     consistency checks report that before any element loads, naming the version change. The versions plan's
@@ -102,12 +102,15 @@ gate was decided without them.
      and Decimal in the serializable form, and on the text encoding, remain, and the draft proposes answers for
      them;
    - the fixes for the departures that the draft lists (its section 12) and that change no file, and for the bugs
-     in the reference ID parser that its first review found (byte identity's Phase 0), one per bug;
+     in the reference ID parser that its first review found (byte identity's Phase 0), one per bug. The one for
+     Float and Decimal values waits for byte identity's decision 11 (its Phase 1);
    - the strings document's remaining hazard fixes (its section 8), one per bug, beginning with merging the
      default-charset fixes for legend-pure ([#1405]); and its scans of existing models;
-   - the scan for byte identity's decision 14, made on 2026-11-22, which names every Float and Decimal by a
-     canonical numeral. The fix for Decimal changes files, so it follows the scan, in byte identity's Phase 2.
-2. **Next:** byte identity's Phases 1 to 3, and the versions plan's Phase 2 once the specification is merged.
+   - the scan for byte identity's decision 14, made on 2026-11-22, which names every Float and Decimal in the
+     compiled graph by a canonical numeral, and leaves execution to each engine. The fix for Decimal literals
+     changes files, so it follows the scan, in byte identity's Phase 2.
+2. **Next:** byte identity's Phases 1 to 3, once its decision 11 is made; the compiler fixes that its Phase 2
+   calls for, in a plan of their own; and the versions plan's Phase 2 once the specification is merged.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 3, the
    compiler fixes that its Phase 2 calls for, and the versions plan's Phase 2 are done.
    Meanwhile, byte identity's Phase 5, which adopts the canonical encoder.
