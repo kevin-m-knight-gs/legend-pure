@@ -189,7 +189,7 @@ buffer.
 
 The platform and legend-pure figures are medians of 12 warm passes, and the legend-engine figures of 2. In
 legend-engine's jars, the first pass took 38.6 seconds for today's files and 38.1 for Option 4's. The warm figure
-for today's files there includes a pass from the session's first JVM, 29.2 seconds, made before the slowdown
+for today's files there includes a pass of 29.2 seconds from the first legend-engine JVM, one of the three fast reads
 described under [Stored entries](#stored-entries); in the other repetition, today's files took 41.0 seconds and
 Option 4's 41.4. So the ratio of 1.17 does not show that Option 4's files read slower from jars.
 
@@ -244,10 +244,9 @@ each primitive read becomes a native file read. Reading and decoding take 12.264
 their own inflater reads 512 bytes at a time, but for platform, stored entries still read 17% slower than deflated
 ones: 0.825 seconds against 0.703, and slower in each of the three repetitions. For legend-pure, they read as
 fast: 0.753 seconds against 0.762. For legend-engine, the two repetitions disagree: stored entries took 41.5
-seconds against 41.0 in one, and 41.7 against 29.2 in the other, whose deflated read came early in the session.
-The session's first three reads took 29 to 33 seconds, and every later legend-engine read in this comparison 41
-seconds or more. In every repetition, the stored reads ran after the deflated ones, so a slowdown during a session
-counts against them.
+seconds against 41.0 in one, and 41.7 against 29.2 in the other, whose deflated read came first. The first three reads
+of the legend-engine set took 29 to 33 seconds, and every later one in this comparison 41 seconds or more. In every
+repetition, the stored reads ran after the deflated ones, so a slowdown while the set ran would count against them.
 
 So under Option 4, PELT entries must not be stored in jars until the readers buffer. With today's files, storing
 saves almost no space, changing sizes by -0.05% to +0.42% ([section 3](#in-jars)), and reads slower for

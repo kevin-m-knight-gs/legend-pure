@@ -655,11 +655,11 @@ Exit: a new version of either extension can ship.
     release makes it the default ([Phase 3](#phase-3-record-versions-and-honor-them)). The first needs no setting,
     but from the version's first release on, earlier readers reject every module that it changes. The second lets
     readers that know the version spread before any module needs them. It needs, in two more builders,
-    `FilePathProvider`'s (`FilePathProvider.java:361` and `:368`) and `ReferenceIds`' (`ReferenceIds.java:256`,
-    `:261`, and `:275`), the default that Phase 3 gives the metadata serializer when none is set, the newest loaded
-    version other than the new one, but not its refusal, since a writer chooses the new version by setting it as
-    the default; a setting in each writer; and a later release that moves the default; from that release on,
-    readers that have not upgraded reject every module that it changes.
+    `FilePathProvider`'s (`FilePathProvider.java:326`, `:361`, and `:368`) and `ReferenceIds`' (`ReferenceIds.java:256`,
+    `:261`, `:266`, and `:275`), the default that Phase 3 gives the metadata serializer when none is set, the newest
+    loaded version other than the new one, but not its refusal, since a writer chooses the new version by setting it as
+    the default; a setting in each writer; and a later release that moves the default; from that release on, readers
+    that have not upgraded reject every module that it changes.
 
 [#1371]: https://github.com/finos/legend-pure/pull/1371
 [#1372]: https://github.com/finos/legend-pure/pull/1372

@@ -489,9 +489,10 @@ reject octal escapes and dropped backslashes, since writers never write them.
 - If element names outside ASCII are ever needed, for example if legend-engine models with quoted identifiers
   become PELTs, a new path provider version has to name their files. The rest of this section sets out options for
   that version, to consider when it is needed. None is chosen (decision 13). Such a version also has to avoid
-  device names outside ASCII: Microsoft's naming documentation, which names no Windows versions, reserves `COM`
-  and `LPT` followed by a superscript one, two, or three (U+00B9, U+00B2, and U+00B3) in every directory
+  device names outside ASCII: Microsoft's naming documentation reserves `COM` and `LPT` followed by a superscript one,
+  two, or three (U+00B9, U+00B2, and U+00B3) in every directory, without saying which Windows versions do
   ([Naming Files, Paths, and Namespaces](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file)).
+  Windows 11 build 26300 does not reserve them inside a directory (verified).
 
 **What a name has to fit.** File systems limit the length of each name, in one of two units:
 

@@ -637,8 +637,8 @@ it the three benefits above. Whether they are worth more than today's compressio
     - graph caches, and the runtime's copy of M3, through `BinaryRepositorySerializer.java:321`
       (`ModelRepository.java:574`), which `FSZipPureGraphCache.java:101`, `MemoryPureGraphCache.java:56`,
       `SimpleFSPureGraphCache.java:64`, and `PureRuntime.java:283` use;
-    - Java that sets a Decimal through the generated M3 classes, through `PrimitiveHelper.java:167`
-      (`AnyHelper.java:108`);
+    - Java that sets a Decimal through the generated M3 classes, through `PrimitiveHelper.java:167`, which
+      `AnyHelper.java:108` calls;
     - code that an engine compiles from text as it runs, such as legend-engine's `compileValueSpecification`
       (`FunctionsGen.java:58`, which calls `CodeBlockDeltaCompiler.java:53`, in the compiled engine, and
       `CompileValueSpecification.java:75` in the interpreted one);
@@ -670,16 +670,25 @@ it the three benefits above. Whether they are worth more than today's compressio
     specification's numerals have no exponent. A rule that writes them as zero changes only the values of Decimals
     whose scale is negative, to the values their names write. In literals, only exponents give such scales: `1e3d`
     holds `1E+3`, of scale -3, and is named `1000` (verified), and under the rule it would hold `1000`. So no file
-    changes, nor any literal's text, and files from earlier releases load as before. Today the engines disagree on
-    such literals, since the compiled engine builds them from their names: `1e3d == 1000d` is false in the
-    interpreted engine and true in the compiled one, and the rule makes it true in both. As it runs, the
-    interpreted engine would also raise to zero the negative scales of the Decimals it parses and computes, which
-    the compiled engine keeps, and so change what it computes from them, text included. Exponents give such
-    scales, and so do `round` and `divide` given a negative scale (`RoundWithScale.java:58`,
-    `DivideDecimal.java:54`). So `parseDecimal('1e3') == 1000d` would become true in the interpreted engine and
-    stay false in the compiled one; `(1e3d * 1.5d)->toString()` would give `1500.0` in the interpreted engine
-    rather than `1500`, as the compiled engine already does; and `(parseDecimal('1e3') * 1.5d)->toString()` would
-    give `1500.0` in the interpreted engine and `1500` in the compiled one.
+    changes, nor any literal's name, and files from earlier releases load as before. Today the engines disagree on such
+    literals, since the compiled engine builds them from their names: `1e3d == 1000d` is false in the interpreted engine
+    when it compiles the literal from source, and true when it loads it from files or a graph cache, which rebuild it
+    from its name (`ModelRepositoryPrimitiveValueResolver.java:73`, `BinaryRepositorySerializer.java:321`), and in the
+    compiled engine. The rule makes it true everywhere. JSON shows the same difference, since legend-engine's `toJSON`
+    writes a Decimal's `BigDecimal` rather than its name (`ToJson.java:92`, `JsonNativeImplementation.java:47`): where
+    `1e3d == 1000d` is false, `1e3d` goes out as `1E+3`, and elsewhere as `1000`, as it would everywhere under the rule.
+    As it runs, the interpreted engine would also raise to zero the negative scales of the Decimals it parses, computes,
+    and reads from data, which the compiled engine keeps, and so change what it computes from them, text included.
+    Exponents give such scales, and so do `round` and `divide` given a negative scale (`RoundWithScale.java:58`,
+    `DivideDecimal.java:54`), and so do numbers that legend-engine reads from data as doubles, with no exponent in any
+    source: `fromJson` reads `10000000.0` as `1.0E+7`, of scale -6 (`JsonDeserializationCache.java:67`), and TDS cells
+    do the same (`TestTDS.java:273`). Both engines read them with that code (`JsonGen.java:109`,
+    `TestTDSCompiled.java:33`), and today they agree on them. So `parseDecimal('1e3') == 1000d` would become true in the
+    interpreted engine and stay false in the compiled one; `(1e3d * 1.5d)->toString()` would give `1500.0` in the
+    interpreted engine, as it already does in the compiled one, rather than `1500`;
+    `(parseDecimal('1e3') * 1.5d)->toString()` would give `1500.0` in the interpreted engine and `1500` in the compiled
+    one; and for a Decimal `x` that `fromJson` reads from `10000000.0`, `(x * 1.5d)->toString()` would give `15000000.0`
+    in the interpreted engine and `15000000` in the compiled one, where today both give `15000000`.
   - **A rule that changes the scale,** such as Float's, which drops trailing zeros and adds `.0` to a numeral
     written without a point, renames literals: `7.50d` would be named `7.5`, `1d` `1.0`, and `1e3d` `1000.0`. A
     rule that only drops trailing zeros would leave `1d` as it is. Under Float's rule, these change:
@@ -709,11 +718,13 @@ it the three benefits above. Whether they are worth more than today's compressio
       legend-engine's Pure grammar composer writes Decimals (`toPureGrammar.pure:119`); in JSON, such as the
       protocol's (`vX_X_X/transfers/valueSpecification.pure:298`); in the Java that legend-engine generates, as
       `new BigDecimal("...")`: by its Java platform binding, which execution plans use (`mathLibrary.pure:31`), by
-      its Java conventions (`essential/math.pure:29`, `grammar/math.pure:29`, and `standard/math.pure:31`), and by
-      feature-based generation (`core_external_language_java_feature_based_generation/generation.pure:125`), so
-      that code also computes with the new scale; and in the Java that runs Deephaven queries
-      (`deephavenStoreLegendJavaPlatformBindingExtension.pure:259` and `:277`). So `1.50d->toString()` gives
-      `1.5`, `1d` gives `1.0`, and `1e3d` gives `1000.0`.
+      its Java conventions (`core_external_language_java_conventions_essential/essential/math.pure:29`,
+      `core_external_language_java_conventions_essential/grammar/math.pure:29`, and
+      `core_external_language_java_conventions_standard/standard/math.pure:31`), and by feature-based generation
+      (`core_external_language_java_feature_based_generation/generation.pure:125`), so that code also computes with the
+      new scale; and in the Java that runs Deephaven queries
+      (`deephavenStoreLegendJavaPlatformBindingExtension.pure:259` and `:277`). So `1.50d->toString()` gives `1.5`, `1d`
+      gives `1.0`, and `1e3d` gives `1000.0`.
     - **Dates.** `date` takes the subsecond of a Decimal second from its digits (`NewDate.java:148` to `:150`,
       `CoreHelper.java:403` to `:408`). So a literal second of `12.500d` gives the subsecond `5` rather than
       `500`, and `12d` gives `0`, where today the interpreted engine fails on it and the compiled engine gives
@@ -727,12 +738,13 @@ it the three benefits above. Whether they are worth more than today's compressio
       integer, and `1.50d` a decimal of scale 1 rather than 2, as do the results of aggregations over them
       (verified with H2 2.1.214). Tests that compare generated SQL see the new text.
     - **The scan** therefore covers legend-pure's and legend-engine's test expectations, as well as the models'
-      files. They include legend-engine's PCT manifests, which quote literals in expected errors, for example
-      `expected: 0.000D` for `testParseZero` on H2 and Postgres, and the expected failures of its PCT runs in the
-      interpreted engine, which its `Test_Interpreted_*_PCT` classes list in Java. A test fails the build when its
-      error no longer contains the recorded text, and when it passes (`PureTestBuilderCompiled.java:156` and
-      `:166`, `PureTestBuilderInterpreted.java:123` and `:132`), so legend-engine updates both with the release
-      that makes the fix.
+      files. They include legend-engine's PCT manifests, for its interpreted runs as well as its compiled ones
+      (`Test_Interpreted_StandardFunctions_PCT.java:30` reads
+      `core_functions_standard/core-interpreted/StandardFunctions_manifest.json`), which quote literals in expected
+      errors, for example `expected: 0.000D` for `testParseZero` on H2 and Postgres. A test fails the build when its
+      error no longer contains the recorded text, and when it passes (`PureTestBuilderCompiled.java:156` and `:166`,
+      `PureTestBuilderInterpreted.java:123` and `:132`), so legend-engine updates its manifests with the release that
+      makes the fix.
 - **File names.** Path segments are ASCII in path provider V1, and serialization reports any other as a build-time
   error (decided on 2026-11-20, the strings document's decision 10). The 126-unit limit applies to each path segment,
   extension included. A longer segment is cut so that the kept part, a 13-character hash suffix, and the extension
@@ -974,16 +986,21 @@ Exit: two builds can be compared by serializable form in any environment, whatev
 - **Give Decimals their rule in the factory, beside Float's** (decision 14), once the rule is chosen (see
   [section 5](#5-other-details-a-specification-has-to-pin-down)). A rule that renames Decimals, as Float's would,
   comes after a scan shows which models' files, which test expectations, and which of legend-engine's PCT
-  manifests and interpreted PCT runs it changes. A rule that keeps the scale renames none, so it changes no file,
-  and it needs no scan of legend-pure or legend-engine: no Pure source in either writes a Decimal literal with an
-  exponent, passes `parseDecimal` a literal with one, or gives `round` or `divide` a literal negative scale. It
-  still changes what the interpreted engine computes from negative scales (section 5), so it comes with the PCT
-  tests that pin what Pure defines for them, such as whether `parseDecimal('1e3') == 1000d`, which the engines
-  would answer differently. Either way, PCT tests pin what Pure defines, in both engines: how Decimals that differ
-  only in scale compare, and the scale of what each operation computes. Where section 5 shows the engines
-  computing different scales under a rule, a test that pins the scale fails in one engine until that engine
-  changes, so what Pure defines there is part of choosing the rule. It comes before Phase 3's corpus, which
-  records Decimal names.
+  manifests, for interpreted runs as well as compiled ones, it changes. A rule that keeps the scale renames none, so it
+  changes no file, and it needs no scan of legend-pure or legend-engine: no Pure source in either gives a Decimal
+  literal a negative scale (the only Decimal literals with exponents, at `TestDecimalParsing.java:48` to `:51`, have
+  scales of 0 to 3), passes `parseDecimal` a numeral with an exponent, or gives `round` or `divide` a literal negative
+  scale. Decimals read from data can have negative scales without an exponent, as those that `fromJson` and TDS cells
+  read from doubles do, and no scan of sources finds them. It still changes what the interpreted engine computes from
+  negative scales, whether they come from literals, parsing, arithmetic, or data (section 5), so it comes with the PCT
+  tests that pin what Pure defines for them, such as whether `parseDecimal('1e3') == 1000d`, which the engines would
+  answer differently. Either way, PCT tests pin what Pure defines, in both engines: how Decimals that differ only in
+  scale compare, and the scale of what each operation computes. Where section 5 shows the engines computing different
+  scales under a rule, the interpreted engine gives the rule's scale, since its Decimals pass through the factory, and
+  the compiled engine gives `BigDecimal`'s, since execution is its choice (decision 14). If Pure defines `BigDecimal`'s
+  scale there, the interpreted engine cannot meet it under that rule; if Pure defines the rule's, the compiled engine
+  meets it only if it chooses to, and the test stays an expected failure there until it does. So what Pure defines there
+  is part of choosing the rule. It comes before Phase 3's corpus, which records Decimal names.
 - **Copy `longSpreadOne` into `FilePathTools`,** crediting Eclipse Collections, with tests that pin today's file
   names (see [section 5](#5-other-details-a-specification-has-to-pin-down)). No file name changes.
 
@@ -1139,13 +1156,15 @@ critical path for the invariant.
   they change depends on the rule (section 5). A rule that keeps the scale renames nothing, and changes only the
   values of Decimals whose scale is negative, such as `1e3d`'s, in the graph and in the interpreted engine as it
   runs, and with them what that engine computes from them, text included: `(1e3d * 1.5d)->toString()` gives
-  `1500.0` rather than `1500`. A rule that changes the scale, such as Float's, changes the bytes of every element
-  with a Decimal that it renames, and what section 5 lists: equality that involves a literal, and so
-  `removeDuplicates` and map keys; the results of arithmetic on literals; a literal's text, through `toString`,
-  `toRepresentation`, and JSON, and in the SQL and Java that legend-engine generates; the subsecond that `date`
-  takes from a literal second; the expected errors in legend-engine's PCT manifests, and the expected failures of
-  its interpreted PCT runs; and in the interpreted engine, the scale of every Decimal it computes, and of every
-  Decimal it loads from an earlier release's files.
+  `1500.0` rather than `1500`, as in the compiled engine, but the compiled engine keeps the negative scales that it
+  parses, computes, and reads from data as it runs, so `(parseDecimal('1e3') * 1.5d)->toString()` then gives `1500.0` in
+  the interpreted engine and `1500` in the compiled one. A rule that changes the scale, such as Float's, changes the
+  bytes of every element with a Decimal that it renames, and what section 5 lists: equality that involves a literal, and
+  so `removeDuplicates` and map keys; the results of arithmetic on literals; a literal's text, through `toString`,
+  `toRepresentation`, and JSON, and in the SQL and Java that legend-engine generates; the subsecond that `date` takes
+  from a literal second; the expected errors in legend-engine's PCT manifests, for interpreted runs as well as compiled
+  ones; and in the interpreted engine, the scale of every Decimal it computes, and of every Decimal it loads from an
+  earlier release's files.
 - **Comparisons by serializable form, and content digests,** change no file.
 - **Option 5's method for decompressed payloads,** added only if the plan settles there, has a default, so the
   interfaces stay compatible.
