@@ -451,9 +451,11 @@ R4 keeps self-describing IDs open, if a later version ever has to reach generate
     disagree;
   - each back-reference file for a concrete element must record the element's version
     ([section 5](#5-matching-back-references)).
-- **Callers that still use the default path provider version** are right for every module that records none while
-  that default is version 1, since under section 4 such a module has version 1's names. Once a later version is
-  the default (decision 10), they are right only for the modules whose names the two versions give alike.
+- **Callers that still use the default path provider version** are right for a module when the default gives the
+  names that the module's own version gives: the version it records, or version 1 if it records none (section 4).
+  While the default is version 1, that is every module that records none. Once a later version is the default
+  (decision 10), it is every module that records that version, and every other module whose names the two versions
+  give alike.
 - **Stale files.** An incremental build that changes a module's recorded path provider version leaves files with
   the old names behind. That is not new: an incremental build already leaves the file of a removed element behind.
   Readers never look for such files, since they compute names only for the elements a manifest lists, with the
@@ -536,22 +538,26 @@ This starts when a new version of either extension is wanted, and ships with tha
   a compressed one that deflates it, and come with their specification, the records' addition to the manifest's
   serializable form, the compressed version's uncompressed counterpart, and conformance-corpus entries, as the
   byte-identity plan requires of every new version. Metadata V1 to V3 refuse to write a manifest with records.
-- The new metadata versions never become the default. A serializer built without a default takes the newest loaded
-  version (`ExtensibleSerializer.java:142`), and no writer sets one: `PureCompilerBinaryGenerator.java:313`,
-  `FSPeltPureGraphCache.java:92`, `FSPeltGraphLoaderHybridPureGraphCache.java:134`,
-  `JavaStandaloneLibraryGenerator.java:190`, and `JavaCodeGeneration.java:457`, which
-  `legend-pure-maven-generation-java` runs. Once loaded, the new versions would then write every metadata file, and
-  earlier readers would reject every module. So `ModuleMetadataSerializer`'s builder never takes a new version as
-  its default while it holds an earlier one. It refuses one in `setDefaultVersion`, which `withDefaultVersion`
-  calls (`ModuleMetadataSerializer.java:315` to `:317`) and which callers can also call directly
-  (`ExtensibleSerializer.java:126`). When no default is set, or after `clearDefaultVersion`
-  (`ExtensibleSerializer.java:131`), it takes the newest loaded version other than the new ones, version 3 when
-  all are loaded; that goes in `build(Iterable, int)` (`ModuleMetadataSerializer.java:328`), since `build()` is
-  final (`ExtensibleSerializer.java:136`). A builder that holds only new versions, as their own tests build, takes
-  the newest, so that those tests can extend `AbstractTestModuleMetadataSerializerExtension`, which expects a
-  builder's one extension to be its default (`AbstractTestModuleMetadataSerializerExtension.java:43`). The choice
-  stays in the builder: the extensions cannot decline to be the default themselves, since `SerializerExtension`
-  declares only `version()` (`SerializerExtension.java:19`), and no interface gains a method
+- The new metadata versions never become the default of a serializer that also holds an earlier version. A
+  serializer built without a default takes the newest loaded version (`ExtensibleSerializer.java:142`), and no
+  writer sets one: `PureCompilerBinaryGenerator.java:313`, `FSPeltPureGraphCache.java:92`,
+  `FSPeltGraphLoaderHybridPureGraphCache.java:134`, `JavaStandaloneLibraryGenerator.java:190`, and
+  `JavaCodeGeneration.java:457`, which `legend-pure-maven-generation-java` runs. Once loaded, the new versions would
+  then write every metadata file, and earlier readers would reject every module. So `ModuleMetadataSerializer`'s
+  builder never takes a new version as its default while it holds an earlier one. It checks in
+  `build(Iterable, int)` (`ModuleMetadataSerializer.java:328`), which sees every extension the builder holds, since
+  `build()` is final (`ExtensibleSerializer.java:136`) and a caller may set the default before adding extensions.
+  That method receives only the resolved version, and `AbstractBuilder` keeps whether one was set in a private
+  field (`ExtensibleSerializer.java:100`), so the builder records that itself, in overrides of `setDefaultVersion`,
+  which `withDefaultVersion` calls (`ModuleMetadataSerializer.java:315` to `:317`), and `clearDefaultVersion`
+  (`ExtensibleSerializer.java:126` and `:131`). When it holds an earlier version, it refuses a new version set as
+  the default, and when no default is set, it takes the newest loaded version other than the new ones, version 3
+  when all are loaded. A builder that holds only new versions, as their own tests build, takes the newest, so that
+  those tests can extend `AbstractTestModuleMetadataSerializerExtension`, which expects a builder's one extension
+  to be its default (`AbstractTestModuleMetadataSerializerExtension.java:43`). `TestModuleMetadataSerializer`,
+  which expects the newest loaded version to be the default (`TestModuleMetadataSerializer.java:74`), then expects
+  version 3. The choice stays in the builder: the extensions cannot decline to be the default themselves, since
+  `SerializerExtension` declares only `version()` (`SerializerExtension.java:19`), and no interface gains a method
   ([section 10](#10-compatibility)). A writer that wants version 2 sets it as the default, and gets the new
   uncompressed version for a manifest with records; one that passes version 2 to `serializeManifest`
   (`ModuleMetadataSerializer.java:52`) gets an error. The tests below run with the new versions loaded, and with
@@ -623,7 +629,10 @@ Exit: a new version of either extension can ship.
   interface.
 - **Phase 3's API changes are additive:** the list of version records on `ModuleManifest`, module-scoped methods on
   `FileDeserializer`, and per-target versions on `ModuleBackReferenceMetadata`, with its module-level version kept
-  as the default. No interface gains a method.
+  as the default. Phase 3 also deprecates `FilePathProvider`'s manifest methods that take a version
+  ([section 7](#7-reading)), and `ModuleMetadataSerializer`'s builder refuses a new version as its default when it
+  holds an earlier one, which no caller in legend-pure or legend-engine meets, since none sets a default metadata
+  version. No interface gains a method.
 
 ## 11. Decisions to make
 
@@ -645,10 +654,12 @@ Exit: a new version of either extension can ship.
     is the default, as for every extensible serializer today; or only where a writer chooses it, until a later
     release makes it the default ([Phase 3](#phase-3-record-versions-and-honor-them)). The first needs no setting,
     but from the version's first release on, earlier readers reject every module that it changes. The second lets
-    readers that know the version spread before any module needs them. It needs the pinned default that Phase 3
-    gives the metadata serializer in two more builders, `FilePathProvider`'s and `ReferenceIds`'
-    (`ReferenceIds.java:256`, `:261`, and `:275`), a setting in each writer, and a later release that moves the
-    default; from that release on, readers that have not upgraded reject every module that it changes.
+    readers that know the version spread before any module needs them. It needs, in two more builders,
+    `FilePathProvider`'s (`FilePathProvider.java:361` and `:368`) and `ReferenceIds`' (`ReferenceIds.java:256`,
+    `:261`, and `:275`), the default that Phase 3 gives the metadata serializer when none is set, the newest loaded
+    version other than the new one, but not its refusal, since a writer chooses the new version by setting it as
+    the default; a setting in each writer; and a later release that moves the default; from that release on,
+    readers that have not upgraded reject every module that it changes.
 
 [#1371]: https://github.com/finos/legend-pure/pull/1371
 [#1372]: https://github.com/finos/legend-pure/pull/1372

@@ -5,7 +5,7 @@ canonical encoder was measured on 2026-11-20 ([section 10](#10-the-canonical-enc
 its level-7-like setting, the same day. The buffering recommended
 here was merged on 2026-11-19 ([#1401]), and [section 9](#9-the-buffering-fix) measures its effect. Elsewhere,
 "today's readers" are those of legend-pure 5.112.1, from before that change. It leaves today's files unchanged.
-Section 4's comparison of stored entries was corrected on 2026-11-23.
+Section 4's comparison of stored entries, and its note on legend-engine's jars, were corrected on 2026-11-23.
 
 These are the measurements for
 [Phase 4 of the byte-identity plan](2026-10-15-pelt-byte-identity.md#phase-4-measurements-encoder-prototype-and-decision-gate).
@@ -95,7 +95,9 @@ own compressed entry sizes ([section 2](#2-jar-settings)).
   power plan.
 - Temurin JDK 17.0.21, with a heap of 8 to 32 GB. Platform's read and decode was also measured on Temurin JDK
   25.0.5.
-- A fresh JVM for each configuration and variant, with the order of the variants alternated between repetitions.
+- A fresh JVM for each configuration and variant, today's files or Option 4's, with the order of the variants
+  alternated between repetitions. The configurations ran in the same order in every repetition, so stored jar
+  entries were always read after deflated ones.
 - The OS file cache is warm throughout. Figures are medians, in seconds.
 
 ### What each measurement covers
@@ -186,7 +188,10 @@ entry's own inflater. Option 4's files in directories are already buffered, so f
 buffer.
 
 The platform and legend-pure figures are medians of 12 warm passes, and the legend-engine figures of 2. In
-legend-engine's jars, the first pass took 38.6 seconds for today's files and 38.1 for Option 4's.
+legend-engine's jars, the first pass took 38.6 seconds for today's files and 38.1 for Option 4's. The warm figure
+for today's files there includes a pass from the session's first JVM, 29.2 seconds, made before the slowdown
+described under [Stored entries](#stored-entries); in the other repetition, today's files took 41.0 seconds and
+Option 4's 41.4. So the ratio of 1.17 does not show that Option 4's files read slower from jars.
 
 ### Why: one native call per read
 

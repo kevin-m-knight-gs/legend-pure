@@ -9,7 +9,7 @@ locale is required. [#1404] carried it out in legend-pure the same day. The defa
 (section 8, item 1) went into review on 2026-11-20 as [#1405]. Decisions 9 and 10 were also made on 2026-11-20, and
 decision 1 for serialization: PELT files hold well-formed UTF-8, existing versions keep the UTF-16 orders (O1),
 and path provider V1 allows only ASCII path segments. The byte-identity plan's Phase 0 draft,
-`docs/reference/pelt-format.md`, states them.
+`docs/reference/pelt-format.md`, states them. On 2026-11-23, section 6.5 gained Windows device names outside ASCII.
 Related: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md),
 [PELT consistency checks](2026-10-15-pelt-consistency-checks.md),
 [path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md), and the
@@ -488,7 +488,10 @@ reject octal escapes and dropped backslashes, since writers never write them.
   module names, compared without regard to case (`NUL` at least; all of them, for earlier Windows versions).
 - If element names outside ASCII are ever needed, for example if legend-engine models with quoted identifiers
   become PELTs, a new path provider version has to name their files. The rest of this section sets out options for
-  that version, to consider when it is needed. None is chosen (decision 13).
+  that version, to consider when it is needed. None is chosen (decision 13). Such a version also has to avoid
+  device names outside ASCII: Microsoft's naming documentation, which names no Windows versions, reserves `COM`
+  and `LPT` followed by a superscript one, two, or three (U+00B9, U+00B2, and U+00B3) in every directory
+  ([Naming Files, Paths, and Namespaces](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file)).
 
 **What a name has to fit.** File systems limit the length of each name, in one of two units:
 

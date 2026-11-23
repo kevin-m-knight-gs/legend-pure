@@ -98,19 +98,20 @@ gate was decided without them.
      document's decisions on the format, made on 2026-11-20: well-formed UTF-8 in files (its decision 1, for
      serialization), the UTF-16 orders in existing versions (9), and ASCII path segments in path provider V1 (10).
      A draft, `docs/reference/pelt-format.md`, was written the same day, and two reviews, on 2026-11-21, and a
-     third, on 2026-11-22, corrected it. Byte identity's decisions 10, 11, and 13, on the digest encoding, on Float
-     and Decimal in the serializable form, and on the text encoding, remain, and the draft proposes answers for
-     them;
-   - the fixes for the departures that the draft lists (its section 12) and that change no file, and for the bugs
-     in the reference ID parser that its first review found (byte identity's Phase 0), one per bug. The one for
-     Float and Decimal values waits for byte identity's decision 11 (its Phase 1);
+     third, on 2026-11-22, corrected it, and it was revised again on 2026-11-23. Byte identity's decisions 10, 11,
+     and 13, on the digest encoding, on Float and Decimal in the serializable form, and on the text encoding,
+     remain, and the draft proposes answers for them;
+   - the fixes for the departures that the draft lists (its section 12) and that change no file and add no error,
+     and for the bugs in the reference ID parser that its first review found (byte identity's Phase 0), one per
+     bug. The one for Float and Decimal values waits for byte identity's decision 11 (its Phase 1);
    - the strings document's remaining hazard fixes (its section 8), one per bug, beginning with merging the
      default-charset fixes for legend-pure ([#1405]); and its scans of existing models;
    - choosing the rule for Decimal names that byte identity's decision 14 leaves open. The decision, made on
      2026-11-22 and revised on 2026-11-23, names every Float and Decimal in the compiled graph by a canonical
      numeral, applies the rule where `ModelRepository` creates them, and leaves execution to each engine. A rule
-     that keeps a Decimal's scale changes no file, so its fix can come at once; one that renames Decimals follows
-     a scan of what it changes, in byte identity's Phase 2.
+     that keeps a Decimal's scale changes no file and needs no scan, but it changes what the interpreted engine
+     computes from negative scales, so its fix comes with PCT tests that pin what Pure defines for them; one that
+     renames Decimals follows a scan of what it changes, in byte identity's Phase 2.
 2. **Next:** byte identity's Phases 1 to 3, once its decision 11 is made; the compiler fixes that its Phase 2
    calls for, in a plan of their own; and the versions plan's Phase 2 once the specification is merged.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 3, the
