@@ -1,6 +1,6 @@
 # PELT serialization plans: roadmap
 
-Status: 2026-10-16, last updated 2026-11-22.
+Status: 2026-10-16, last updated 2026-11-23.
 
 Three plans change PELT serialization. A fourth document sets out options for handling strings across platforms
 and languages: some of its decisions become rules in the byte-identity specification, and the rest reach beyond
@@ -106,9 +106,11 @@ gate was decided without them.
      Float and Decimal values waits for byte identity's decision 11 (its Phase 1);
    - the strings document's remaining hazard fixes (its section 8), one per bug, beginning with merging the
      default-charset fixes for legend-pure ([#1405]); and its scans of existing models;
-   - the scan for byte identity's decision 14, made on 2026-11-22, which names every Float and Decimal in the
-     compiled graph by a canonical numeral, and leaves execution to each engine. The fix for Decimal literals
-     changes files, so it follows the scan, in byte identity's Phase 2.
+   - choosing the rule for Decimal names that byte identity's decision 14 leaves open. The decision, made on
+     2026-11-22 and revised on 2026-11-23, names every Float and Decimal in the compiled graph by a canonical
+     numeral, applies the rule where `ModelRepository` creates them, and leaves execution to each engine. A rule
+     that keeps a Decimal's scale changes no file, so its fix can come at once; one that renames Decimals follows
+     a scan of what it changes, in byte identity's Phase 2.
 2. **Next:** byte identity's Phases 1 to 3, once its decision 11 is made; the compiler fixes that its Phase 2
    calls for, in a plan of their own; and the versions plan's Phase 2 once the specification is merged.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 3, the

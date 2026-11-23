@@ -484,8 +484,8 @@ reject octal escapes and dropped backslashes, since writers never write them.
 - legend-pure's grammar allows only ASCII element names, so path provider V1 says so (decision 10, made on
   2026-11-20), and serialization reports any other path segment as a build-time error, after a scan of existing
   models. Two more checks belong with it, as build-time errors on every platform, if the byte-identity plan's
-  decision 7 takes the recommended error: case-only collisions, and Windows device names compared without regard to
-  case (`NUL` at least; all of them, for earlier Windows versions).
+  decision 7 takes the recommended error: case-only collisions, and Windows device names, in element paths and
+  module names, compared without regard to case (`NUL` at least; all of them, for earlier Windows versions).
 - If element names outside ASCII are ever needed, for example if legend-engine models with quoted identifiers
   become PELTs, a new path provider version has to name their files. The rest of this section sets out options for
   that version, to consider when it is needed. None is chosen (decision 13).
@@ -697,8 +697,8 @@ For the recommended combination. Items marked *now* are the hazards of section 8
   offsets; PCT tests with supplementary characters; documentation that defines a character; and `split` and `trim`
   as decided.
 - **Serialization:** writers reject unpaired surrogates; non-ASCII path segments are a build-time error, and so are
-  case-only collisions and Windows device names if the byte-identity plan's decision 7 takes the recommended
-  error, each after its scan.
+  case-only collisions and Windows device names, in element paths and module names, if the byte-identity plan's
+  decision 7 takes the recommended error, each after its scan.
 - **Specification:** `pelt-format.md` (the byte-identity plan's Phase 0) states UTF-8 byte lengths, the O1 orders
   with test vectors, the reference ID escapes, and the file-name rules. The rules for compilers (its Phase 6) state
   the coordinate rules of section 4.

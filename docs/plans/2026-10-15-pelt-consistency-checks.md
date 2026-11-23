@@ -1,9 +1,9 @@
 # Plan: PELT consistency checks
 
-Status: proposal, 2026-10-15, revised 2026-11-22.
+Status: proposal, 2026-10-15, revised 2026-11-23.
 Prerequisites: [byte-identical PELT files](2026-10-15-pelt-byte-identity.md), through its Phase 3, whose
-conformance corpus this plan's Phase 1 adds to, and the compiler fixes that its Phase 2 calls for, which belong to
-a separate plan; and
+conformance corpus this plan's Phase 1 adds to, and the compiler fixes that the byte-identity plan's Phase 2 calls
+for, which belong to a separate plan; and
 [path provider and reference ID versions](2026-10-16-pelt-path-provider-and-reference-id-versions.md), through its
 Phase 2, which adds the R6 that reduces each external reference to its element. This plan starts after all three.
 Related: the [roadmap](2026-10-16-pelt-serialization-roadmap.md), for how the plans fit together.

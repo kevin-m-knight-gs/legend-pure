@@ -1,6 +1,6 @@
 # Plan: more than one path provider or reference ID version
 
-Status: proposal, 2026-10-16, revised 2026-11-22. This plan merges two earlier ones, on path provider versions
+Status: proposal, 2026-10-16, revised 2026-11-23. This plan merges two earlier ones, on path provider versions
 (2026-10-15) and on reference ID versions (2026-10-16), which shared their mechanism. Phase 1 is done: its four
 fixes are merged ([#1371], [#1372], [#1373], and [#1398]). Phase 2 adds to the PELT specification, now a reviewed
 draft, so it can be done once that draft is merged. Phase 3 waits until a second version of either extension is
@@ -451,8 +451,9 @@ R4 keeps self-describing IDs open, if a later version ever has to reach generate
     disagree;
   - each back-reference file for a concrete element must record the element's version
     ([section 5](#5-matching-back-references)).
-- **Callers that still use the default path provider version** are right for every module that records none.
-  Under section 4, that is every module whose names never changed.
+- **Callers that still use the default path provider version** are right for every module that records none while
+  that default is version 1, since under section 4 such a module has version 1's names. Once a later version is
+  the default (decision 10), they are right only for the modules whose names the two versions give alike.
 - **Stale files.** An incremental build that changes a module's recorded path provider version leaves files with
   the old names behind. That is not new: an incremental build already leaves the file of a removed element behind.
   Readers never look for such files, since they compute names only for the elements a manifest lists, with the
@@ -463,7 +464,10 @@ R4 keeps self-describing IDs open, if a later version ever has to reach generate
 - `FileSerializer` computes the recorded path provider version ([section 4](#4-what-a-module-records)) when it
   writes a module's manifest. It writes the manifest in the default metadata version unless the manifest has
   records, and then in the lowest version at or above the default (compressed, if the default compresses) that can
-  hold them.
+  hold them. It takes which metadata versions compress, and which can hold records, from a fixed table, as the
+  builder takes the versions it refuses as defaults ([Phase 3](#phase-3-record-versions-and-honor-them)):
+  `ModuleMetadataSerializerExtension` declares only methods that serialize and deserialize
+  (`ModuleMetadataSerializerExtension.java:27` to `:59`), and no interface gains a method.
 - `ModuleMetadataGenerator` builds manifests without records, as now. `FileSerializer` adds them as it writes.
 - A writer uses one reference ID version for a module's element files and its module metadata, as
   `PureCompilerSerializer` has done since [#1373], and writes each back-reference file in its target's version,
@@ -537,14 +541,21 @@ This starts when a new version of either extension is wanted, and ships with tha
   `FSPeltPureGraphCache.java:92`, `FSPeltGraphLoaderHybridPureGraphCache.java:134`,
   `JavaStandaloneLibraryGenerator.java:190`, and `JavaCodeGeneration.java:457`, which
   `legend-pure-maven-generation-java` runs. Once loaded, the new versions would then write every metadata file, and
-  earlier readers would reject every module. So `ModuleMetadataSerializer`'s builder defaults to version 3, not to
-  the newest, also after `clearDefaultVersion` (`ExtensibleSerializer.java:131`), and `withDefaultVersion`
-  (`ModuleMetadataSerializer.java:315`) refuses a new version. The choice stays in the builder: the extensions
-  cannot decline to be the default themselves, since `SerializerExtension` declares only `version()`
-  (`SerializerExtension.java:19`), and no interface gains a method ([section 10](#10-compatibility)). A writer
-  that wants version 2 sets it as the default, and gets the new uncompressed version for a manifest with records;
-  one that passes version 2 to `serializeManifest` (`ModuleMetadataSerializer.java:52`) gets an error. The tests
-  below run with the new versions loaded, and with default metadata versions 2 and 3.
+  earlier readers would reject every module. So `ModuleMetadataSerializer`'s builder never takes a new version as
+  its default while it holds an earlier one. It refuses one in `setDefaultVersion`, which `withDefaultVersion`
+  calls (`ModuleMetadataSerializer.java:315` to `:317`) and which callers can also call directly
+  (`ExtensibleSerializer.java:126`). When no default is set, or after `clearDefaultVersion`
+  (`ExtensibleSerializer.java:131`), it takes the newest loaded version other than the new ones, version 3 when
+  all are loaded; that goes in `build(Iterable, int)` (`ModuleMetadataSerializer.java:328`), since `build()` is
+  final (`ExtensibleSerializer.java:136`). A builder that holds only new versions, as their own tests build, takes
+  the newest, so that those tests can extend `AbstractTestModuleMetadataSerializerExtension`, which expects a
+  builder's one extension to be its default (`AbstractTestModuleMetadataSerializerExtension.java:43`). The choice
+  stays in the builder: the extensions cannot decline to be the default themselves, since `SerializerExtension`
+  declares only `version()` (`SerializerExtension.java:19`), and no interface gains a method
+  ([section 10](#10-compatibility)). A writer that wants version 2 sets it as the default, and gets the new
+  uncompressed version for a manifest with records; one that passes version 2 to `serializeManifest`
+  (`ModuleMetadataSerializer.java:52`) gets an error. The tests below run with the new versions loaded, and with
+  default metadata versions 2 and 3.
 - Reference ID providers default to the newest loaded version too (`ReferenceIds.java:275`), as path providers do
   ([section 1](#1-where-we-are)). So a new version of either, once loaded, is what every writer above uses. Every
   module would then record a new reference ID version, and every module whose file names change, a new path
@@ -565,7 +576,9 @@ This starts when a new version of either extension is wanted, and ships with tha
 - Tests, with the test-only reference ID version from Phase 1, and a test-only path provider version that renames
   some files. Each test-only version is numbered outside the range of real versions. The path provider's must be
   above that range, such as `Integer.MAX_VALUE`, since the lowest-version rule
-  ([section 4](#4-what-a-module-records)) tries versions from 1 up. The tests check that:
+  ([section 4](#4-what-a-module-records)) tries versions from 1 up. Neither test-only version is registered as a
+  service: the path provider's, numbered above every real version, would otherwise become the default wherever it
+  is loaded. The tests check that:
   - modules written with V1 and with the test version of each extension load together, from a classpath and from
     a directory, and back references across a reference ID boundary attach in both directions;
   - modules built with V1, loaded, and written again with the test reference ID version give the same files as the
@@ -632,7 +645,10 @@ Exit: a new version of either extension can ship.
     is the default, as for every extensible serializer today; or only where a writer chooses it, until a later
     release makes it the default ([Phase 3](#phase-3-record-versions-and-honor-them)). The first needs no setting,
     but from the version's first release on, earlier readers reject every module that it changes. The second lets
-    readers that know the version spread before any module needs them.
+    readers that know the version spread before any module needs them. It needs the pinned default that Phase 3
+    gives the metadata serializer in two more builders, `FilePathProvider`'s and `ReferenceIds`'
+    (`ReferenceIds.java:256`, `:261`, and `:275`), a setting in each writer, and a later release that moves the
+    default; from that release on, readers that have not upgraded reject every module that it changes.
 
 [#1371]: https://github.com/finos/legend-pure/pull/1371
 [#1372]: https://github.com/finos/legend-pure/pull/1372
