@@ -1,6 +1,6 @@
 # PELT format
 
-Status: draft, 2026-11-22. This document describes the PELT files that legend-pure writes and reads at `a67907c83`.
+Status: draft, 2026-11-23. This document describes the PELT files that legend-pure writes and reads at `a67907c83`.
 Three rules in it were decided on 2026-11-20: strings in files are well-formed UTF-8 (section 2.1), existing
 versions keep their UTF-16 orders (section 2.3), and path segments under path provider version 1 are ASCII
 (section 8.2). Three parts are proposals, not yet decided: the digest encoding (section 10), the text encoding
@@ -648,7 +648,11 @@ case name files that collide on Windows and macOS. Windows also reserves device 
 case. In a path with a directory, Windows 11 build 26300 reserves only `NUL`, and only without an extension, so
 there only a directory named `nul` collides: a package's, or a module's directory of element back reference files.
 Earlier versions reserve `CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, and `LPT1` to `LPT9`, each with or without
-an extension. Whether writers must reject either kind of name is not yet decided.
+an extension, so there every name that is one of them collides, whatever it becomes: a package's directory, such
+as `con`, an element file, such as `con.pelt`, the element's back reference files, such as `con.pbr`, and a
+module's metadata files, such as `aux.pmf`, with its directory of element back reference files. Of these, a module
+name can only be `aux`, `con`, `nul`, or `prn`, since a module name has no digit before its first underscore.
+Whether writers must reject either kind of name is not yet decided.
 
 ## 9. Reference IDs, version 1
 
@@ -859,8 +863,9 @@ A back reference is an object with one key, its kind: `application`, `modelEleme
 
 ## 12. Departures of the Java implementation
 
-Each of these is a bug in legend-pure at `a67907c83`. A fix that changes no file can be made at once. A fix that
-changes files written today comes after a scan of existing models shows which it affects.
+Each of these is a bug in legend-pure at `a67907c83`. A fix that changes no file can be made at once, unless the
+rule it follows is still a proposal, as section 5.1's rule for numerals is (item 8). A fix that changes files
+written today comes after a scan of existing models shows which it affects.
 
 1. **Unpaired surrogates** are written as `?` (`0x3F`), without an error, since `String.getBytes` replaces them
    (`StringWriterV3.java:134`). Section 2.1 requires an error.
