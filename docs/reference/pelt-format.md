@@ -865,8 +865,9 @@ A back reference is an object with one key, its kind: `application`, `modelEleme
 
 Each of these is a bug in legend-pure at `a67907c83`. A fix that changes no file and adds no error can be made at
 once, unless the rule it follows is still a proposal, as section 5.1's rule for numerals is (item 8). A fix that
-changes files written today comes after a scan of existing models shows which it affects, and so does one that
-adds an error, as the fixes for items 1, 4, 5, 7, and 9 do.
+changes files written today, as the fixes for items 3 and 6 do where a file holds such an Integer or such a tie, comes
+after a scan of existing models shows which it affects, and so does one that adds an error, as the fixes for
+items 1, 4, 5, 7, and 9 do.
 
 1. **Unpaired surrogates** are written as `?` (`0x3F`), without an error, since `String.getBytes` replaces them
    (`StringWriterV3.java:134`). Section 2.1 requires an error.
