@@ -1,6 +1,6 @@
 # PELT serialization plans: roadmap
 
-Status: 2026-10-16, last updated 2026-11-23.
+Status: 2026-10-16, last updated 2026-11-24.
 
 Three plans change PELT serialization. A fourth document sets out options for handling strings across platforms
 and languages: some of its decisions become rules in the byte-identity specification, and the rest reach beyond
@@ -97,23 +97,20 @@ gate was decided without them.
    - byte identity's Phase 0, the specification of the serializable form and the encoding, with the strings
      document's decisions on the format, made on 2026-11-20: well-formed UTF-8 in files (its decision 1, for
      serialization), the UTF-16 orders in existing versions (9), and ASCII path segments in path provider V1 (10).
-     A draft, `docs/reference/pelt-format.md`, was written the same day, and two reviews, on 2026-11-21, and a
-     third, on 2026-11-22, corrected it, and it was revised again on 2026-11-23. Byte identity's decisions 10, 11,
-     and 13, on the digest encoding, on Float and Decimal in the serializable form, and on the text encoding,
-     remain, and the draft proposes answers for them;
+     A draft, `docs/reference/pelt-format.md`, was written the same day, and reviews have corrected it since.
+     Byte identity's decisions 10, 11, and 13, on the digest encoding, on Float and Decimal in the serializable
+     form, and on the text encoding, remain, and the draft proposes answers for them;
    - the fixes for the departures that the draft lists (its section 12) and that change no file and add no error,
      and for the bugs in the reference ID parser that its first review found, which reject no ID that a writer wrote
      (byte identity's Phase 0), one per bug. The one for Float and Decimal values waits for byte identity's decision 11
      (its Phase 1);
    - the strings document's remaining hazard fixes (its section 8), one per bug, beginning with merging the
      default-charset fixes for legend-pure ([#1405]); and its scans of existing models;
-   - choosing the rule for Decimal names that byte identity's decision 14 leaves open. The decision, made on
-     2026-11-22 and revised on 2026-11-23, names every Float and Decimal in the compiled graph by a canonical
-     numeral, applies the rule where `ModelRepository` creates them, and leaves execution to each engine. A rule
-     that keeps a Decimal's scale changes no file and needs no scan of legend-pure or legend-engine, but it changes what
-     the interpreted engine computes from negative scales, those of Decimals read from data included, so its fix comes
-     with PCT tests that pin what Pure defines for them; one that renames Decimals follows a scan of what it changes, in
-     byte identity's Phase 2.
+   - choosing, outside these plans, a rule for canonical Decimal names, the expected way to meet byte identity's
+     decision 14. That decision requires each Float and Decimal in the compiled graph to hold the value its name
+     writes, so that files read back with nothing lost, and today a Decimal with a negative scale, such as `1e3d`,
+     does not. Byte identity applies the rule in its Phase 2, after a scan of the files it changes if it renames
+     Decimals, and before its Phase 3's corpus records Decimal names.
 2. **Next:** byte identity's Phases 1 to 3, once its decision 11 is made; the compiler fixes that its Phase 2
    calls for, in a plan of their own; and the versions plan's Phase 2 once the specification is merged.
 3. **Then:** the consistency checks, with Phases 1 and 2 in one release, once byte identity's Phase 3, the

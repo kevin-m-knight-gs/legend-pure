@@ -4,9 +4,9 @@ Status: proposal, 2026-10-15. The decision gate chose Option 1, the canonical en
 setting, on 2026-11-20. Phase 0's draft was written the same day, and decision 6 was made with it. The draft's
 first two reviews, on 2026-11-21, corrected it, and the first found bugs in the reference ID parser (Phase 0). A
 third, on 2026-11-22, corrected it and added test vectors, and decision 14, on Float and Decimal names, was made
-the same day and then clarified: it binds the compiled graph, not execution. It was revised on 2026-11-23: the
-rule for Decimals goes beside Float's, so that it covers every Decimal the compiler creates, and is still to be
-chosen.
+the same day and revised on 2026-11-23. On 2026-11-24, it was reframed as a requirement of fidelity: each Float and
+Decimal in the compiled graph holds the value its name writes. Canonical Decimal names, by a rule chosen outside
+this plan, are the expected way to meet it (section 5).
 
 ## Goal
 
@@ -319,7 +319,7 @@ match, and every rule between that graph and the serializable forms must be spec
 
 - inferred generic types, resolved function applications, and generated properties (for example for
   milestoning), with values in the same order;
-- the names of Float and Decimal instances: canonical numerals (section 5 and decision 14);
+- the names of Float and Decimal instances (section 5 and decision 14);
 - source information: line and column numbering, column units for non-ASCII text (UTF-16 code units or code
   points), tab handling, and exactly which positions start and end columns denote.
 
@@ -596,13 +596,10 @@ it the three benefits above. Whether they are worth more than today's compressio
     but `Value` holds a `BigDecimal` (`Value.java:318` and `:338`), which loses the sign of a negative zero and
     any leading zeros. If such numerals occur, files that differ decode to equal serializable forms. Java's names
     hold neither, since they are plain strings of `BigDecimal` values (below), but other writers' files could.
-    `Value` also errs the other way: it tells apart values that the form writes as one numeral. `1e3d` is `1E+3`
-    in the graph, but its name, and so its file, say `1000`, so a form built from the graph's `BigDecimal` differs
-    from the one read back from the file, although both hold the same number. Decision 14's rule for Decimals
-    (below) removes that for the graphs Java's compiler builds, whatever the rule: each Decimal then holds the
-    value its name writes, as the file does. Under the recommended option of decision 11, the serializable form
-    keeps the sign and the digit strings, and compares by them, which removes both problems for every writer; the
-    `BigDecimal` stays available.
+    `Value` also errs the other way: it tells apart values that the form writes as one numeral, such as `1e3d`,
+    which is `1E+3` in the graph and `1000` in its file (below). Under the recommended option of decision 11, the
+    serializable form keeps the sign and the digit strings, and compares by them, which removes both problems for
+    every writer; the `BigDecimal` stays available.
   - **Integers** are values, whatever Java type holds them. `Value` compares them by Java type, so an `Integer` 5
     differs from a `Long` 5, and V1 chooses between its two integer encodings by Java type too (`BaseV1.java:222`).
     Both are consistent today, because `ModelRepository` and the deserializer choose types the same way. The
@@ -612,139 +609,24 @@ it the three benefits above. Whether they are worth more than today's compressio
     big integer encoding (verified; `ModelRepository.java:602`). None occurs in the files checked in Phase 0.
   - **Compile states** are a set of named states. The bitset, which depends on the order of the `CompileState`
     enum, is V1's encoding of that set.
-- **Float and Decimal names.** Each Float and Decimal in the compiled graph is to be named by a canonical numeral,
-  one for each value, so that two names are equal exactly when Pure counts their values equal (decision 14). The
-  rule binds compilation, and so the files; execution is each engine's choice (below). Float names already follow
-  it. Every Float that `ModelRepository` creates (`SimplePrimitiveCoreInstances.java:56`) goes through
-  `FloatCoreInstance.canonicalizeBigDecimal` (`FloatCoreInstance.java:29`), and its name is the result's plain
-  string, with at least one fractional digit and no other trailing zero. So `007.50` is named `7.5`, `1.0e3` is
-  `1000.0`, and `-0.0` is `0.0`, and the rule gives equal names exactly to equal numbers (verified on JDK 8, 11,
-  17, 21, and 25). Decimal has no rule: a Decimal keeps the `BigDecimal` it is given
-  (`SimplePrimitiveCoreInstances.java:51`), and its name is that value's plain string
-  (`SimpleDecimalCoreInstance.java:42`), so `7.50d` is named `7.50` but `7.5d` is `7.5`, and `1d` is `1` but
-  `1.0d` is `1.0`. Decimal's rule is still to be chosen, and need not be Float's. It follows from what Pure defines
-  a Decimal to be, not from `BigDecimal` (decision 14): if `7.50d` and `7.5d` are the same Decimal, the rule gives
-  them one name, as Float's rule does for Floats; if they are not, it keeps their scale.
-  - **Where.** Float's rule sits in the factory through which `ModelRepository` creates every Float, and Decimal's
-    goes beside it (`SimplePrimitiveCoreInstances.java:51`), so that the compiler applies it to every Decimal it
-    creates, whether or not the parser creates it. Every `ModelRepository` method that creates a Decimal ends there
-    (`ModelRepository.java:584`). Today the compiler creates Decimals only in the M3 parser
-    (`AntlrContextToM3CoreInstance.java:913`, `:1433`, and `:1593`), through which the graph DSL's literals pass
-    too, but the rule also covers any other place where it comes to create them. Like Float's rule, it also
-    reaches everything else that creates Decimals through `ModelRepository`:
-    - loading, of PELT files (`ModelRepositoryPrimitiveValueResolver.java:73`) and of `.par` archives
-      (`SimpleReferenceFactory.java:244`);
-    - graph caches, and the runtime's copy of M3, through `BinaryRepositorySerializer.java:321`
-      (`ModelRepository.java:574`), which `FSZipPureGraphCache.java:101`, `MemoryPureGraphCache.java:56`,
-      `SimpleFSPureGraphCache.java:64`, and `PureRuntime.java:283` use;
-    - Java that sets a Decimal through the generated M3 classes, through `PrimitiveHelper.java:167`, which
-      `AnyHelper.java:108` calls;
-    - code that an engine compiles from text as it runs, such as legend-engine's `compileValueSpecification`
-      (`FunctionsGen.java:58`, which calls `CodeBlockDeltaCompiler.java:53`, in the compiled engine, and
-      `CompileValueSpecification.java:75` in the interpreted one);
-    - the Decimals that the interpreted engine parses and computes as it runs: `parseDecimal`
-      (`ParsePrimitive.java:55`, through `ModelRepository.java:295`), and arithmetic, `round`, `divide`,
-      `toDecimal`, and `parseDecimal` with a precision and scale (`NumericUtilities.java:164`), and those of
-      legend-engine's interpreted natives, such as `fromJson` (`FromJson.java:158`) and TDS cells
-      (`TestTDSInterpreted.java:104` and `:108`).
-  - **Execution** is each engine's choice, and an engine may give something up for speed or memory, as the
-    compiled engine does by holding Pure Integers in Java `long`s. With the rule in the factory, the interpreted
-    engine follows it as it runs, as it follows Float's. The compiled engine does not: it parses and computes
-    Decimals with Java's `BigDecimal` (`CoreHelper.java:1180`), and keeps the scales that `BigDecimal` gives. Today
-    both engines take a Decimal's equality and arithmetic from `BigDecimal`: equality counts scale
-    (`EqualityUtilities.java:71`, `CompiledSupport.java:1010`), as `removeDuplicates` and map keys do, and
-    addition, subtraction, and multiplication take their scale from their operands (`NumericAccumulator.java:92`,
-    `:193`, and `:294`). If Pure defines them otherwise (decision 14), both engines change to match, as PCT tests
-    pin.
-  - **The compiled engine** needs no change to follow the rule in what it takes from the graph and its files. It
-    builds Decimal literals from names (`JavaPurePrimitiveTypeMapping.java:112`), and takes the Decimals of PELT
-    metadata as the files write them (`DirectPrimitiveValueResolver.java:50`).
-  - **legend-engine's `PureModel`** compiles too, from the protocol, and keeps each Decimal literal's `BigDecimal`
-    as the protocol gives it (`ValueSpecificationBuilder.java:751`). For its graphs to follow the rule,
-    legend-engine applies it there. Until then, the literals of a user's query keep the scale they were given, in
-    SQL as elsewhere. Nothing in these plans waits for that.
-  - **A rule that keeps the scale** renames nothing, if it writes a negative scale as zero, as names do today. A
-    Decimal's name is already its value's plain string, which has no leading zeros, no exponent, and no negative
-    zero, and writes a negative scale as zero. A rule that kept negative scales would rename `1e3d`, and no version
-    could write the new name: element version 1 writes a sign and digit strings (`BaseV1.java:175`), and the
-    specification's numerals have no exponent. A rule that writes them as zero changes only the values of Decimals
-    whose scale is negative, to the values their names write. In literals, only exponents give such scales: `1e3d`
-    holds `1E+3`, of scale -3, and is named `1000` (verified), and under the rule it would hold `1000`. So no file
-    changes, nor any literal's name, and files from earlier releases load as before. Today the engines disagree on such
-    literals, since the compiled engine builds them from their names: `1e3d == 1000d` is false in the interpreted engine
-    when it compiles the literal from source, and true when it loads it from files or a graph cache, which rebuild it
-    from its name (`ModelRepositoryPrimitiveValueResolver.java:73`, `BinaryRepositorySerializer.java:321`), and in the
-    compiled engine. The rule makes it true everywhere. JSON shows the same difference, since legend-engine's `toJSON`
-    writes a Decimal's `BigDecimal` rather than its name (`ToJson.java:92`, `JsonNativeImplementation.java:47`): where
-    `1e3d == 1000d` is false, `1e3d` goes out as `1E+3`, and elsewhere as `1000`, as it would everywhere under the rule.
-    As it runs, the interpreted engine would also raise to zero the negative scales of the Decimals it parses, computes,
-    and reads from data, which the compiled engine keeps, and so change what it computes from them, text included.
-    Exponents give such scales, and so do `round` and `divide` given a negative scale (`RoundWithScale.java:58`,
-    `DivideDecimal.java:54`), and so do numbers that legend-engine reads from data as doubles, with no exponent in any
-    source: `fromJson` reads `10000000.0` as `1.0E+7`, of scale -6 (`JsonDeserializationCache.java:67`), and TDS cells
-    do the same (`TestTDS.java:273`). Both engines read them with that code (`JsonGen.java:109`,
-    `TestTDSCompiled.java:33`), and today they agree on them. So `parseDecimal('1e3') == 1000d` would become true in the
-    interpreted engine and stay false in the compiled one; `(1e3d * 1.5d)->toString()` would give `1500.0` in the
-    interpreted engine, as it already does in the compiled one, rather than `1500`;
-    `(parseDecimal('1e3') * 1.5d)->toString()` would give `1500.0` in the interpreted engine and `1500` in the compiled
-    one; and for a Decimal `x` that `fromJson` reads from `10000000.0`, `(x * 1.5d)->toString()` would give `15000000.0`
-    in the interpreted engine and `15000000` in the compiled one, where today both give `15000000`.
-  - **A rule that changes the scale,** such as Float's, which drops trailing zeros and adds `.0` to a numeral
-    written without a point, renames literals: `7.50d` would be named `7.5`, `1d` `1.0`, and `1e3d` `1000.0`. A
-    rule that only drops trailing zeros would leave `1d` as it is. Under Float's rule, these change:
-    - **Files.** Every element with a Decimal that the rule renames gets new bytes, so the fix comes after a scan
-      of existing models (Phase 2), and before Phase 3's corpus records such names. A file from an earlier release
-      keeps its names until it is rebuilt, and until then the engines read it differently: the interpreted engine
-      loads it through the factory, which applies the rule (`ModelRepositoryPrimitiveValueResolver.java:73`), and
-      the compiled engine reads numerals as written (`DirectPrimitiveValueResolver.java:50`). The specification's
-      note on what Java's compiler writes changes with the fix.
-    - **Computed Decimals.** The interpreted engine gives each Decimal it computes the rule's scale, and the
-      compiled engine keeps `BigDecimal`'s, so `1.5d->round(2)->toString()` would give `1.5` in the first and
-      `1.50` in the second. In the compiled engine, the results of addition, subtraction, and multiplication change
-      with the literals they are given: `1.50d + 1.50d` gives `3.0` rather than `3.00`, `1d + 1d` gives `2.0`
-      rather than `2`, and `19.905d * 17774d` gives `353791.4700` rather than `353791.470`.
-    - **Equality.** Literals that differ only in scale become equal: `1.50d == 1.5d` becomes true, and
-      `[1.50d, 1.5d]->removeDuplicates()` keeps one. In the interpreted engine, which applies the rule to the
-      Decimals it parses and computes as well, equality becomes equality of numbers. In the compiled engine, a
-      literal no longer equals a computed value with the scale it was written with: `parseDecimal('1.50') == 1.50d`
-      becomes false. PCT tests make that comparison in ten assertions, which fail in the compiled engine until they
-      are rewritten: those of `parseDecimal` (`parseDecimal.pure:34`, `:35`, `:41`, and `:49` to `:51`), one of
-      `toDecimal`, where `toDecimal(8)` is `8` and the literal `8D` becomes `8.0` (`toDecimal.pure:56`), and three
-      of `times`, where the literal becomes `353791.47` and the product is `353791.470`, or `353791.4700` when
-      `17774` is written as a Decimal (`times.pure:101` to `:103`). Those of `round` and `divide` do not fail
-      (`round.pure:140` to `:143`, `divide.pure:110`), and in the interpreted engine, none does.
-    - **Text.** A literal is written canonically wherever it is written out: by `toString` (`ToString.java:56`,
-      `CompiledSupport.java:1278`); by `toRepresentation` (`toRepresentation.pure:46`), through which
-      legend-engine's Pure grammar composer writes Decimals (`toPureGrammar.pure:119`); in JSON, such as the
-      protocol's (`vX_X_X/transfers/valueSpecification.pure:298`); in the Java that legend-engine generates, as
-      `new BigDecimal("...")`: by its Java platform binding, which execution plans use (`mathLibrary.pure:31`), by
-      its Java conventions (`core_external_language_java_conventions_essential/essential/math.pure:29`,
-      `core_external_language_java_conventions_essential/grammar/math.pure:29`, and
-      `core_external_language_java_conventions_standard/standard/math.pure:31`), and by feature-based generation
-      (`core_external_language_java_feature_based_generation/generation.pure:125`), so that code also computes with the
-      new scale; and in the Java that runs Deephaven queries
-      (`deephavenStoreLegendJavaPlatformBindingExtension.pure:259` and `:277`). So `1.50d->toString()` gives `1.5`, `1d`
-      gives `1.0`, and `1e3d` gives `1000.0`.
-    - **Dates.** `date` takes the subsecond of a Decimal second from its digits (`NewDate.java:148` to `:150`,
-      `CoreHelper.java:403` to `:408`). So a literal second of `12.500d` gives the subsecond `5` rather than
-      `500`, and `12d` gives `0`, where today the interpreted engine fails on it and the compiled engine gives
-      none.
-    - **SQL.** legend-engine's relational SQL generation writes a Decimal literal with `toString`
-      (`extensionDefaults.pure:135`). Where it processes a value, it casts the literal to the type it gives
-      Decimal, `Decimal(precision=32, scale=16)` (`pureToSQLQuery.pure:774` and `:11332`), so `1.50d` goes out as
-      `1.5`, and `1d` as `1.0` rather than `1`, with the same type and value. Literals in aggregations
-      (`pureToSQLQuery.pure:7592`), in column specifications (`:7856`), and on the deprecated path
-      (`pureToSQLQuery_deprecated.pure:284`) go out uncast, so there `1d` becomes a decimal rather than an
-      integer, and `1.50d` a decimal of scale 1 rather than 2, as do the results of aggregations over them
-      (verified with H2 2.1.214). Tests that compare generated SQL see the new text.
-    - **The scan** therefore covers legend-pure's and legend-engine's test expectations, as well as the models'
-      files. They include legend-engine's PCT manifests, for its interpreted runs as well as its compiled ones
-      (`Test_Interpreted_StandardFunctions_PCT.java:30` reads
-      `core_functions_standard/core-interpreted/StandardFunctions_manifest.json`), which quote literals in expected
-      errors, for example `expected: 0.000D` for `testParseZero` on H2 and Postgres. A test fails the build when its
-      error no longer contains the recorded text, and when it passes (`PureTestBuilderCompiled.java:156` and `:166`,
-      `PureTestBuilderInterpreted.java:123` and `:132`), so legend-engine updates its manifests with the release that
-      makes the fix.
+- **Float and Decimal names.** A file holds each Float and Decimal as its instance's name, and loading builds the
+  value from that numeral (`ModelRepositoryPrimitiveValueResolver.java:73`). So a file reads back as the graph it
+  was written from, with nothing lost, only if each Float and Decimal in the graph holds the value its name writes,
+  as decision 14 requires. Floats do. Every Float that `ModelRepository` creates goes through
+  `FloatCoreInstance.canonicalizeBigDecimal` (`SimplePrimitiveCoreInstances.java:56`, `FloatCoreInstance.java:29`),
+  and its name is the result's plain string, with at least one fractional digit and no other trailing zero: it
+  writes the value exactly, and equal numbers share one name (verified on JDK 8, 11, 17, 21, and 25). Decimals with
+  a negative scale do not. A Decimal keeps the `BigDecimal` it is given (`SimplePrimitiveCoreInstances.java:51`),
+  and its name is that value's plain string (`SimpleDecimalCoreInstance.java:42`), which has no exponent, so it
+  loses a negative scale: `1e3d` holds `1E+3`, of scale -3, but is named `1000`, and its file reads back as `1000`,
+  of scale 0 (verified). The expected way to meet the requirement is to give Decimals canonical names too, by a rule
+  that the compiler applies beside Float's. Choosing the rule, and what it means for execution, are outside this
+  plan. Serialization needs two things of it:
+  - **No negative scales.** Names have no exponent, since no existing version can write one, so the rule leaves no
+    Decimal with a negative scale.
+  - **A scan before renaming.** A rule that renames Decimals, as Float's would rename `7.50d` to `7.5`, changes the
+    files of every element that holds one it renames. It comes after a scan of existing models (Phase 2), and
+    before Phase 3's corpus records Decimal names.
 - **File names.** Path segments are ASCII in path provider V1, and serialization reports any other as a build-time
   error (decided on 2026-11-20, the strings document's decision 10). The 126-unit limit applies to each path segment,
   extension included. A longer segment is cut so that the kept part, a 13-character hash suffix, and the extension
@@ -867,12 +749,13 @@ serializable forms. It comes in Phase 6.
 
 Exit: someone can write a decoder, an encoder, and the content digest from the document alone. Phase 6 tests that.
 
-**Status (2026-11-23):** drafted on 2026-11-20, on branch `serialization/pelt_format`, with the strings document's
+**Status (2026-11-24):** drafted on 2026-11-20, on branch `serialization/pelt_format`, with the strings document's
 decisions 1 (for serialization), 9, and 10, and decision 6. Its digest encoding, its text encoding, and its rule
 that Float and Decimal numerals compare as written are proposals, for decisions 10, 13, and 11. Two reviews, on
 2026-11-21, corrected it, and a third, on 2026-11-22, corrected it and added test vectors. On 2026-11-23, its note
-on Windows device names and the opening of its section 12, on when departures can be fixed, were revised. It
-stands on its own and cites no plan, since the plans may never be merged.
+on Windows device names and the opening of its section 12, on when departures can be fixed, were revised, and on
+2026-11-24, its note on the numerals that Java's compiler writes was cut to what does not depend on Decimal's rule.
+It stands on its own and cites no plan, since the plans may never be merged.
 
 - **Checked against the files.** A reader and writer written in Python from the draft alone decoded every element
   and module metadata file of the 5.112.1 platform and pure jars and of 142 legend-engine jars at 5.3.1-SNAPSHOT,
@@ -958,8 +841,8 @@ Exit: two builds can be compared by serializable form in any environment, whatev
   - The encoder, and the checks below, depend on the value fixes (section 5). `SerializerV1` takes Float and
     Decimal digit strings from instance names, so an encoder given only `BigDecimal` values would change the bytes
     of other writers' files with a negative zero or leading zeros, although Java's names hold neither. In Java's
-    own builds, the fixes matter to the graph-to-file check below: until Decimals follow decision 14's rule,
-    `1e3d` is `1E+3` in the graph and `1000` in its file, and `Value` tells the two apart.
+    own builds, the fixes matter to the graph-to-file check below: until Decimals meet decision 14, `1e3d` is `1E+3`
+    in the graph and `1000` in its file, and `Value` tells the two apart.
   - Measure serialization time before and after the split, on Phase 4's module sets. The write side then holds
     each element's serializable form in memory, as the read side already does.
 - **Add round-trip tests.** For every file in builds of a fixed set of modules (platform, one DSL module, and
@@ -983,24 +866,9 @@ Exit: two builds can be compared by serializable form in any environment, whatev
   each after its scan of existing models, the last two if decision 7 takes the recommended error (see
   [section 5](#5-other-details-a-specification-has-to-pin-down)). Device names are rejected in module names as
   well as in element paths.
-- **Give Decimals their rule in the factory, beside Float's** (decision 14), once the rule is chosen (see
-  [section 5](#5-other-details-a-specification-has-to-pin-down)). A rule that renames Decimals, as Float's would,
-  comes after a scan shows which models' files, which test expectations, and which of legend-engine's PCT
-  manifests, for interpreted runs as well as compiled ones, it changes. A rule that keeps the scale renames none, so it
-  changes no file, and it needs no scan of legend-pure or legend-engine: no Pure source in either gives a Decimal
-  literal a negative scale (the only Decimal literals with exponents, at `TestDecimalParsing.java:48` to `:51`, have
-  scales of 0 to 3), passes `parseDecimal` a numeral with an exponent, or gives `round` or `divide` a literal negative
-  scale. Decimals read from data can have negative scales without an exponent, as those that `fromJson` and TDS cells
-  read from doubles do, and no scan of sources finds them. It still changes what the interpreted engine computes from
-  negative scales, whether they come from literals, parsing, arithmetic, or data (section 5), so it comes with the PCT
-  tests that pin what Pure defines for them, such as whether `parseDecimal('1e3') == 1000d`, which the engines would
-  answer differently. Either way, PCT tests pin what Pure defines, in both engines: how Decimals that differ only in
-  scale compare, and the scale of what each operation computes. Where section 5 shows the engines computing different
-  scales under a rule, the interpreted engine gives the rule's scale, since its Decimals pass through the factory, and
-  the compiled engine gives `BigDecimal`'s, since execution is its choice (decision 14). If Pure defines `BigDecimal`'s
-  scale there, the interpreted engine cannot meet it under that rule; if Pure defines the rule's, the compiled engine
-  meets it only if it chooses to, and the test stays an expected failure there until it does. So what Pure defines there
-  is part of choosing the rule. It comes before Phase 3's corpus, which records Decimal names.
+- **Make Decimals meet decision 14,** most likely with canonical names from a rule in the factory, beside Float's,
+  once the rule is chosen (see [section 5](#5-other-details-a-specification-has-to-pin-down)). A rule that renames
+  Decimals comes after a scan of the files it changes, and before Phase 3's corpus records Decimal names.
 - **Copy `longSpreadOne` into `FilePathTools`,** crediting Eclipse Collections, with tests that pin today's file
   names (see [section 5](#5-other-details-a-specification-has-to-pin-down)). No file name changes.
 
@@ -1152,19 +1020,8 @@ critical path for the invariant.
   `InstanceData` keeps its name, since it appears unerased in generated constructors
   (`ClassPeltImplProcessor.java:438`).
 - **The value fixes** keep `Value`'s methods and change its equality only in the cases that section 5 lists.
-- **Canonical Decimal names** (decision 14) change no format, so earlier readers read the new files. What else
-  they change depends on the rule (section 5). A rule that keeps the scale renames nothing, and changes only the
-  values of Decimals whose scale is negative, such as `1e3d`'s, in the graph and in the interpreted engine as it
-  runs, and with them what that engine computes from them, text included: `(1e3d * 1.5d)->toString()` gives
-  `1500.0` rather than `1500`, as in the compiled engine, but the compiled engine keeps the negative scales that it
-  parses, computes, and reads from data as it runs, so `(parseDecimal('1e3') * 1.5d)->toString()` then gives `1500.0` in
-  the interpreted engine and `1500` in the compiled one. A rule that changes the scale, such as Float's, changes the
-  bytes of every element with a Decimal that it renames, and what section 5 lists: equality that involves a literal, and
-  so `removeDuplicates` and map keys; the results of arithmetic on literals; a literal's text, through `toString`,
-  `toRepresentation`, and JSON, and in the SQL and Java that legend-engine generates; the subsecond that `date` takes
-  from a literal second; the expected errors in legend-engine's PCT manifests, for interpreted runs as well as compiled
-  ones; and in the interpreted engine, the scale of every Decimal it computes, and of every Decimal it loads from an
-  earlier release's files.
+- **Canonical Decimal names,** the expected way to meet decision 14, change no format, so earlier readers read the
+  new files. A rule that renames Decimals changes the bytes of every element that holds one it renames (section 5).
 - **Comparisons by serializable form, and content digests,** change no file.
 - **Option 5's method for decompressed payloads,** added only if the plan settles there, has a default, so the
   interfaces stay compatible.
@@ -1212,11 +1069,8 @@ critical path for the invariant.
 11. **Float and Decimal in the serializable form:** the sign and digit strings as written (recommended), or
     numeric values, with every encoder writing canonical digit strings. Under the second, files that write one
     number in different ways decode to equal serializable forms, and encoding such a form again can change the
-    file's bytes. Which files that affects depends on Decimal's rule (decision 14). Under a rule that gives each
-    number one name, as Float's does, every numeral Java writes from then on is canonical, so the two options differ
-    only on files from earlier releases that hold a Decimal such as `7.50` or `1`, and on other writers' files.
-    Under a rule that keeps the scale, numeric values would have to keep it too, or forms would lose what Java's
-    own files hold, such as the trailing zero of `7.50`. The Phase 0 draft follows the first.
+    file's bytes. The first loses nothing that a file holds, whatever names the compiler gives Decimals (decision 14).
+    The Phase 0 draft follows the first.
 12. **The canonical encoder's setting:** decided on 2026-11-20: the level-7-like setting. The encoder is frozen
     with one setting, and changing it later takes a new extension version. The prototype measured two
     ([results](2026-11-18-pelt-compression-measurements.md#10-the-canonical-encoder)):
@@ -1231,14 +1085,13 @@ critical path for the invariant.
     people can read and diff (recommended), or JSON canonicalized by RFC 8785, an existing scheme, which puts each
     form on one line with its keys sorted. Either way, equal forms have equal text. The Phase 0 draft follows the
     first.
-14. **Float and Decimal names:** decided on 2026-11-22, revised on 2026-11-23: every Float and Decimal in the
-    compiled graph is named by a canonical numeral. The compiler applies the rule to every one it creates, whether
-    or not the parser creates it, so the rule goes where `ModelRepository` creates them
-    (`SimplePrimitiveCoreInstances.java:51` and `:56`). Float's rule is the one it follows today (section 5).
-    Decimal's is open and need not be Float's: it may keep a literal's trailing zeros, and leave a literal written
-    without a point without one. Either way, what a Decimal means in Pure, such as when two are equal, is defined
-    by Pure, not by Java's `BigDecimal`. Execution is each engine's choice, and an engine may give something up for
-    speed or memory, as the compiled engine holds Pure Integers in Java `long`s.
+14. **Float and Decimal names:** decided on 2026-11-22, revised on 2026-11-23, and reframed on 2026-11-24 as a
+    requirement of fidelity: each Float and Decimal in the compiled graph holds exactly the value its name writes,
+    so that its file reads back with nothing lost. Floats meet it today (section 5). For Decimals, the expected way
+    to meet it is canonical names, by a rule that the compiler applies to every Decimal it creates, whether or not
+    the parser creates it, and so beside Float's, where `ModelRepository` creates them
+    (`SimplePrimitiveCoreInstances.java:51` and `:56`). Choosing the rule, and what it means for execution, are
+    outside this plan.
 
 ## Outside this plan
 
