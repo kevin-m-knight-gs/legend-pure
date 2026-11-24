@@ -1,6 +1,6 @@
 # PELT format
 
-Status: draft, 2026-11-23. This document describes the PELT files that legend-pure writes and reads at `a67907c83`.
+Status: draft, 2026-11-24. This document describes the PELT files that legend-pure writes and reads at `a67907c83`.
 Three rules in it were decided on 2026-11-20: strings in files are well-formed UTF-8 (section 2.1), existing
 versions keep their UTF-16 orders (section 2.3), and path segments under path provider version 1 are ASCII
 (section 8.2). Three parts are proposals, not yet decided: the digest encoding (section 10), the text encoding
@@ -351,10 +351,7 @@ elements are not part of an element's form: the back reference metadata of the r
 them (section 5.2).
 
 **What Java's compiler writes,** for information: Float and Decimal numerals are Java's plain string of the value,
-so they have no exponent, no leading zeros apart from a single `0` before the point, and no negative zero. A Float
-always has a fraction part, which ends in a digit other than `0` unless it is `0`. A Decimal keeps its literal's
-scale, the number of digits after the point less the exponent, so `7.50d` stays `7.50`; it has no point when the
-scale is 0 or less, as for `1e3d`, which is `1000`, and `1.5e1d`, which is `15`.
+so they have no exponent, no leading zeros apart from a single `0` before the point, and no negative zero.
 
 ### 5.2 Module metadata
 
